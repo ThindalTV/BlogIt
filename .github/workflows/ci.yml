@@ -33,7 +33,7 @@ jobs:
 
       - name: Run tests
         run: >-
-          dotnet test BlogIt.Tests/BlogIt.Tests.csproj
+          dotnet test tests/BlogIt.Tests/BlogIt.Tests.csproj
           --no-build
           --no-restore
           --configuration Release

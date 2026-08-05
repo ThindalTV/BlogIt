@@ -65,7 +65,7 @@ jobs:
           RAW_PACKAGE_VERSION: ${{ inputs['package-version'] }}
         run: |
           $defaultVersion = "0.0.0-smoke.${{ github.run_number }}.${{ github.run_attempt }}"
-          $version = & ./package-smoke/normalize-version.ps1 `
+          $version = & ./build/package-smoke/normalize-version.ps1 `
             -Version $env:RAW_PACKAGE_VERSION `
             -DefaultVersion $defaultVersion
           "normalized_version=$version" >> $env:GITHUB_OUTPUT
@@ -79,7 +79,7 @@ jobs:
 
       - name: Run tests
         run: >-
-          dotnet test BlogIt.Tests/BlogIt.Tests.csproj
+          dotnet test tests/BlogIt.Tests/BlogIt.Tests.csproj
           --no-build
           --no-restore
           --configuration Release
@@ -112,7 +112,7 @@ jobs:
         env:
           PACKAGE_VERSION: ${{ steps.version.outputs.normalized_version }}
         run: >-
-          ./packaging-spike/verify.ps1
+          ./build/package-layout-tests/verify.ps1
           -PackageVersion $env:PACKAGE_VERSION
           -PackageFeed $env:PACKAGE_FEED
           -SkipPack
@@ -122,7 +122,7 @@ jobs:
         env:
           PACKAGE_VERSION: ${{ steps.version.outputs.normalized_version }}
         run: >-
-          ./package-smoke/run.ps1
+          ./build/package-smoke/run.ps1
           -PackageVersion $env:PACKAGE_VERSION
           -PackageFeed $env:PACKAGE_FEED
           -ConnectionString $env:SQL_CONNECTION_STRING

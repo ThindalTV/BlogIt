@@ -1,7 +1,7 @@
 <Solution>
   <Project Path="src/BlogIt.Admin/BlogIt.Admin.csproj" />
-  <Project Path="BlogIt.MauiAdmin/BlogIt.MauiAdmin.csproj" />
-  <Project Path="BlogIt.Tests/BlogIt.Tests.csproj" />
+  <Project Path="src/BlogIt.MauiAdmin/BlogIt.MauiAdmin.csproj" />
+  <Project Path="tests/BlogIt.Tests/BlogIt.Tests.csproj" />
   <Project Path="samples/BlogIt.Sample.AppHost/BlogIt.Sample.AppHost.csproj" />
   <Project Path="samples/BlogIt.Sample.ServiceDefaults/BlogIt.Sample.ServiceDefaults.csproj" />
   <Project Path="samples/BlogIt.Sample/BlogIt.Sample.csproj" />

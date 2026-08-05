@@ -74,7 +74,7 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\src\BlogIt.Contracts\BlogIt.Contracts.csproj" />
+      <ProjectReference Include="..\BlogIt.Contracts\BlogIt.Contracts.csproj" />
     </ItemGroup>
 
 </Project>

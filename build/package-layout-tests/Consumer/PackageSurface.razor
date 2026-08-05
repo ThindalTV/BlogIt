@@ -1,0 +1,17 @@
+@using BlogIt.Components.Shared
+@using BlogIt.Services
+@inject IPublicContentService ContentService
+
+<SeoHead Title="Package consumer"
+         Description="Clean package compilation proof"
+         SchemaType="SeoSchemaType.WebPage" />
+<GaScript />
+
+@code {
+    private PublicPostPage? postPage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        postPage = await ContentService.GetPostsAsync(1, 1);
+    }
+}
