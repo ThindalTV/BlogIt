@@ -3,9 +3,10 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace BlogIt.Shared.Migrations
+namespace BlogIt.Migrations
 {
     /// <inheritdoc />
+    [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
     public partial class InitialCreate : Migration
     {
         /// <inheritdoc />
@@ -20,6 +21,9 @@ namespace BlogIt.Shared.Migrations
                     Slug = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false),
                     Content = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     IsPublished = table.Column<bool>(type: "bit", nullable: false),
+                    HasBeenPublished = table.Column<bool>(type: "bit", nullable: false),
+                    ScheduledPublishAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    ScheduledUnpublishAt = table.Column<DateTime>(type: "datetime2", nullable: true),
                     SeoTitle = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     SeoDescription = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     SeoKeywords = table.Column<string>(type: "nvarchar(max)", nullable: true),
@@ -58,6 +62,23 @@ namespace BlogIt.Shared.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "UrlRedirects",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    SourcePath = table.Column<string>(type: "nvarchar(1000)", maxLength: 1000, nullable: false),
+                    TargetUrl = table.Column<string>(type: "nvarchar(2000)", maxLength: 2000, nullable: false),
+                    IsPermanent = table.Column<bool>(type: "bit", nullable: false),
+                    IsAutomatic = table.Column<bool>(type: "bit", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_UrlRedirects", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "Users",
                 columns: table => new
                 {
@@ -82,7 +103,10 @@ namespace BlogIt.Shared.Migrations
                     Summary = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     Content = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     IsPublished = table.Column<bool>(type: "bit", nullable: false),
+                    HasBeenPublished = table.Column<bool>(type: "bit", nullable: false),
                     PublishedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    ScheduledPublishAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    ScheduledUnpublishAt = table.Column<DateTime>(type: "datetime2", nullable: true),
                     SeoTitle = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     SeoDescription = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     SeoKeywords = table.Column<string>(type: "nvarchar(max)", nullable: true),
@@ -221,6 +245,16 @@ namespace BlogIt.Shared.Migrations
                 column: "AuthorId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_BlogPosts_ScheduledPublishAt",
+                table: "BlogPosts",
+                column: "ScheduledPublishAt");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_BlogPosts_ScheduledUnpublishAt",
+                table: "BlogPosts",
+                column: "ScheduledUnpublishAt");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_BlogPosts_Slug",
                 table: "BlogPosts",
                 column: "Slug",
@@ -237,6 +271,16 @@ namespace BlogIt.Shared.Migrations
                 column: "UploadedByUserId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_Pages_ScheduledPublishAt",
+                table: "Pages",
+                column: "ScheduledPublishAt");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Pages_ScheduledUnpublishAt",
+                table: "Pages",
+                column: "ScheduledUnpublishAt");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_Pages_Slug",
                 table: "Pages",
                 column: "Slug",
@@ -246,6 +290,12 @@ namespace BlogIt.Shared.Migrations
                 name: "IX_Tags_Slug",
                 table: "Tags",
                 column: "Slug",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_UrlRedirects_SourcePath",
+                table: "UrlRedirects",
+                column: "SourcePath",
                 unique: true);
 
             migrationBuilder.CreateIndex(
@@ -272,6 +322,9 @@ namespace BlogIt.Shared.Migrations
 
             migrationBuilder.DropTable(
                 name: "SiteSettings");
+
+            migrationBuilder.DropTable(
+                name: "UrlRedirects");
 
             migrationBuilder.DropTable(
                 name: "AiConversations");

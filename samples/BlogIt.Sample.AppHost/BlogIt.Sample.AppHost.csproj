@@ -1,6 +1,7 @@
 <Project Sdk="Aspire.AppHost.Sdk/13.4.6">
 
   <ItemGroup>
+    <AssemblyAttribute Include="System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverageAttribute" />
     <ProjectReference Include="..\BlogIt.Sample\BlogIt.Sample.csproj" />
   </ItemGroup>
 

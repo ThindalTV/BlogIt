@@ -8,8 +8,9 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
 
-namespace BlogIt.Shared.Migrations
+namespace BlogIt.Migrations
 {
+    [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
     [DbContext(typeof(BlogItDbContext))]
     partial class BlogItDbContextModelSnapshot : ModelSnapshot
     {

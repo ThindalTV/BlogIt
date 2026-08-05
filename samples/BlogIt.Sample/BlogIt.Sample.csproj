@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
   <ItemGroup>
+    <AssemblyAttribute Include="System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverageAttribute" />
     <ProjectReference Include="..\..\src\BlogIt\BlogIt.csproj" />
     <!-- Source builds need the bundled contracts assembly as a compile reference. The BlogIt package supplies it itself. -->
     <ProjectReference Include="..\..\src\BlogIt.Contracts\BlogIt.Contracts.csproj"

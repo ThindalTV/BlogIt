@@ -9,11 +9,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
 
-namespace BlogIt.Shared.Migrations
+namespace BlogIt.Migrations
 {
     [DbContext(typeof(BlogItDbContext))]
-    [Migration("20260804214255_AddUrlRedirects")]
-    partial class AddUrlRedirects
+    [Migration("20260805232419_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)

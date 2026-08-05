@@ -55,9 +55,7 @@ public class SqlServerProviderTests
         dbContext.Model.FindEntityType(typeof(BlogPost)).Should().NotBeNull();
         dbContext.Model.FindEntityType(typeof(Tag)).Should().NotBeNull();
         dbContext.Database.GetMigrations().Should().Equal(
-            "20260804182142_InitialCreate",
-            "20260804212742_AddPublicationSchedules",
-            "20260804214255_AddUrlRedirects");
+            "20260805232419_InitialCreate");
     }
 
     private static ServiceProvider CreateServices(
