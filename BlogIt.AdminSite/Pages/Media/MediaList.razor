@@ -1,0 +1,171 @@
+@page "/media"
+@attribute [Authorize]
+@inject ApiClient Api
+
+<PageTitle>Media — BlogIt Admin</PageTitle>
+
+<div class="page-header">
+    <h1 class="page-title">Media</h1>
+    <label class="btn btn-primary upload-trigger">
+        + Upload
+        <InputFile OnChange="HandleUpload" accept="image/*,video/*,application/pdf" style="display:none" />
+    </label>
+</div>
+
+<div class="toolbar">
+    <input class="form-input toolbar-search" placeholder="Search media…" value="@searchQuery" @oninput="OnSearchInput" />
+</div>
+
+@if (!string.IsNullOrEmpty(errorMsg))
+{
+    <div class="alert alert-error">@errorMsg</div>
+}
+@if (!string.IsNullOrEmpty(successMsg))
+{
+    <div class="alert alert-success">@successMsg</div>
+}
+
+@if (isLoading)
+{
+    <div class="loading-spinner-wrap"><div class="spinner"></div></div>
+}
+else if (filtered == null || filtered.Count == 0)
+{
+    <p class="empty-state">No media files found.</p>
+}
+else
+{
+    <div class="media-grid media-grid-page">
+        @foreach (var file in filtered)
+        {
+            <div class="media-card @(selectedFile?.Id == file.Id ? "selected" : "")" @onclick="() => SelectFile(file)">
+                @if (file.ContentType.StartsWith("image/"))
+                {
+                    <div class="media-card-thumb">
+                        <img src="@file.PublicPath" alt="@file.Title" loading="lazy" />
+                    </div>
+                }
+                else
+                {
+                    <div class="media-card-thumb media-card-icon">
+                        <span>📄</span>
+                    </div>
+                }
+                <div class="media-card-info">
+                    <span class="media-card-name" title="@file.Title">@file.Title</span>
+                    <span class="media-card-size">@FormatSize(file.SizeBytes)</span>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@if (selectedFile != null)
+{
+    <div class="media-detail-bar">
+        <div class="media-detail-info">
+            <strong>@selectedFile.Title</strong>
+            <span>@selectedFile.FileName</span>
+            <span>@FormatSize(selectedFile.SizeBytes)</span>
+            <span>@selectedFile.UploadedAt.ToString("MMM d, yyyy")</span>
+        </div>
+        <div class="media-detail-actions">
+            <button class="btn btn-secondary" @onclick="CopyUrl">Copy URL</button>
+            <button class="btn btn-danger" @onclick="() => showConfirm = true">Delete</button>
+        </div>
+    </div>
+}
+
+@if (isUploading)
+{
+    <div class="upload-progress">Uploading…</div>
+}
+
+<ConfirmDialog IsOpen="showConfirm"
+    Title="Delete File"
+    Message=@($"Delete \"{selectedFile?.Title}\"? This cannot be undone.")
+    OnConfirm="DeleteSelected"
+    OnCancel="() => showConfirm = false" />
+
+@code {
+    private IReadOnlyList<MediaFileDto>? allMedia;
+    private List<MediaFileDto>? filtered;
+    private MediaFileDto? selectedFile;
+    private bool isLoading = true;
+    private bool isUploading;
+    private string searchQuery = "";
+    private string errorMsg = "";
+    private string successMsg = "";
+    private bool showConfirm;
+    private IBrowserFile? pendingFile;
+
+    private void OnSearchInput(ChangeEventArgs e)
+    {
+        searchQuery = e.Value?.ToString() ?? "";
+        FilterMedia();
+    }
+
+    protected override async Task OnInitializedAsync() => await LoadMedia();
+
+    private async Task LoadMedia()
+    {
+        isLoading = true;
+        try { allMedia = (await Api.GetMediaAsync())?.Items; FilterMedia(); }
+        catch (Exception ex) { errorMsg = ex.Message; }
+        finally { isLoading = false; }
+    }
+
+    private void FilterMedia()
+    {
+        if (allMedia == null) { filtered = null; return; }
+        filtered = string.IsNullOrWhiteSpace(searchQuery)
+            ? [.. allMedia]
+            : [.. allMedia.Where(m => m.Title.Contains(searchQuery, StringComparison.OrdinalIgnoreCase))];
+    }
+
+    private void SelectFile(MediaFileDto file) => selectedFile = selectedFile?.Id == file.Id ? null : file;
+
+    private async Task HandleUpload(InputFileChangeEventArgs e)
+    {
+        isUploading = true;
+        errorMsg = "";
+        try
+        {
+            var file = e.File;
+            var title = Path.GetFileNameWithoutExtension(file.Name);
+            await using var stream = file.OpenReadStream(maxAllowedSize: 50 * 1024 * 1024);
+            await Api.UploadMediaAsync(title, stream, file.Name, file.ContentType);
+            successMsg = $"'{file.Name}' uploaded successfully.";
+            await LoadMedia();
+        }
+        catch (Exception ex) { errorMsg = $"Upload failed: {ex.Message}"; }
+        finally { isUploading = false; }
+    }
+
+    private async Task CopyUrl()
+    {
+        if (selectedFile == null) return;
+        // Use clipboard API via JS is not straightforward — show URL in success message
+        successMsg = $"URL: {selectedFile.PublicPath}";
+    }
+
+    private async Task DeleteSelected()
+    {
+        showConfirm = false;
+        if (selectedFile == null) return;
+        try
+        {
+            await Api.DeleteMediaAsync(selectedFile.Id);
+            selectedFile = null;
+            await LoadMedia();
+        }
+        catch (Exception ex) { errorMsg = ex.Message; }
+    }
+
+    private static string FormatSize(long bytes) => bytes switch
+    {
+        < 1024 => $"{bytes} B",
+        < 1024 * 1024 => $"{bytes / 1024.0:F1} KB",
+        _ => $"{bytes / (1024.0 * 1024):F1} MB"
+    };
+}

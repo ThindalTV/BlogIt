@@ -1,0 +1,155 @@
+@page "/"
+@attribute [Authorize]
+@inject ApiClient Api
+
+<PageTitle>Dashboard — BlogIt Admin</PageTitle>
+
+<div class="page-header">
+    <h1 class="page-title">Dashboard</h1>
+</div>
+
+@if (isLoading)
+{
+    <div class="loading-spinner-wrap"><div class="spinner"></div></div>
+}
+else
+{
+    <div class="stat-grid">
+        <div class="stat-card">
+            <span class="stat-value">@publishedCount</span>
+            <span class="stat-label">Published Posts</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-value">@draftCount</span>
+            <span class="stat-label">Draft Posts</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-value">@pageCount</span>
+            <span class="stat-label">Pages</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-value">@mediaCount</span>
+            <span class="stat-label">Media Files</span>
+        </div>
+    </div>
+
+    <div class="dashboard-row">
+        <div class="dashboard-panel">
+            <h2 class="panel-title">Recent Posts</h2>
+            @if (recentPosts?.Count > 0)
+            {
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Title</th>
+                            <th>Status</th>
+                            <th>Author</th>
+                            <th>Date</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var post in recentPosts)
+                        {
+                            <tr>
+                                <td><a href="posts/@post.Id">@post.Title</a></td>
+                                <td><span class="badge @(post.IsPublished ? "badge-published" : "badge-draft")">@(post.IsPublished ? "Published" : "Draft")</span></td>
+                                <td>@post.AuthorDisplayName</td>
+                                <td>@post.UpdatedAt.ToString("MMM d, yyyy")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+            else
+            {
+                <p class="empty-state">No posts yet. <a href="posts/new">Create your first post →</a></p>
+            }
+        </div>
+
+        <div class="dashboard-panel">
+            <h2 class="panel-title">
+                Analytics
+                <span class="panel-actions">
+                    <input type="date" class="form-input form-input-sm" @bind="startDate" @bind:event="onchange" @bind:after="LoadAnalytics" />
+                    <span>–</span>
+                    <input type="date" class="form-input form-input-sm" @bind="endDate" @bind:event="onchange" @bind:after="LoadAnalytics" />
+                </span>
+            </h2>
+            @if (analyticsLoading)
+            {
+                <div class="loading-spinner-wrap"><div class="spinner"></div></div>
+            }
+            else if (analytics == null)
+            {
+                <p class="empty-state">Analytics not configured or no data available.</p>
+            }
+            else
+            {
+                <div class="analytics-metrics">
+                    <div class="metric">
+                        <span class="metric-value">@analytics.Sessions.ToString("N0")</span>
+                        <span class="metric-label">Sessions</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-value">@analytics.Users.ToString("N0")</span>
+                        <span class="metric-label">Users</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-value">@analytics.PageViews.ToString("N0")</span>
+                        <span class="metric-label">Page Views</span>
+                    </div>
+                </div>
+                @if (analytics.TopPages?.Count > 0)
+                {
+                    <h3 class="sub-title">Top Pages</h3>
+                    <table class="data-table">
+                        <thead><tr><th>Path</th><th>Views</th></tr></thead>
+                        <tbody>
+                            @foreach (var p in analytics.TopPages.Take(5))
+                            {
+                                <tr><td>@p.Path</td><td>@p.Views.ToString("N0")</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private bool isLoading = true;
+    private bool analyticsLoading;
+    private int publishedCount, draftCount, pageCount, mediaCount;
+    private IReadOnlyList<BlogPostSummaryDto>? recentPosts;
+    private AnalyticsSummaryDto? analytics;
+    private DateTime startDate = DateTime.Today.AddDays(-30);
+    private DateTime endDate = DateTime.Today;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var postsTask = Api.GetPostsAsync(page: 1);
+        var pagesTask = Api.GetPagesAsync();
+        var mediaTask = Api.GetMediaAsync();
+
+        await Task.WhenAll(postsTask, pagesTask, mediaTask);
+
+        var posts = await postsTask;
+        publishedCount = posts?.Items.Count(p => p.IsPublished) ?? 0;
+        draftCount = posts?.Items.Count(p => !p.IsPublished) ?? 0;
+        recentPosts = posts?.Items.Take(5).ToList();
+        pageCount = (await pagesTask)?.TotalCount ?? 0;
+        mediaCount = (await mediaTask)?.TotalCount ?? 0;
+
+        isLoading = false;
+        await LoadAnalytics();
+    }
+
+    private async Task LoadAnalytics()
+    {
+        analyticsLoading = true;
+        try { analytics = await Api.GetAnalyticsSummaryAsync(startDate, endDate); }
+        catch { analytics = null; }
+        analyticsLoading = false;
+    }
+}

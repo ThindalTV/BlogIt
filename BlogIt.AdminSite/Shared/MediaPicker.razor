@@ -1,0 +1,172 @@
+@if (IsOpen)
+{
+    <div class="modal-overlay" @onclick="HandleOverlayClick">
+        <div class="modal" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <h2 class="modal-title">Media Library</h2>
+                <button class="modal-close" @onclick="Close">✕</button>
+            </div>
+            <div class="modal-tabs">
+                <button class="tab-btn @(activeTab == "browse" ? "active" : "")" @onclick='() => activeTab = "browse"'>Browse</button>
+                <button class="tab-btn @(activeTab == "upload" ? "active" : "")" @onclick='() => activeTab = "upload"'>Upload</button>
+            </div>
+
+            @if (activeTab == "browse")
+            {
+                <div class="media-picker-search">
+                    <input class="form-input" placeholder="Search media…" value="@searchQuery" @oninput="OnSearchInput" />
+                </div>
+                @if (isLoading)
+                {
+                    <div class="loading-spinner-wrap"><div class="spinner"></div></div>
+                }
+                else if (filtered is { Count: 0 })
+                {
+                    <p class="empty-state">No media files found.</p>
+                }
+                else
+                {
+                    <div class="media-grid">
+                        @foreach (var file in filtered ?? [])
+                        {
+                            <div class="media-thumb @(selected?.Id == file.Id ? "selected" : "")" @onclick="() => SelectFile(file)">
+                                @if (file.ContentType.StartsWith("image/"))
+                                {
+                                    <img src="@file.PublicPath" alt="@file.Title" loading="lazy" />
+                                }
+                                else
+                                {
+                                    <div class="media-file-icon">📄</div>
+                                }
+                                <span class="media-thumb-name">@file.Title</span>
+                            </div>
+                        }
+                    </div>
+                }
+                @if (selected != null)
+                {
+                    <div class="media-picker-footer">
+                        <span class="selected-name">@selected.Title</span>
+                        <button class="btn btn-primary" @onclick="InsertSelected">Insert</button>
+                    </div>
+                }
+            }
+            else
+            {
+                <div class="upload-area">
+                    <label class="upload-label">
+                        <span>Choose file to upload</span>
+                        <InputFile OnChange="HandleFileUpload" accept="image/*,video/*,application/pdf" />
+                    </label>
+                    <div class="form-group">
+                        <label class="form-label">Title</label>
+                        <input class="form-input" @bind="uploadTitle" placeholder="File title" />
+                    </div>
+                    <button class="btn btn-primary" @onclick="UploadFile" disabled="@isUploading">
+                        @if (isUploading) { <span class="spinner-sm"></span> } else { <span>Upload</span> }
+                    </button>
+                    @if (!string.IsNullOrEmpty(uploadError))
+                    {
+                        <p class="error-msg">@uploadError</p>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback<MediaFileDto> OnInsert { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Inject] private ApiClient Api { get; set; } = default!;
+
+    private string activeTab = "browse";
+    private string searchQuery = "";
+    private IReadOnlyList<MediaFileDto>? allMedia;
+    private List<MediaFileDto>? filtered;
+    private MediaFileDto? selected;
+    private bool isLoading;
+    private bool isUploading;
+    private string uploadTitle = "";
+    private string uploadError = "";
+    private IBrowserFile? uploadFile;
+
+    private void OnSearchInput(ChangeEventArgs e)
+    {
+        searchQuery = e.Value?.ToString() ?? "";
+        FilterMedia();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsOpen && allMedia == null)
+            await LoadMedia();
+    }
+
+    private async Task LoadMedia()
+    {
+        isLoading = true;
+        allMedia = (await Api.GetMediaAsync())?.Items;
+        FilterMedia();
+        isLoading = false;
+    }
+
+    private void FilterMedia()
+    {
+        if (allMedia == null) { filtered = null; return; }
+        filtered = string.IsNullOrWhiteSpace(searchQuery)
+            ? [.. allMedia]
+            : [.. allMedia.Where(m => m.Title.Contains(searchQuery, StringComparison.OrdinalIgnoreCase))];
+    }
+
+    private void SelectFile(MediaFileDto file) => selected = file;
+
+    private async Task InsertSelected()
+    {
+        if (selected != null)
+        {
+            await OnInsert.InvokeAsync(selected);
+            await Close();
+        }
+    }
+
+    private void HandleFileUpload(InputFileChangeEventArgs e)
+    {
+        uploadFile = e.File;
+        if (string.IsNullOrWhiteSpace(uploadTitle))
+            uploadTitle = Path.GetFileNameWithoutExtension(e.File.Name);
+    }
+
+    private async Task UploadFile()
+    {
+        if (uploadFile == null) return;
+        isUploading = true;
+        uploadError = "";
+        try
+        {
+            await using var stream = uploadFile.OpenReadStream(maxAllowedSize: 50 * 1024 * 1024);
+            var result = await Api.UploadMediaAsync(uploadTitle, stream, uploadFile.Name, uploadFile.ContentType);
+            if (result != null)
+            {
+                allMedia = null;
+                await LoadMedia();
+                activeTab = "browse";
+                selected = result;
+            }
+        }
+        catch (Exception ex)
+        {
+            uploadError = $"Upload failed: {ex.Message}";
+        }
+        finally { isUploading = false; }
+    }
+
+    private async Task Close()
+    {
+        selected = null;
+        await OnClose.InvokeAsync();
+    }
+
+    private async Task HandleOverlayClick() => await Close();
+}

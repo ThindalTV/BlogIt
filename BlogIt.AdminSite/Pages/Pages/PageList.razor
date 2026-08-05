@@ -1,0 +1,136 @@
+@page "/pages"
+@attribute [Authorize]
+@inject ApiClient Api
+@inject NavigationManager Nav
+
+<PageTitle>Pages — BlogIt Admin</PageTitle>
+
+<div class="page-header">
+    <h1 class="page-title">Pages</h1>
+    <a class="btn btn-primary" href="pages/new">+ New Page</a>
+</div>
+
+@if (isLoading)
+{
+    <div class="loading-spinner-wrap"><div class="spinner"></div></div>
+}
+else if (pages == null || pages.Count == 0)
+{
+    <div class="empty-state-box">
+        <p>No pages yet.</p>
+        <a class="btn btn-primary" href="pages/new">Create your first page</a>
+    </div>
+}
+else
+{
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Title</th>
+                <th>Slug</th>
+                <th>Status</th>
+                <th>Updated</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var pg in pages)
+            {
+                <tr>
+                    <td><a href="pages/@pg.Id">@pg.Title</a></td>
+                    <td><code>@pg.Slug</code></td>
+                    <td>
+                        <span class="badge @(pg.IsPublished ? "badge-published" : "badge-draft")">@ScheduleLabel(pg)</span>
+                        @if (pg.ScheduledPublishAt.HasValue || pg.ScheduledUnpublishAt.HasValue)
+                        {
+                            <div class="form-hint">@ScheduleTime(pg)</div>
+                        }
+                    </td>
+                    <td>@pg.UpdatedAt.ToString("MMM d, yyyy")</td>
+                    <td class="actions">
+                        <a class="btn btn-sm btn-secondary" href="pages/@pg.Id">Edit</a>
+                        <button class="btn btn-sm btn-secondary" @onclick="() => Preview(pg)">Preview</button>
+                        @if (pg.ScheduledPublishAt.HasValue || pg.ScheduledUnpublishAt.HasValue)
+                        {
+                            <button class="btn btn-sm btn-secondary" @onclick="() => ClearSchedule(pg)">Cancel schedule</button>
+                        }
+                        <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDelete(pg)">Delete</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@if (!string.IsNullOrEmpty(errorMsg))
+{
+    <div class="alert alert-error">@errorMsg</div>
+}
+
+<ConfirmDialog IsOpen="showConfirm"
+    Title="Delete Page"
+    Message=@($"Delete \"{pageToDelete?.Title}\"? This cannot be undone.")
+    OnConfirm="DeletePage"
+    OnCancel="() => showConfirm = false" />
+
+@code {
+    private IReadOnlyList<PageDto>? pages;
+    private bool isLoading = true;
+    private string errorMsg = "";
+    private bool showConfirm;
+    private PageDto? pageToDelete;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { pages = (await Api.GetPagesAsync())?.Items; }
+        catch (Exception ex) { errorMsg = ex.Message; }
+        finally { isLoading = false; }
+    }
+
+    private void ConfirmDelete(PageDto page) { pageToDelete = page; showConfirm = true; }
+
+    private async Task Preview(PageDto page)
+    {
+        try
+        {
+            var preview = await Api.CreatePagePreviewAsync(page.Id);
+            if (preview is not null)
+                Nav.NavigateTo(preview.Url, forceLoad: true);
+        }
+        catch (Exception ex) { errorMsg = ex.Message; }
+    }
+
+    private async Task ClearSchedule(PageDto page)
+    {
+        try
+        {
+            await Api.UpdatePageScheduleAsync(page.Id, new(null, null));
+            pages = (await Api.GetPagesAsync())?.Items;
+        }
+        catch (Exception ex) { errorMsg = ex.Message; }
+    }
+
+    private static string ScheduleLabel(PageDto page) => page.ScheduleState switch
+    {
+        PublicationScheduleState.ScheduledForPublishing => "Scheduled",
+        PublicationScheduleState.ScheduledForUnpublishing => "Published · scheduled",
+        PublicationScheduleState.Published => "Published",
+        _ => "Draft"
+    };
+
+    private static string ScheduleTime(PageDto page)
+    {
+        var instant = page.ScheduleState == PublicationScheduleState.ScheduledForPublishing
+            ? page.ScheduledPublishAt
+            : page.ScheduledUnpublishAt;
+        return instant.HasValue ? instant.Value.ToLocalTime().ToString("MMM d, yyyy h:mm tt") : "";
+    }
+
+    private async Task DeletePage()
+    {
+        showConfirm = false;
+        if (pageToDelete == null) return;
+        try { await Api.DeletePageAsync(pageToDelete.Id); pages = (await Api.GetPagesAsync())?.Items; }
+        catch (Exception ex) { errorMsg = ex.Message; }
+    }
+}

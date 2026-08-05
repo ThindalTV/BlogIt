@@ -1,0 +1,29 @@
+@if (IsOpen)
+{
+    <div class="modal-overlay" @onclick="HandleCancel">
+        <div class="modal modal-sm" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <h2 class="modal-title">@Title</h2>
+            </div>
+            <div class="modal-body">
+                <p>@Message</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="HandleCancel">Cancel</button>
+                <button class="btn btn-danger" @onclick="HandleConfirm">@ConfirmLabel</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public string Title { get; set; } = "Confirm";
+    [Parameter] public string Message { get; set; } = "Are you sure?";
+    [Parameter] public string ConfirmLabel { get; set; } = "Delete";
+    [Parameter] public EventCallback OnConfirm { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private async Task HandleConfirm() => await OnConfirm.InvokeAsync();
+    private async Task HandleCancel() => await OnCancel.InvokeAsync();
+}

@@ -1,0 +1,382 @@
+/* =========================================================
+   public.css — BlogIt public site styles
+   ========================================================= */
+
+/* --- Reset / Normalize ---------------------------------- */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 16px; scroll-behavior: smooth; }
+img, video { max-width: 100%; height: auto; display: block; }
+a { color: inherit; }
+button, input, select, textarea { font: inherit; }
+
+/* --- Typography ----------------------------------------- */
+body {
+    font-family: Georgia, 'Times New Roman', Times, serif;
+    font-size: 1.0625rem;
+    line-height: 1.75;
+    color: #1a1a1a;
+    background: #fff;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    font-family: system-ui, -apple-system, sans-serif;
+    font-weight: 700;
+    line-height: 1.25;
+    margin-bottom: 0.5em;
+    color: #111;
+}
+
+h1 { font-size: 2rem; }
+h2 { font-size: 1.5rem; }
+h3 { font-size: 1.25rem; }
+
+p { margin-bottom: 1rem; }
+
+ul, ol { margin-bottom: 1rem; padding-left: 1.5rem; }
+
+blockquote {
+    border-left: 4px solid #ccc;
+    padding: 0.5rem 1rem;
+    margin: 1.5rem 0;
+    color: #555;
+    font-style: italic;
+    background: #f9f9f9;
+}
+
+code {
+    font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+    font-size: 0.9em;
+    background: #f0f0f0;
+    padding: 0.1em 0.35em;
+    border-radius: 3px;
+}
+
+pre {
+    background: #1e1e1e;
+    color: #d4d4d4;
+    padding: 1.25rem;
+    border-radius: 6px;
+    overflow-x: auto;
+    margin-bottom: 1.5rem;
+    font-size: 0.875rem;
+    line-height: 1.6;
+}
+
+pre code {
+    background: none;
+    padding: 0;
+    font-size: inherit;
+    color: inherit;
+    border-radius: 0;
+}
+
+hr {
+    border: none;
+    border-top: 1px solid #e5e5e5;
+    margin: 2rem 0;
+}
+
+/* --- Layout --------------------------------------------- */
+.container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 0 1.25rem;
+}
+
+/* --- Header / Nav --------------------------------------- */
+.site-header {
+    border-bottom: 1px solid #e5e5e5;
+    padding: 1rem 0;
+    margin-bottom: 2.5rem;
+    background: #fff;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.site-header .container {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.site-title {
+    font-family: system-ui, -apple-system, sans-serif;
+    font-size: 1.25rem;
+    font-weight: 700;
+    text-decoration: none;
+    color: #111;
+    flex-shrink: 0;
+}
+
+.site-title:hover { color: #0056d2; }
+
+.site-nav {
+    display: flex;
+    gap: 1rem;
+}
+
+.site-nav a {
+    font-family: system-ui, -apple-system, sans-serif;
+    font-size: 0.9rem;
+    text-decoration: none;
+    color: #444;
+    padding: 0.2rem 0;
+    border-bottom: 2px solid transparent;
+    transition: color 0.15s, border-color 0.15s;
+}
+
+.site-nav a:hover,
+.site-nav a.active {
+    color: #0056d2;
+    border-bottom-color: #0056d2;
+}
+
+/* --- Search form (header) ------------------------------- */
+.search-form {
+    display: flex;
+    gap: 0.4rem;
+    margin-left: auto;
+}
+
+.search-form input[type="search"] {
+    padding: 0.35rem 0.65rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 0.875rem;
+    width: 180px;
+    outline: none;
+    transition: border-color 0.15s;
+}
+
+.search-form input[type="search"]:focus { border-color: #0056d2; }
+
+.search-form button {
+    padding: 0.35rem 0.75rem;
+    background: #0056d2;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.search-form button:hover { background: #0043a8; }
+
+/* --- Search page form ----------------------------------- */
+.search-form-page {
+    margin-bottom: 1.5rem;
+    margin-left: 0;
+}
+
+.search-form-page input[type="search"] {
+    width: 100%;
+    max-width: 500px;
+    font-size: 1rem;
+    padding: 0.5rem 0.75rem;
+}
+
+.search-form-page button {
+    font-size: 1rem;
+    padding: 0.5rem 1rem;
+}
+
+.search-results-count { margin-bottom: 1.5rem; color: #555; }
+
+/* --- Hero section --------------------------------------- */
+.hero {
+    margin-bottom: 3rem;
+    padding-bottom: 2rem;
+    border-bottom: 1px solid #e5e5e5;
+}
+
+.hero h1 { font-size: 2.5rem; }
+.hero-description { color: #555; font-size: 1.125rem; margin-top: 0.5rem; }
+
+/* --- Post card (listing) -------------------------------- */
+.post-card {
+    margin-bottom: 2.5rem;
+    padding-bottom: 2.5rem;
+    border-bottom: 1px solid #e5e5e5;
+}
+
+.post-card:last-of-type { border-bottom: none; }
+
+.post-title { margin-bottom: 0.35rem; }
+.post-title a { text-decoration: none; color: #111; }
+.post-title a:hover { color: #0056d2; text-decoration: underline; }
+
+.post-meta {
+    font-family: system-ui, -apple-system, sans-serif;
+    font-size: 0.875rem;
+    color: #777;
+    margin-bottom: 0.75rem;
+}
+
+.post-author { margin-left: 0; }
+
+.post-summary { margin-bottom: 0.75rem; }
+.post-summary p:last-child { margin-bottom: 0; }
+
+/* --- Read more ------------------------------------------ */
+.read-more {
+    display: inline-block;
+    font-family: system-ui, -apple-system, sans-serif;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #0056d2;
+    text-decoration: none;
+    margin-top: 0.5rem;
+}
+
+.read-more:hover { text-decoration: underline; }
+
+/* --- Tag chips ------------------------------------------ */
+.tag-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-bottom: 0.75rem;
+}
+
+.tag-chip {
+    font-family: system-ui, -apple-system, sans-serif;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.2rem 0.6rem;
+    background: #f0f4ff;
+    color: #0056d2;
+    border-radius: 999px;
+    text-decoration: none;
+    border: 1px solid #ccd9ff;
+    transition: background 0.15s, color 0.15s;
+}
+
+.tag-chip:hover {
+    background: #0056d2;
+    color: #fff;
+    border-color: #0056d2;
+}
+
+/* --- Full post ------------------------------------------ */
+.post-full { margin-bottom: 3rem; }
+
+.post-header { margin-bottom: 2rem; }
+.post-header h1 { font-size: 2.25rem; margin-bottom: 0.5rem; }
+
+.post-content { max-width: 100%; }
+.post-content h2 { margin-top: 2rem; }
+.post-content h3 { margin-top: 1.75rem; }
+.post-content a { color: #0056d2; }
+.post-content a:hover { text-decoration: none; }
+.post-content img { border-radius: 4px; margin: 1rem 0; }
+
+.page-full { margin-bottom: 3rem; }
+.page-content { max-width: 100%; }
+.page-content h2 { margin-top: 2rem; }
+.page-content a { color: #0056d2; }
+
+.draft-preview-banner {
+    display: flex;
+    justify-content: center;
+    align-items: baseline;
+    gap: 0.75rem;
+    margin-bottom: 2rem;
+    padding: 0.85rem 1rem;
+    border: 3px solid #7c2d12;
+    border-radius: 6px;
+    background: #ffedd5;
+    color: #7c2d12;
+    font-family: system-ui, -apple-system, sans-serif;
+    text-align: center;
+}
+
+.draft-preview-banner strong {
+    letter-spacing: 0.08em;
+}
+
+/* --- Post nav (prev / next) ----------------------------- */
+.post-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    margin-top: 3rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid #e5e5e5;
+    font-family: system-ui, -apple-system, sans-serif;
+    font-size: 0.9rem;
+}
+
+.post-nav a {
+    max-width: 45%;
+    text-decoration: none;
+    color: #0056d2;
+    font-weight: 600;
+    line-height: 1.4;
+}
+
+.post-nav a:hover { text-decoration: underline; }
+.post-nav-next { margin-left: auto; text-align: right; }
+
+/* --- Pagination ----------------------------------------- */
+.pagination {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-top: 2rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid #e5e5e5;
+    font-family: system-ui, -apple-system, sans-serif;
+    font-size: 0.9rem;
+}
+
+.pagination a {
+    color: #0056d2;
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.pagination a:hover { text-decoration: underline; }
+.pagination-info { color: #777; }
+.pagination-next { margin-left: auto; }
+
+/* --- Footer --------------------------------------------- */
+.site-footer {
+    margin-top: 4rem;
+    border-top: 1px solid #e5e5e5;
+    padding: 1.5rem 0;
+    font-family: system-ui, -apple-system, sans-serif;
+    font-size: 0.85rem;
+    color: #999;
+    text-align: center;
+}
+
+/* --- Responsive ----------------------------------------- */
+@media (max-width: 640px) {
+    h1 { font-size: 1.6rem; }
+    h2 { font-size: 1.3rem; }
+    .hero h1 { font-size: 1.75rem; }
+    .post-header h1 { font-size: 1.75rem; }
+
+    .site-header .container {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.75rem;
+    }
+
+    .search-form { margin-left: 0; width: 100%; }
+    .search-form input[type="search"] { width: 100%; }
+
+    .post-nav { flex-direction: column; }
+    .post-nav-next { margin-left: 0; text-align: left; }
+    .post-nav a { max-width: 100%; }
+
+    .draft-preview-banner {
+        align-items: center;
+        flex-direction: column;
+        gap: 0;
+    }
+}

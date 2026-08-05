@@ -1,0 +1,123 @@
+@page "/login"
+@layout BlogIt.MauiAdmin.Components.Layout.MainLayout
+@using BlogIt.MauiAdmin.Models
+@using BlogIt.MauiAdmin.Services
+@inject SiteProfileService ProfileService
+@inject MauiApiClient Api
+@inject NavigationManager Nav
+
+<div class="login-container">
+    <div class="login-card card">
+        <h1 class="login-title">BlogIt Admin</h1>
+
+        @if (_noSites)
+        {
+            <div class="alert alert-info">
+                No sites configured. <a href="/sites">Add a site first →</a>
+            </div>
+        }
+        else
+        {
+            @if (_profiles.Count > 1)
+            {
+                <div class="form-group">
+                    <label>Site</label>
+                    <select class="form-control" @bind="_selectedProfileId">
+                        @foreach (var p in _profiles)
+                        {
+                            <option value="@p.Id">@p.Name (@p.ApiBaseUrl)</option>
+                        }
+                    </select>
+                </div>
+            }
+            else if (_profiles.Count == 1)
+            {
+                <p class="login-site">Logging in to <strong>@_profiles[0].Name</strong></p>
+            }
+
+            <div class="form-group">
+                <label>Username</label>
+                <input class="form-control" @bind="_username" placeholder="Username"
+                       @onkeydown="OnKeyDown" autofocus />
+            </div>
+            <div class="form-group">
+                <label>Password</label>
+                <input class="form-control" type="password" @bind="_password" placeholder="Password"
+                       @onkeydown="OnKeyDown" />
+            </div>
+
+            @if (!string.IsNullOrEmpty(_error))
+            {
+                <div class="alert alert-danger">@_error</div>
+            }
+
+            <button class="btn btn-primary btn-full" @onclick="DoLogin" disabled="@_loggingIn">
+                @(_loggingIn ? "Logging in…" : "Log In")
+            </button>
+
+            <div class="login-footer">
+                <a href="/sites">Manage sites</a>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private List<SiteProfile> _profiles = [];
+    private string? _selectedProfileId;
+    private string _username = "";
+    private string _password = "";
+    private string? _error;
+    private bool _loggingIn;
+    private bool _noSites;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _profiles = await ProfileService.GetProfilesAsync();
+        _noSites = _profiles.Count == 0;
+        var active = await ProfileService.GetActiveProfileAsync();
+        _selectedProfileId = active?.Id ?? _profiles.FirstOrDefault()?.Id;
+
+        // If already logged in for active profile, go straight to dashboard
+        if (active?.IsTokenValid == true)
+            Nav.NavigateTo("/dashboard");
+    }
+
+    private async Task DoLogin()
+    {
+        if (string.IsNullOrWhiteSpace(_username) || string.IsNullOrWhiteSpace(_password))
+        {
+            _error = "Username and password are required.";
+            return;
+        }
+
+        _loggingIn = true;
+        _error = null;
+
+        var profileId = _selectedProfileId ?? _profiles.FirstOrDefault()?.Id;
+        if (profileId is null)
+        {
+            _error = "No site selected.";
+            _loggingIn = false;
+            return;
+        }
+
+        await ProfileService.SetActiveAsync(profileId);
+        var result = await Api.LoginAsync(profileId, _username, _password);
+
+        if (result is null)
+        {
+            _error = "Invalid username or password.";
+            _loggingIn = false;
+            return;
+        }
+
+        Nav.NavigateTo("/dashboard");
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await DoLogin();
+    }
+}
+

@@ -1,0 +1,51 @@
+@inherits LayoutComponentBase
+@inject NavigationManager Nav
+@inject AuthenticationStateProvider AuthProvider
+@inject LocalStorageService LocalStorage
+
+<div class="admin-shell">
+    <header class="topbar">
+        <div class="topbar-brand">
+            <span class="topbar-logo">✦</span>
+            <span class="topbar-name">BlogIt Admin</span>
+        </div>
+        <div class="topbar-user">
+            <AuthorizeView>
+                <Authorized>
+                    <span class="topbar-username">@context.User.FindFirst("name")?.Value ?? context.User.Identity?.Name</span>
+                    <button class="btn-logout" @onclick="Logout">Logout</button>
+                </Authorized>
+            </AuthorizeView>
+        </div>
+    </header>
+
+    <div class="admin-body">
+        <nav class="sidebar">
+            <ul class="nav-list">
+                <li><NavLink href="" Match="NavLinkMatch.All" class="nav-link"><span class="nav-icon">⊞</span>Dashboard</NavLink></li>
+                <li><NavLink href="posts" class="nav-link"><span class="nav-icon">✎</span>Posts</NavLink></li>
+                <li><NavLink href="pages" class="nav-link"><span class="nav-icon">☰</span>Pages</NavLink></li>
+                <li><NavLink href="media" class="nav-link"><span class="nav-icon">🖼</span>Media</NavLink></li>
+                <li><NavLink href="ai" class="nav-link"><span class="nav-icon">✦</span>AI</NavLink></li>
+                <li><NavLink href="redirects" class="nav-link"><span class="nav-icon">↪</span>Redirects</NavLink></li>
+                <li class="nav-divider"></li>
+                <li><NavLink href="users" class="nav-link"><span class="nav-icon">👤</span>Users</NavLink></li>
+                <li><NavLink href="settings" class="nav-link"><span class="nav-icon">⚙</span>Settings</NavLink></li>
+                <li><NavLink href="account" class="nav-link"><span class="nav-icon">🔑</span>My Account</NavLink></li>
+            </ul>
+        </nav>
+
+        <main class="main-content">
+            @Body
+        </main>
+    </div>
+</div>
+
+@code {
+    private async Task Logout()
+    {
+        var provider = (AuthStateProvider)AuthProvider;
+        await provider.MarkUserAsLoggedOut();
+        Nav.NavigateTo("login", forceLoad: false);
+    }
+}

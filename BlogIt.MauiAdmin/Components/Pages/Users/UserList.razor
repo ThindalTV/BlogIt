@@ -1,0 +1,173 @@
+@page "/users"
+@inject MauiApiClient Api
+@inject NavigationManager Nav
+@inject SiteProfileService ProfileService
+
+<div class="page-header">
+    <h1 class="page-title">Users</h1>
+    <button class="btn btn-primary" @onclick="() => { _showNewForm = !_showNewForm; }">+ New User</button>
+</div>
+
+@if (!string.IsNullOrEmpty(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+
+@if (!string.IsNullOrEmpty(_success))
+{
+    <div class="alert alert-success">@_success</div>
+}
+
+@if (_showNewForm)
+{
+    <div class="card" style="margin-bottom:1rem">
+        <h3 class="card-title">New User</h3>
+        <div class="form-group">
+            <label>Username <span class="required">*</span></label>
+            <input class="form-control" @bind="_newUsername" placeholder="username" />
+        </div>
+        <div class="form-group">
+            <label>Display Name</label>
+            <input class="form-control" @bind="_newDisplayName" placeholder="Display name" />
+        </div>
+        <div class="form-group">
+            <label>Password <span class="required">*</span></label>
+            <input class="form-control" type="password" @bind="_newPassword" placeholder="Password" />
+        </div>
+        <div class="form-actions">
+            <button class="btn btn-primary" @onclick="CreateUserAsync" disabled="@_creating">
+                @(_creating ? "Creating…" : "Create User")
+            </button>
+            <button class="btn btn-outline" @onclick="CancelNewForm">Cancel</button>
+        </div>
+    </div>
+}
+
+@if (_loading)
+{
+    <p>Loading…</p>
+}
+else if (_users is not null)
+{
+    @if (_users.Count == 0)
+    {
+        <p class="text-muted">No users found.</p>
+    }
+    else
+    {
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Username</th>
+                    <th>Display Name</th>
+                    <th>Created</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var user in _users)
+                {
+                    <tr>
+                        <td>@user.Username</td>
+                        <td>@(user.DisplayName ?? "—")</td>
+                        <td>@user.CreatedAt.ToString("yyyy-MM-dd")</td>
+                        <td class="table-actions">
+                            <button class="btn btn-sm btn-danger"
+                                    @onclick="() => ConfirmDelete(user.Id, user.Username)">Delete</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+}
+
+@if (_confirmDeleteId.HasValue)
+{
+    <div class="confirm-overlay">
+        <div class="confirm-dialog card">
+            <p>Delete user "<strong>@_confirmDeleteUsername</strong>"? This cannot be undone.</p>
+            <div class="confirm-actions">
+                <button class="btn btn-danger" @onclick="DoDeleteAsync">Yes, Delete</button>
+                <button class="btn btn-outline" @onclick="() => { _confirmDeleteId = null; }">Cancel</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<AppUserDto>? _users;
+    private bool _loading = true;
+    private string? _error;
+    private string? _success;
+
+    private bool _showNewForm;
+    private bool _creating;
+    private string _newUsername = "";
+    private string _newDisplayName = "";
+    private string _newPassword = "";
+
+    private Guid? _confirmDeleteId;
+    private string? _confirmDeleteUsername;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var profile = await ProfileService.GetActiveProfileAsync();
+        if (profile?.IsTokenValid != true) { Nav.NavigateTo("/login"); return; }
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+        try { _users = await Api.GetUsersAsync(); }
+        catch (Exception ex) { _error = ex.Message; }
+        _loading = false;
+    }
+
+    private async Task CreateUserAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newUsername)) { _error = "Username is required."; return; }
+        if (string.IsNullOrWhiteSpace(_newPassword)) { _error = "Password is required."; return; }
+
+        _creating = true;
+        _error = null;
+        var created = await Api.CreateUserAsync(new CreateUserRequest(_newUsername.Trim(), _newDisplayName.Trim(), _newPassword));
+        _creating = false;
+
+        if (created is not null)
+        {
+            _success = $"User '{created.Username}' created.";
+            CancelNewForm();
+            await LoadAsync();
+        }
+        else
+        {
+            _error = "Failed to create user. Username may already exist.";
+        }
+    }
+
+    private void CancelNewForm()
+    {
+        _showNewForm = false;
+        _newUsername = "";
+        _newDisplayName = "";
+        _newPassword = "";
+    }
+
+    private void ConfirmDelete(Guid id, string? username)
+    {
+        _confirmDeleteId = id;
+        _confirmDeleteUsername = username;
+    }
+
+    private async Task DoDeleteAsync()
+    {
+        if (_confirmDeleteId is null) return;
+        var ok = await Api.DeleteUserAsync(_confirmDeleteId.Value);
+        _confirmDeleteId = null;
+        if (ok) { _success = "User deleted."; await LoadAsync(); }
+        else _error = "Failed to delete user.";
+    }
+}

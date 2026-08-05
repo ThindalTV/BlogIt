@@ -1,0 +1,107 @@
+@page "/ai"
+@attribute [Authorize]
+@inject ApiClient Api
+@inject NavigationManager Nav
+
+<PageTitle>AI Conversations — BlogIt Admin</PageTitle>
+
+<div class="page-header">
+    <h1 class="page-title">AI Conversations</h1>
+    <button class="btn btn-primary" @onclick="NewConversation" disabled="@isCreating">
+        @if (isCreating) { <span class="spinner-sm"></span> } else { <span>+ New Conversation</span> }
+    </button>
+</div>
+
+@if (!string.IsNullOrEmpty(errorMsg))
+{
+    <div class="alert alert-error">@errorMsg</div>
+}
+
+@if (isLoading)
+{
+    <div class="loading-spinner-wrap"><div class="spinner"></div></div>
+}
+else if (conversations == null || conversations.Count == 0)
+{
+    <div class="empty-state-box">
+        <p>No AI conversations yet.</p>
+        <button class="btn btn-primary" @onclick="NewConversation">Start your first conversation</button>
+    </div>
+}
+else
+{
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Title</th>
+                <th>Messages</th>
+                <th>Draft</th>
+                <th>Updated</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var conv in conversations)
+            {
+                <tr>
+                    <td><a href="ai/@conv.Id">@conv.Title</a></td>
+                    <td>@conv.MessageCount</td>
+                    <td>@(conv.LinkedDraftId.HasValue ? "Yes" : "—")</td>
+                    <td>@conv.UpdatedAt.ToString("MMM d, yyyy")</td>
+                    <td class="actions">
+                        <a class="btn btn-sm btn-secondary" href="ai/@conv.Id">Open</a>
+                        <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDelete(conv)">Delete</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+<ConfirmDialog IsOpen="showConfirm"
+    Title="Delete Conversation"
+    Message=@($"Delete \"{convToDelete?.Title}\"?")
+    OnConfirm="DeleteConversation"
+    OnCancel="() => showConfirm = false" />
+
+@code {
+    private IReadOnlyList<AiConversationSummaryDto>? conversations;
+    private bool isLoading = true;
+    private bool isCreating;
+    private string errorMsg = "";
+    private bool showConfirm;
+    private AiConversationSummaryDto? convToDelete;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { conversations = await Api.GetConversationsAsync(); }
+        catch (Exception ex) { errorMsg = ex.Message; }
+        finally { isLoading = false; }
+    }
+
+    private async Task NewConversation()
+    {
+        isCreating = true;
+        try
+        {
+            var conv = await Api.CreateConversationAsync(new CreateAiConversationRequest("New Conversation"));
+            if (conv != null) Nav.NavigateTo($"ai/{conv.Id}");
+        }
+        catch (Exception ex) { errorMsg = ex.Message; }
+        finally { isCreating = false; }
+    }
+
+    private void ConfirmDelete(AiConversationSummaryDto conv) { convToDelete = conv; showConfirm = true; }
+
+    private async Task DeleteConversation()
+    {
+        showConfirm = false;
+        if (convToDelete == null) return;
+        try
+        {
+            await Api.DeleteConversationAsync(convToDelete.Id);
+            conversations = await Api.GetConversationsAsync();
+        }
+        catch (Exception ex) { errorMsg = ex.Message; }
+    }
+}

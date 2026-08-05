@@ -1,0 +1,234 @@
+@page "/posts/new"
+@page "/posts/{Id:guid}"
+@inject MauiApiClient Api
+@inject NavigationManager Nav
+@inject SiteProfileService ProfileService
+
+<div class="page-header">
+    <h1 class="page-title">@(_isNew ? "New Post" : "Edit Post")</h1>
+    <button class="btn btn-outline" @onclick='() => Nav.NavigateTo("/posts")'>← Back to Posts</button>
+</div>
+
+@if (!string.IsNullOrEmpty(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+
+@if (!string.IsNullOrEmpty(_success))
+{
+    <div class="alert alert-success">@_success</div>
+}
+
+@if (_loading)
+{
+    <p>Loading…</p>
+}
+else
+{
+    <div class="card">
+        @if (!_isNew)
+        {
+            <div class="form-group">
+                <label>Status</label>
+                <span>
+                    @if (_isPublished)
+                    {
+                        <span class="badge badge-success">Published</span>
+                    }
+                    else
+                    {
+                        <span class="badge badge-secondary">Draft</span>
+                    }
+                </span>
+            </div>
+        }
+
+        <div class="form-group">
+            <label>Title <span class="required">*</span></label>
+            <input class="form-control" @bind="_title" placeholder="Post title" />
+        </div>
+
+        <div class="form-group">
+            <label>Summary <span class="required">*</span></label>
+            <textarea class="form-control" rows="3" @bind="_summary" placeholder="Short summary"></textarea>
+        </div>
+
+        <div class="form-group">
+            <label>Content</label>
+            <textarea class="form-control" rows="16" @bind="_content" placeholder="Post content (Markdown)"></textarea>
+        </div>
+
+        <div class="form-group">
+            <label>Tags <span class="hint">(comma-separated)</span></label>
+            <input class="form-control" @bind="_tags" placeholder="e.g. tech, blazor, dotnet" />
+        </div>
+
+        <details class="seo-fields">
+            <summary>SEO &amp; OG Fields</summary>
+            <div class="form-group" style="margin-top:1rem">
+                <label>SEO Title</label>
+                <input class="form-control" @bind="_seoTitle" />
+            </div>
+            <div class="form-group">
+                <label>SEO Description</label>
+                <textarea class="form-control" rows="2" @bind="_seoDescription"></textarea>
+            </div>
+            <div class="form-group">
+                <label>OG Image URL</label>
+                <input class="form-control" @bind="_ogImageUrl" placeholder="https://…" />
+            </div>
+        </details>
+
+        <div class="form-actions">
+            <button class="btn btn-outline" @onclick="SaveDraftAsync" disabled="@_saving">
+                @(_saving ? "Saving…" : "Save as Draft")
+            </button>
+            <button class="btn btn-primary" @onclick="PublishAsync" disabled="@_saving">
+                @(_saving ? "Saving…" : (_isPublished ? "Save &amp; Keep Published" : "Save &amp; Publish"))
+            </button>
+            @if (!_isNew && _isPublished)
+            {
+                <button class="btn btn-outline" @onclick="UnpublishAsync" disabled="@_saving">
+                    Unpublish
+                </button>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+
+    private bool _isNew;
+    private bool _isPublished;
+    private bool _loading = true;
+    private bool _saving;
+    private string? _error;
+    private string? _success;
+
+    private string _title = "";
+    private string _summary = "";
+    private string _content = "";
+    private string _tags = "";
+    private string _seoTitle = "";
+    private string _seoDescription = "";
+    private string _ogImageUrl = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var profile = await ProfileService.GetActiveProfileAsync();
+        if (profile?.IsTokenValid != true) { Nav.NavigateTo("/login"); return; }
+
+        _isNew = Id is null;
+
+        if (!_isNew)
+        {
+            try
+            {
+                var post = await Api.GetPostAsync(Id!.Value);
+                if (post is null) { Nav.NavigateTo("/posts"); return; }
+                _title = post.Title ?? "";
+                _summary = post.Summary ?? "";
+                _content = post.Content ?? "";
+                _tags = post.Tags is { Count: > 0 } ? string.Join(", ", post.Tags.Select(t => t.Name)) : "";
+                _seoTitle = post.SeoTitle ?? "";
+                _seoDescription = post.SeoDescription ?? "";
+                _ogImageUrl = post.OgImageUrl ?? "";
+                _isPublished = post.IsPublished;
+            }
+            catch (Exception ex)
+            {
+                _error = ex.Message;
+            }
+        }
+
+        _loading = false;
+    }
+
+    private List<string> ParseTags() =>
+        _tags.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+
+    private async Task SaveDraftAsync()
+    {
+        if (!Validate()) return;
+        _saving = true;
+        _error = null;
+        _success = null;
+
+        bool ok;
+        if (_isNew)
+        {
+            var created = await Api.CreatePostAsync(new CreateBlogPostRequest(
+                _title, _summary, _content, _seoTitle, _seoDescription, null, _ogImageUrl, ParseTags()));
+            ok = created is not null;
+            if (ok) Nav.NavigateTo($"/posts/{created!.Id}");
+        }
+        else
+        {
+            var updated = await Api.UpdatePostAsync(Id!.Value,
+                new UpdateBlogPostRequest(_title, _summary, _content, _seoTitle, _seoDescription, null, _ogImageUrl, ParseTags()));
+            ok = updated is not null;
+            if (ok) _success = "Saved.";
+        }
+
+        if (!ok) _error = "Failed to save post.";
+        _saving = false;
+    }
+
+    private async Task PublishAsync()
+    {
+        if (!Validate()) return;
+        _saving = true;
+        _error = null;
+        _success = null;
+
+        Guid postId;
+        if (_isNew)
+        {
+            var created = await Api.CreatePostAsync(new CreateBlogPostRequest(
+                _title, _summary, _content, _seoTitle, _seoDescription, null, _ogImageUrl, ParseTags()));
+            if (created is null) { _error = "Failed to save post."; _saving = false; return; }
+            postId = created.Id;
+        }
+        else
+        {
+            var updated = await Api.UpdatePostAsync(Id!.Value,
+                new UpdateBlogPostRequest(_title, _summary, _content, _seoTitle, _seoDescription, null, _ogImageUrl, ParseTags()));
+            if (updated is null) { _error = "Failed to save post."; _saving = false; return; }
+            postId = Id!.Value;
+        }
+
+        var published = await Api.PublishPostAsync(postId);
+        if (published)
+        {
+            _isPublished = true;
+            _isNew = false;
+            Id = postId;
+            _success = "Post published.";
+            Nav.NavigateTo($"/posts/{postId}");
+        }
+        else
+        {
+            _error = "Post saved but could not be published.";
+        }
+
+        _saving = false;
+    }
+
+    private async Task UnpublishAsync()
+    {
+        _saving = true;
+        _error = null;
+        var ok = await Api.UnpublishPostAsync(Id!.Value);
+        if (ok) { _isPublished = false; _success = "Post unpublished."; }
+        else _error = "Failed to unpublish.";
+        _saving = false;
+    }
+
+    private bool Validate()
+    {
+        if (string.IsNullOrWhiteSpace(_title)) { _error = "Title is required."; return false; }
+        if (string.IsNullOrWhiteSpace(_summary)) { _error = "Summary is required."; return false; }
+        return true;
+    }
+}

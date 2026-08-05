@@ -1,0 +1,177 @@
+@page "/ai/{Id:guid}"
+@attribute [Authorize]
+@inject ApiClient Api
+@inject NavigationManager Nav
+
+<PageTitle>@(conversation?.Title ?? "AI Chat") — BlogIt Admin</PageTitle>
+
+<div class="page-header">
+    <div class="chat-title-wrap">
+        @if (editingTitle)
+        {
+            <input class="form-input chat-title-input" @bind="titleEdit" @onblur="SaveTitle" @onkeydown="TitleKeyDown" autofocus />
+        }
+        else
+        {
+            <h1 class="page-title chat-title" @onclick="StartEditTitle" title="Click to rename">
+                @(conversation?.Title ?? "AI Chat")
+                <span class="edit-hint">✎</span>
+            </h1>
+        }
+    </div>
+    <button class="btn btn-primary" @onclick="() => showExportModal = true">Export to Draft</button>
+</div>
+
+@if (!string.IsNullOrEmpty(errorMsg))
+{
+    <div class="alert alert-error">@errorMsg</div>
+}
+@if (exportedDraftId.HasValue)
+{
+    <div class="alert alert-success">
+        Draft created! <a href="posts/@exportedDraftId">Edit the draft →</a>
+    </div>
+}
+
+<div class="chat-container">
+    <div class="chat-messages" @ref="messagesRef">
+        @if (conversation?.Messages?.Count > 0)
+        {
+            @foreach (var msg in conversation.Messages)
+            {
+                <div class="chat-bubble @(msg.Role == "user" ? "chat-bubble-user" : "chat-bubble-assistant")">
+                    <div class="bubble-content">@msg.Content</div>
+                    <div class="bubble-time">@msg.CreatedAt.ToString("HH:mm")</div>
+                </div>
+            }
+        }
+        else
+        {
+            <div class="chat-empty">Start the conversation by typing a message below.</div>
+        }
+        @if (isWaiting)
+        {
+            <div class="chat-bubble chat-bubble-assistant">
+                <div class="bubble-typing"><span></span><span></span><span></span></div>
+            </div>
+        }
+    </div>
+
+    <div class="chat-input-area">
+        <textarea class="chat-input" @bind="messageText" @onkeydown="HandleKeyDown"
+            placeholder="Type a message… (Enter to send, Shift+Enter for newline)"
+            rows="3" disabled="@isWaiting"></textarea>
+        <button class="btn btn-primary chat-send" @onclick="SendMessage" disabled="@(isWaiting || string.IsNullOrWhiteSpace(messageText))">
+            @if (isWaiting) { <span class="spinner-sm"></span> } else { <span>Send</span> }
+        </button>
+    </div>
+</div>
+
+@if (showExportModal)
+{
+    <div class="modal-overlay" @onclick="() => showExportModal = false">
+        <div class="modal" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <h2 class="modal-title">Export to Draft</h2>
+                <button class="modal-close" @onclick="() => showExportModal = false">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Additional Instructions <span class="form-hint">(optional)</span></label>
+                    <textarea class="form-textarea" @bind="exportInstructions" rows="4"
+                        placeholder="e.g. Write in a casual tone, include a call to action…"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="() => showExportModal = false">Cancel</button>
+                <button class="btn btn-primary" @onclick="ExportDraft" disabled="@isExporting">
+                    @if (isExporting) { <span class="spinner-sm"></span> } else { <span>Export</span> }
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+    [Inject] private IJSRuntime JS { get; set; } = default!;
+
+    private AiConversationDetailDto? conversation;
+    private bool isWaiting;
+    private string messageText = "";
+    private string errorMsg = "";
+    private bool editingTitle;
+    private string titleEdit = "";
+    private bool showExportModal;
+    private string exportInstructions = "";
+    private bool isExporting;
+    private Guid? exportedDraftId;
+    private ElementReference messagesRef;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { conversation = await Api.GetConversationAsync(Id); }
+        catch (Exception ex) { errorMsg = ex.Message; }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        await JS.InvokeVoidAsync("eval", "document.querySelector('.chat-messages')?.scrollTo(0, document.querySelector('.chat-messages').scrollHeight)");
+    }
+
+    private async Task SendMessage()
+    {
+        if (string.IsNullOrWhiteSpace(messageText)) return;
+        isWaiting = true;
+        errorMsg = "";
+        var text = messageText;
+        messageText = "";
+        try
+        {
+            conversation = await Api.SendMessageAsync(Id, new SendAiMessageRequest(text));
+        }
+        catch (Exception ex) { errorMsg = ex.Message; }
+        finally { isWaiting = false; }
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !e.ShiftKey)
+            await SendMessage();
+    }
+
+    private void StartEditTitle()
+    {
+        titleEdit = conversation?.Title ?? "";
+        editingTitle = true;
+    }
+
+    private void TitleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") SaveTitle();
+        else if (e.Key == "Escape") editingTitle = false;
+    }
+
+    private async void SaveTitle()
+    {
+        editingTitle = false;
+        // Title update — no dedicated API, ignore for now or extend conversation
+    }
+
+    private async Task ExportDraft()
+    {
+        isExporting = true;
+        try
+        {
+            var post = await Api.ExportDraftAsync(Id, new ExportAiConversationRequest(exportInstructions));
+            if (post != null)
+            {
+                exportedDraftId = post.PostId;
+                showExportModal = false;
+                conversation = await Api.GetConversationAsync(Id);
+            }
+        }
+        catch (Exception ex) { errorMsg = ex.Message; }
+        finally { isExporting = false; }
+    }
+}

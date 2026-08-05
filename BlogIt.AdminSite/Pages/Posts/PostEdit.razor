@@ -1,0 +1,294 @@
+@page "/posts/new"
+@page "/posts/{Id:guid}"
+@attribute [Authorize]
+@inject ApiClient Api
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+<PageTitle>@(isNew ? "New Post" : post?.Title ?? "Edit Post") — BlogIt Admin</PageTitle>
+
+<div class="page-header">
+    <h1 class="page-title">@(isNew ? "New Post" : post?.Title ?? "Edit Post")</h1>
+    <div class="header-actions">
+        @if (!isNew && Id.HasValue)
+        {
+            <button class="btn btn-secondary" @onclick="Preview">Preview</button>
+        }
+        <button class="btn btn-secondary" @onclick="SaveDraft" disabled="@isSaving">Save Draft</button>
+        <button class="btn btn-primary" @onclick="Publish" disabled="@isSaving">
+            @if (isSaving) { <span class="spinner-sm"></span> } else { <span>@(isNew ? "Publish" : (post?.IsPublished == true ? "Update & Publish" : "Publish"))</span> }
+        </button>
+    </div>
+</div>
+
+@if (!string.IsNullOrEmpty(errorMsg))
+{
+    <div class="alert alert-error">@errorMsg</div>
+}
+@if (!string.IsNullOrEmpty(successMsg))
+{
+    <div class="alert alert-success">@successMsg</div>
+}
+
+@if (isLoading)
+{
+    <div class="loading-spinner-wrap"><div class="spinner"></div></div>
+}
+else
+{
+    <div class="editor-layout">
+        <div class="editor-main">
+            <div class="form-group">
+                <label class="form-label">Title</label>
+                <input class="form-input form-input-lg" @bind="title" placeholder="Post title…" />
+            </div>
+            <div class="form-group">
+                <label class="form-label">Slug</label>
+                <input class="form-input" @bind="slug" placeholder="Generated from the title"
+                       disabled="@(post?.PublishedAt is not null)" />
+                @if (post?.PublishedAt is not null)
+                {
+                    <p class="form-hint">The slug was locked by the first publication.</p>
+                }
+                else
+                {
+                    <p class="form-hint">Editable until this post is published for the first time.</p>
+                }
+            </div>
+            <div class="form-group">
+                <label class="form-label">Summary</label>
+                <textarea class="form-textarea" @bind="summary" rows="3" placeholder="Brief summary…"></textarea>
+            </div>
+            <div class="form-group">
+                <div class="editor-label-row">
+                    <label class="form-label">Content (Markdown)</label>
+                    <button class="btn btn-sm btn-secondary" @onclick="() => showMediaPicker = true">Insert Media</button>
+                </div>
+                <textarea id="post-content-editor" @ref="editorRef">@content</textarea>
+            </div>
+        </div>
+
+        <aside class="editor-sidebar">
+            <div class="sidebar-panel">
+                <h3 class="sidebar-panel-title">Scheduling</h3>
+                @if (post is not null)
+                {
+                    <p class="form-hint">Current state: @ScheduleLabel(post.ScheduleState)</p>
+                }
+                <div class="form-group">
+                    <label class="form-label">Publish at</label>
+                    <input class="form-input" type="datetime-local" value="@scheduledPublishLocal"
+                           @onchange="e => scheduledPublishLocal = e.Value?.ToString() ?? string.Empty"
+                           disabled="@(post?.IsPublished == true)" />
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Unpublish at</label>
+                    <input class="form-input" type="datetime-local" value="@scheduledUnpublishLocal"
+                           @onchange="e => scheduledUnpublishLocal = e.Value?.ToString() ?? string.Empty" />
+                </div>
+                <p class="form-hint">Times are shown in your local time and saved as UTC. Leave blank for no schedule.</p>
+            </div>
+            <div class="sidebar-panel">
+                <h3 class="sidebar-panel-title">Tags</h3>
+                <input class="form-input" @bind="tagsInput" placeholder="tag1, tag2, tag3" />
+                <p class="form-hint">Comma-separated</p>
+            </div>
+            <div class="sidebar-panel">
+                <h3 class="sidebar-panel-title">SEO</h3>
+                <div class="form-group">
+                    <label class="form-label">SEO Title</label>
+                    <input class="form-input" @bind="seoTitle" />
+                </div>
+                <div class="form-group">
+                    <label class="form-label">SEO Description</label>
+                    <textarea class="form-textarea" @bind="seoDescription" rows="2"></textarea>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">SEO Keywords</label>
+                    <input class="form-input" @bind="seoKeywords" />
+                </div>
+                <div class="form-group">
+                    <label class="form-label">OG Image URL</label>
+                    <input class="form-input" @bind="ogImageUrl" />
+                </div>
+            </div>
+        </aside>
+    </div>
+}
+
+<MediaPicker IsOpen="showMediaPicker"
+    OnInsert="InsertMedia"
+    OnClose="() => showMediaPicker = false" />
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+
+    private BlogPostDetailDto? post;
+    private bool isNew => Id == null;
+    private bool isLoading = true;
+    private bool isSaving;
+    private string errorMsg = "";
+    private string successMsg = "";
+    private bool showMediaPicker;
+    private ElementReference editorRef;
+    private DotNetObjectReference<PostEdit>? dotNetRef;
+    private bool editorInitialized;
+
+    private string title = "";
+    private string slug = "";
+    private string summary = "";
+    private string content = "";
+    private string tagsInput = "";
+    private string seoTitle = "";
+    private string seoDescription = "";
+    private string seoKeywords = "";
+    private string ogImageUrl = "";
+    private string scheduledPublishLocal = "";
+    private string scheduledUnpublishLocal = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!isNew && Id.HasValue)
+        {
+            post = await Api.GetPostAsync(Id.Value);
+            if (post != null)
+            {
+                title = post.Title;
+                slug = post.Slug;
+                summary = post.Summary;
+                content = post.Content ?? "";
+                tagsInput = string.Join(", ", post.Tags.Select(t => t.Name));
+                seoTitle = post.SeoTitle ?? "";
+                seoDescription = post.SeoDescription ?? "";
+                seoKeywords = post.SeoKeywords ?? "";
+                ogImageUrl = post.OgImageUrl ?? "";
+                scheduledPublishLocal = ToLocalInput(post.ScheduledPublishAt);
+                scheduledUnpublishLocal = ToLocalInput(post.ScheduledUnpublishAt);
+            }
+        }
+        isLoading = false;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!editorInitialized && !isLoading)
+        {
+            editorInitialized = true;
+            dotNetRef = DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("blogitInterop.initEditor", "post-content-editor", dotNetRef);
+            if (!string.IsNullOrEmpty(content))
+                await JS.InvokeVoidAsync("blogitInterop.setEditorValue", "post-content-editor", content);
+        }
+    }
+
+    [JSInvokable]
+    public void OnContentChanged(string value) => content = value;
+
+    private async Task<string> GetEditorContent()
+    {
+        return await JS.InvokeAsync<string>("blogitInterop.getEditorValue", "post-content-editor");
+    }
+
+    private List<string> GetTags() =>
+        tagsInput.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+
+    private async Task SaveDraft()
+    {
+        await Save(publish: false);
+    }
+
+    private async Task Publish()
+    {
+        await Save(publish: true);
+    }
+
+    private async Task Preview()
+    {
+        if (!Id.HasValue) return;
+        var preview = await Api.CreatePostPreviewAsync(Id.Value);
+        if (preview is not null)
+            Nav.NavigateTo(preview.Url, forceLoad: true);
+    }
+
+    private async Task Save(bool publish)
+    {
+        isSaving = true;
+        errorMsg = "";
+        successMsg = "";
+        try
+        {
+            content = await GetEditorContent();
+            var tags = GetTags();
+            var scheduledPublishAt = ToUtc(scheduledPublishLocal);
+            var scheduledUnpublishAt = ToUtc(scheduledUnpublishLocal);
+            var scheduleError = PublicationSchedule.Validate(scheduledPublishAt, scheduledUnpublishAt);
+            if (scheduleError is not null)
+                throw new InvalidOperationException(scheduleError);
+
+            if (isNew)
+            {
+                var req = new CreateBlogPostRequest(
+                    title, summary, content, seoTitle, seoDescription, seoKeywords, ogImageUrl, tags,
+                    scheduledPublishAt, scheduledUnpublishAt, slug);
+                var created = await Api.CreatePostAsync(req);
+                if (created != null)
+                {
+                    if (publish) await Api.PublishPostAsync(created.Id);
+                    Nav.NavigateTo($"posts/{created.Id}", replace: true);
+                }
+            }
+            else if (Id.HasValue)
+            {
+                var req = new UpdateBlogPostRequest(
+                    title, summary, content, seoTitle, seoDescription, seoKeywords, ogImageUrl, tags,
+                    scheduledPublishAt, scheduledUnpublishAt, slug);
+                await Api.UpdatePostAsync(Id.Value, req);
+                if (publish && post?.IsPublished != true)
+                    await Api.PublishPostAsync(Id.Value);
+                else if (!publish && post?.IsPublished == true)
+                    await Api.UnpublishPostAsync(Id.Value);
+                successMsg = "Post saved.";
+                post = await Api.GetPostAsync(Id.Value);
+                if (post is not null)
+                {
+                    slug = post.Slug;
+                    scheduledPublishLocal = ToLocalInput(post.ScheduledPublishAt);
+                    scheduledUnpublishLocal = ToLocalInput(post.ScheduledUnpublishAt);
+                }
+            }
+        }
+        catch (Exception ex) { errorMsg = $"Save failed: {ex.Message}"; }
+        finally { isSaving = false; }
+    }
+
+    private async Task InsertMedia(MediaFileDto media)
+    {
+        var markdown = media.ContentType.StartsWith("image/")
+            ? $"![{media.Title}]({media.PublicPath})"
+            : $"[{media.Title}]({media.PublicPath})";
+        var current = await GetEditorContent();
+        content = current + "\n" + markdown;
+        await JS.InvokeVoidAsync("blogitInterop.setEditorValue", "post-content-editor", content);
+        showMediaPicker = false;
+    }
+
+    private static DateTime? ToUtc(string value) =>
+        string.IsNullOrWhiteSpace(value) ? null : DateTime.Parse(value).ToUniversalTime();
+
+    private static string ToLocalInput(DateTime? utc) =>
+        utc?.ToLocalTime().ToString("yyyy-MM-ddTHH:mm") ?? "";
+
+    private static string ScheduleLabel(PublicationScheduleState state) => state switch
+    {
+        PublicationScheduleState.ScheduledForPublishing => "Scheduled for publishing",
+        PublicationScheduleState.ScheduledForUnpublishing => "Published; unpublishing scheduled",
+        PublicationScheduleState.Published => "Published",
+        _ => "Draft"
+    };
+
+    public async ValueTask DisposeAsync()
+    {
+        dotNetRef?.Dispose();
+    }
+}

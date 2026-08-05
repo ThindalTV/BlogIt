@@ -1,0 +1,190 @@
+@page "/posts"
+@attribute [Authorize]
+@inject ApiClient Api
+@inject NavigationManager Nav
+
+<PageTitle>Posts — BlogIt Admin</PageTitle>
+
+<div class="page-header">
+    <h1 class="page-title">Posts</h1>
+    <a class="btn btn-primary" href="posts/new">+ New Post</a>
+</div>
+
+<div class="toolbar">
+    <input class="form-input toolbar-search" placeholder="Search posts…" value="@searchQuery" @oninput="OnSearchInput" />
+    <select class="form-select toolbar-filter" @bind="statusFilter" @bind:after="() => LoadPosts(1)">
+        <option value="">All</option>
+        <option value="published">Published</option>
+        <option value="draft">Draft</option>
+        <option value="scheduled">Scheduled</option>
+    </select>
+</div>
+
+@if (isLoading)
+{
+    <div class="loading-spinner-wrap"><div class="spinner"></div></div>
+}
+else if (result == null || result.Items.Count == 0)
+{
+    <div class="empty-state-box">
+        <p>No posts found.</p>
+        <a class="btn btn-primary" href="posts/new">Create your first post</a>
+    </div>
+}
+else
+{
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Title</th>
+                <th>Status</th>
+                <th>Author</th>
+                <th>Updated</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var post in result.Items)
+            {
+                <tr>
+                    <td><a href="posts/@post.Id">@post.Title</a></td>
+                    <td>
+                        <span class="badge @(post.IsPublished ? "badge-published" : "badge-draft")">@ScheduleLabel(post)</span>
+                        @if (post.ScheduledPublishAt.HasValue || post.ScheduledUnpublishAt.HasValue)
+                        {
+                            <div class="form-hint">@ScheduleTime(post)</div>
+                        }
+                    </td>
+                    <td>@post.AuthorDisplayName</td>
+                    <td>@post.UpdatedAt.ToString("MMM d, yyyy")</td>
+                    <td class="actions">
+                        <a class="btn btn-sm btn-secondary" href="posts/@post.Id">Edit</a>
+                        <button class="btn btn-sm btn-secondary" @onclick="() => Preview(post)">Preview</button>
+                        @if (post.IsPublished)
+                        {
+                            <button class="btn btn-sm btn-secondary" @onclick="() => Unpublish(post)">Unpublish</button>
+                        }
+                        else
+                        {
+                            <button class="btn btn-sm btn-secondary" @onclick="() => Publish(post)">Publish</button>
+                        }
+                        @if (post.ScheduledPublishAt.HasValue || post.ScheduledUnpublishAt.HasValue)
+                        {
+                            <button class="btn btn-sm btn-secondary" @onclick="() => ClearSchedule(post)">Cancel schedule</button>
+                        }
+                        <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDelete(post)">Delete</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    @if (result.TotalCount > result.PageSize)
+    {
+        <div class="pagination">
+            @for (int p = 1; p <= (int)Math.Ceiling((double)result.TotalCount / result.PageSize); p++)
+            {
+                var pg = p;
+                <button class="page-btn @(pg == currentPage ? "active" : "")" @onclick="() => LoadPosts(pg)">@pg</button>
+            }
+        </div>
+    }
+}
+
+@if (!string.IsNullOrEmpty(errorMsg))
+{
+    <div class="alert alert-error">@errorMsg</div>
+}
+
+<ConfirmDialog IsOpen="showConfirm"
+    Title="Delete Post"
+    Message=@($"Delete \"{postToDelete?.Title}\"? This cannot be undone.")
+    OnConfirm="DeletePost"
+    OnCancel="() => showConfirm = false" />
+
+@code {
+    private PagedResult<BlogPostSummaryDto>? result;
+    private bool isLoading;
+    private int currentPage = 1;
+    private string searchQuery = "";
+    private string statusFilter = "";
+    private string errorMsg = "";
+    private bool showConfirm;
+    private BlogPostSummaryDto? postToDelete;
+
+    private async Task OnSearchInput(ChangeEventArgs e)
+    {
+        searchQuery = e.Value?.ToString() ?? "";
+        await LoadPosts(1);
+    }
+
+    protected override async Task OnInitializedAsync() => await LoadPosts(1);
+
+    private async Task LoadPosts(int page)
+    {
+        isLoading = true;
+        currentPage = page;
+        try { result = await Api.GetPostsAsync(searchQuery, page, statusFilter); }
+        catch (Exception ex) { errorMsg = ex.Message; }
+        finally { isLoading = false; }
+    }
+
+    private async Task Publish(BlogPostSummaryDto post)
+    {
+        try { await Api.PublishPostAsync(post.Id); await LoadPosts(currentPage); }
+        catch (Exception ex) { errorMsg = ex.Message; }
+    }
+
+    private async Task Unpublish(BlogPostSummaryDto post)
+    {
+        try { await Api.UnpublishPostAsync(post.Id); await LoadPosts(currentPage); }
+        catch (Exception ex) { errorMsg = ex.Message; }
+    }
+
+    private async Task ClearSchedule(BlogPostSummaryDto post)
+    {
+        try
+        {
+            await Api.UpdatePostScheduleAsync(post.Id, new(null, null));
+            await LoadPosts(currentPage);
+        }
+        catch (Exception ex) { errorMsg = ex.Message; }
+    }
+
+    private static string ScheduleLabel(BlogPostSummaryDto post) => post.ScheduleState switch
+    {
+        PublicationScheduleState.ScheduledForPublishing => "Scheduled",
+        PublicationScheduleState.ScheduledForUnpublishing => "Published · scheduled",
+        PublicationScheduleState.Published => "Published",
+        _ => "Draft"
+    };
+
+    private static string ScheduleTime(BlogPostSummaryDto post)
+    {
+        var instant = post.ScheduleState == PublicationScheduleState.ScheduledForPublishing
+            ? post.ScheduledPublishAt
+            : post.ScheduledUnpublishAt;
+        return instant.HasValue ? instant.Value.ToLocalTime().ToString("MMM d, yyyy h:mm tt") : "";
+    }
+
+    private async Task Preview(BlogPostSummaryDto post)
+    {
+        try
+        {
+            var preview = await Api.CreatePostPreviewAsync(post.Id);
+            if (preview is not null)
+                Nav.NavigateTo(preview.Url, forceLoad: true);
+        }
+        catch (Exception ex) { errorMsg = ex.Message; }
+    }
+
+    private void ConfirmDelete(BlogPostSummaryDto post) { postToDelete = post; showConfirm = true; }
+
+    private async Task DeletePost()
+    {
+        showConfirm = false;
+        if (postToDelete == null) return;
+        try { await Api.DeletePostAsync(postToDelete.Id); await LoadPosts(currentPage); }
+        catch (Exception ex) { errorMsg = ex.Message; }
+    }
+}

@@ -1,0 +1,185 @@
+@page "/settings"
+@attribute [Authorize]
+@inject ApiClient Api
+
+<PageTitle>Settings — BlogIt Admin</PageTitle>
+
+<div class="page-header">
+    <h1 class="page-title">Site Settings</h1>
+    <button class="btn btn-primary" @onclick="Save" disabled="@isSaving">
+        @if (isSaving) { <span class="spinner-sm"></span> } else { <span>Save Settings</span> }
+    </button>
+</div>
+
+@if (!string.IsNullOrEmpty(errorMsg))
+{
+    <div class="alert alert-error">@errorMsg</div>
+}
+@if (!string.IsNullOrEmpty(successMsg))
+{
+    <div class="alert alert-success">@successMsg</div>
+}
+
+@if (isLoading)
+{
+    <div class="loading-spinner-wrap"><div class="spinner"></div></div>
+}
+else
+{
+    <div class="settings-sections">
+        <div class="settings-section">
+            <h2 class="settings-section-title">Site</h2>
+            <div class="form-group">
+                <label class="form-label">Site Name</label>
+                <input class="form-input" @bind="siteName" />
+            </div>
+            <div class="form-group">
+                <label class="form-label">Site URL</label>
+                <input class="form-input" @bind="siteUrl" />
+            </div>
+            <div class="form-group">
+                <label class="form-label">Description</label>
+                <textarea class="form-textarea" @bind="siteDescription" rows="3"></textarea>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Default OG Image URL</label>
+                <input class="form-input" @bind="defaultOgImage" />
+            </div>
+        </div>
+
+        <div class="settings-section">
+            <h2 class="settings-section-title">AI</h2>
+            <div class="form-group">
+                <label class="form-label">Provider</label>
+                <select class="form-select" @bind="aiProvider">
+                    <option value="github-copilot">GitHub Copilot</option>
+                    <option value="openai-compatible">OpenAI-Compatible</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">API Key <span class="form-hint">(leave blank to keep existing)</span></label>
+                <input class="form-input" type="password" @bind="aiApiKey" placeholder="****" autocomplete="off" />
+            </div>
+            @if (aiProvider == "openai-compatible")
+            {
+                <div class="form-group">
+                    <label class="form-label">Base URL</label>
+                    <input class="form-input" @bind="aiBaseUrl" placeholder="https://api.openai.com/v1" />
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Model</label>
+                    <input class="form-input" @bind="aiModel" placeholder="gpt-4o" />
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Export Model</label>
+                    <input class="form-input" @bind="aiExportModel" />
+                </div>
+            }
+        </div>
+
+        <div class="settings-section">
+            <h2 class="settings-section-title">Analytics</h2>
+            <div class="form-group">
+                <label class="form-label">Measurement ID</label>
+                <input class="form-input" @bind="gaMeasurementId" placeholder="G-XXXXXXXXXX" />
+            </div>
+            <div class="form-group">
+                <label class="form-label">Property ID</label>
+                <input class="form-input" @bind="gaPropertyId" placeholder="123456789" />
+            </div>
+            <div class="form-group">
+                <label class="form-label">Service Account Credentials JSON <span class="form-hint">(leave blank to keep existing)</span></label>
+                <textarea class="form-textarea" @bind="gaCredentialsJson" rows="5" placeholder="****"></textarea>
+            </div>
+        </div>
+
+        <div class="settings-section">
+            <h2 class="settings-section-title">Auth</h2>
+            <div class="form-group">
+                <label class="form-label">JWT Expiry (minutes)</label>
+                <input class="form-input" type="number" @bind="jwtExpiryMinutes" min="5" max="10080" />
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool isLoading = true;
+    private bool isSaving;
+    private string errorMsg = "";
+    private string successMsg = "";
+
+    private string siteName = "";
+    private string siteUrl = "";
+    private string siteDescription = "";
+    private string defaultOgImage = "";
+    private string aiProvider = "github-copilot";
+    private string aiApiKey = "";
+    private string aiBaseUrl = "";
+    private string aiModel = "";
+    private string aiExportModel = "";
+    private string gaMeasurementId = "";
+    private string gaPropertyId = "";
+    private string gaCredentialsJson = "";
+    private int jwtExpiryMinutes = 60;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var settings = await Api.GetSettingsAsync();
+            if (settings != null)
+            {
+                siteName = settings.GetValueOrDefault(SettingKeys.SiteName, "");
+                siteUrl = settings.GetValueOrDefault(SettingKeys.SiteUrl, "");
+                siteDescription = settings.GetValueOrDefault(SettingKeys.SiteDescription, "");
+                defaultOgImage = settings.GetValueOrDefault(SettingKeys.DefaultOgImage, "");
+                aiProvider = settings.GetValueOrDefault(SettingKeys.AiProvider, "github-copilot");
+                aiBaseUrl = settings.GetValueOrDefault(SettingKeys.AiBaseUrl, "");
+                aiModel = settings.GetValueOrDefault(SettingKeys.AiModel, "");
+                aiExportModel = settings.GetValueOrDefault(SettingKeys.AiExportModel, "");
+                gaMeasurementId = settings.GetValueOrDefault(SettingKeys.GoogleAnalyticsMeasurementId, "");
+                gaPropertyId = settings.GetValueOrDefault(SettingKeys.GoogleAnalyticsPropertyId, "");
+                if (int.TryParse(settings.GetValueOrDefault(SettingKeys.JwtExpiryMinutes, "60"), out var exp))
+                    jwtExpiryMinutes = exp;
+            }
+        }
+        catch (Exception ex) { errorMsg = ex.Message; }
+        finally { isLoading = false; }
+    }
+
+    private async Task Save()
+    {
+        isSaving = true;
+        errorMsg = "";
+        successMsg = "";
+        try
+        {
+            var settings = new Dictionary<string, string>
+            {
+                [SettingKeys.SiteName] = siteName,
+                [SettingKeys.SiteUrl] = siteUrl,
+                [SettingKeys.SiteDescription] = siteDescription,
+                [SettingKeys.DefaultOgImage] = defaultOgImage,
+                [SettingKeys.AiProvider] = aiProvider,
+                [SettingKeys.AiBaseUrl] = aiBaseUrl,
+                [SettingKeys.AiModel] = aiModel,
+                [SettingKeys.AiExportModel] = aiExportModel,
+                [SettingKeys.GoogleAnalyticsMeasurementId] = gaMeasurementId,
+                [SettingKeys.GoogleAnalyticsPropertyId] = gaPropertyId,
+                [SettingKeys.JwtExpiryMinutes] = jwtExpiryMinutes.ToString(),
+            };
+            // Only include sensitive fields if user typed something
+            if (!string.IsNullOrWhiteSpace(aiApiKey))
+                settings[SettingKeys.AiApiKey] = aiApiKey;
+            if (!string.IsNullOrWhiteSpace(gaCredentialsJson))
+                settings[SettingKeys.GoogleAnalyticsCredentialsJson] = gaCredentialsJson;
+
+            await Api.UpdateSettingsAsync(settings);
+            successMsg = "Settings saved.";
+            aiApiKey = gaCredentialsJson = "";
+        }
+        catch (Exception ex) { errorMsg = $"Save failed: {ex.Message}"; }
+        finally { isSaving = false; }
+    }
+}

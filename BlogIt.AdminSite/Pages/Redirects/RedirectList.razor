@@ -1,0 +1,175 @@
+@page "/redirects"
+@attribute [Authorize]
+@inject ApiClient Api
+
+<PageTitle>Redirects — BlogIt Admin</PageTitle>
+
+<div class="page-header">
+    <h1 class="page-title">Redirects</h1>
+    <button class="btn btn-primary" @onclick="BeginCreate">+ New Redirect</button>
+</div>
+
+@if (!string.IsNullOrEmpty(errorMsg))
+{
+    <div class="alert alert-error">@errorMsg</div>
+}
+@if (!string.IsNullOrEmpty(successMsg))
+{
+    <div class="alert alert-success">@successMsg</div>
+}
+
+@if (showForm)
+{
+    <div class="inline-form-panel">
+        <h2 class="panel-title">@(editingId.HasValue ? "Edit Redirect" : "New Redirect")</h2>
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">Source path</label>
+                <input class="form-input" @bind="sourcePath" placeholder="/redir/abc123" />
+            </div>
+            <div class="form-group">
+                <label class="form-label">Target URL or path</label>
+                <input class="form-input" @bind="targetUrl" placeholder="https://www.microsoft.com" />
+            </div>
+            <div class="form-group">
+                <label class="form-check">
+                    <input type="checkbox" @bind="isPermanent" />
+                    <span>Permanent (301)</span>
+                </label>
+                <p class="form-hint">Clear for a temporary 302 redirect.</p>
+            </div>
+        </div>
+        <div class="form-actions">
+            <button class="btn btn-secondary" @onclick="CancelEdit">Cancel</button>
+            <button class="btn btn-primary" @onclick="Save" disabled="@isSaving">
+                @(isSaving ? "Saving…" : "Save Redirect")
+            </button>
+        </div>
+    </div>
+}
+
+@if (isLoading)
+{
+    <div class="loading-spinner-wrap"><div class="spinner"></div></div>
+}
+else if (redirects.Count == 0)
+{
+    <p class="empty-state">No redirects configured.</p>
+}
+else
+{
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Source</th>
+                <th>Target</th>
+                <th>Type</th>
+                <th>Origin</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var redirect in redirects)
+            {
+                <tr>
+                    <td><code>@redirect.SourcePath</code></td>
+                    <td class="redirect-target"><code>@redirect.TargetUrl</code></td>
+                    <td>@(redirect.IsPermanent ? "301" : "302")</td>
+                    <td>
+                        <span class="badge @(redirect.IsAutomatic ? "badge-published" : "badge-draft")">
+                            @(redirect.IsAutomatic ? "Automatic" : "Manual")
+                        </span>
+                    </td>
+                    <td class="actions">
+                        <button class="btn btn-sm btn-secondary" @onclick="() => BeginEdit(redirect)">Edit</button>
+                        <button class="btn btn-sm btn-danger" @onclick="() => Delete(redirect)">Delete</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private IReadOnlyList<UrlRedirectDto> redirects = [];
+    private bool isLoading = true;
+    private bool isSaving;
+    private bool showForm;
+    private Guid? editingId;
+    private string sourcePath = "";
+    private string targetUrl = "";
+    private bool isPermanent = true;
+    private string errorMsg = "";
+    private string successMsg = "";
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
+    {
+        isLoading = true;
+        try { redirects = await Api.GetRedirectsAsync() ?? []; }
+        catch (Exception ex) { errorMsg = ex.Message; }
+        finally { isLoading = false; }
+    }
+
+    private void BeginCreate()
+    {
+        editingId = null;
+        sourcePath = "";
+        targetUrl = "";
+        isPermanent = true;
+        errorMsg = "";
+        showForm = true;
+    }
+
+    private void BeginEdit(UrlRedirectDto redirect)
+    {
+        editingId = redirect.Id;
+        sourcePath = redirect.SourcePath;
+        targetUrl = redirect.TargetUrl;
+        isPermanent = redirect.IsPermanent;
+        errorMsg = "";
+        showForm = true;
+    }
+
+    private void CancelEdit()
+    {
+        editingId = null;
+        showForm = false;
+    }
+
+    private async Task Save()
+    {
+        isSaving = true;
+        errorMsg = "";
+        successMsg = "";
+        try
+        {
+            var request = new SaveUrlRedirectRequest(sourcePath, targetUrl, isPermanent);
+            if (editingId.HasValue)
+                await Api.UpdateRedirectAsync(editingId.Value, request);
+            else
+                await Api.CreateRedirectAsync(request);
+
+            successMsg = "Redirect saved.";
+            showForm = false;
+            editingId = null;
+            await Load();
+        }
+        catch (Exception ex) { errorMsg = ex.Message; }
+        finally { isSaving = false; }
+    }
+
+    private async Task Delete(UrlRedirectDto redirect)
+    {
+        errorMsg = "";
+        successMsg = "";
+        try
+        {
+            await Api.DeleteRedirectAsync(redirect.Id);
+            successMsg = "Redirect deleted.";
+            await Load();
+        }
+        catch (Exception ex) { errorMsg = ex.Message; }
+    }
+}

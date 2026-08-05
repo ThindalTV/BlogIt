@@ -1,0 +1,10 @@
+**/.vs
+**/.git
+**/.gitignore
+**/bin
+**/obj
+**/TestResults
+**/*.user
+**/node_modules
+**/.env
+**/appsettings.Development.json

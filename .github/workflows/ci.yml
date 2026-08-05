@@ -1,0 +1,40 @@
+name: CI — Build & Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Build and test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+          dotnet-quality: "preview"
+
+      - name: Restore dependencies
+        run: dotnet restore BlogIt.sln
+
+      - name: Build solution
+        run: dotnet build BlogIt.sln --no-restore --configuration Release
+
+      - name: Run tests
+        run: dotnet test BlogIt.Tests/BlogIt.Tests.csproj --no-build --configuration Release --verbosity normal --logger "trx;LogFileName=test-results.trx"
+
+      - name: AppHost smoke test
+        run: dotnet run --project BlogIt.AppHost/BlogIt.AppHost.csproj --no-build --configuration Release -- --help
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: BlogIt.Tests/TestResults/test-results.trx

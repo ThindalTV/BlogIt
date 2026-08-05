@@ -1,0 +1,9 @@
+<Solution>
+  <Project Path="BlogIt.AdminSite/BlogIt.AdminSite.csproj" />
+  <Project Path="BlogIt.AppHost/BlogIt.AppHost.csproj" />
+  <Project Path="BlogIt.MauiAdmin/BlogIt.MauiAdmin.csproj" />
+  <Project Path="BlogIt.ServiceDefaults/BlogIt.ServiceDefaults.csproj" />
+  <Project Path="BlogIt.Shared/BlogIt.Shared.csproj" />
+  <Project Path="BlogIt.Tests/BlogIt.Tests.csproj" />
+  <Project Path="BlogIt.Web/BlogIt.Web.csproj" />
+</Solution>

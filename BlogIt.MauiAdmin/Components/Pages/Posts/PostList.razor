@@ -1,0 +1,158 @@
+@page "/posts"
+@inject MauiApiClient Api
+@inject NavigationManager Nav
+@inject SiteProfileService ProfileService
+
+<div class="page-header">
+    <h1 class="page-title">Posts</h1>
+    <button class="btn btn-primary" @onclick='() => Nav.NavigateTo("/posts/new")'>+ New Post</button>
+</div>
+
+<div class="toolbar">
+    <input class="form-control" placeholder="Search posts…" @bind="_search" @bind:event="oninput"
+           @onkeydown="OnSearchKey" style="max-width:300px" />
+    <select class="form-control" @bind="_statusFilter" style="max-width:160px">
+        <option value="all">All</option>
+        <option value="published">Published</option>
+        <option value="draft">Draft</option>
+    </select>
+    <button class="btn btn-primary btn-sm" @onclick="LoadAsync">Search</button>
+</div>
+
+@if (!string.IsNullOrEmpty(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+
+@if (_loading)
+{
+    <p>Loading…</p>
+}
+else if (_result is not null)
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Title</th>
+                <th>Status</th>
+                <th>Published</th>
+                <th>Tags</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var post in _result.Items)
+            {
+                <tr>
+                    <td>@post.Title</td>
+                    <td>
+                        @if (post.IsPublished)
+                        {
+                            <span class="badge badge-success">Published</span>
+                        }
+                        else
+                        {
+                            <span class="badge badge-secondary">Draft</span>
+                        }
+                    </td>
+                    <td>@(post.PublishedAt?.ToString("yyyy-MM-dd") ?? "—")</td>
+                    <td>@(post.Tags is { Count: > 0 } ? string.Join(", ", post.Tags.Select(t => t.Name)) : "—")</td>
+                    <td class="table-actions">
+                        <button class="btn btn-sm btn-outline" @onclick="() => EditPost(post.Id)">Edit</button>
+                        @if (post.IsPublished)
+                        {
+                            <button class="btn btn-sm btn-outline"
+                                    @onclick="() => UnpublishAsync(post.Id)">Unpublish</button>
+                        }
+                        else
+                        {
+                            <button class="btn btn-sm btn-outline"
+                                    @onclick="() => PublishAsync(post.Id)">Publish</button>
+                        }
+                        <button class="btn btn-sm btn-danger"
+                                @onclick="() => ConfirmDelete(post.Id, post.Title)">Delete</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    @if (TotalPages > 1)
+    {
+        <div class="pagination">
+            <button class="btn btn-sm btn-outline" disabled="@(_page <= 1)"
+                    @onclick="PrevPage">← Prev</button>
+            <span>Page @_page of @TotalPages</span>
+            <button class="btn btn-sm btn-outline" disabled="@(_page >= TotalPages)"
+                    @onclick="NextPage">Next →</button>
+        </div>
+    }
+}
+
+@if (_confirmDeleteId.HasValue)
+{
+    <div class="confirm-overlay">
+        <div class="confirm-dialog card">
+            <p>Delete "<strong>@_confirmDeleteTitle</strong>"? This cannot be undone.</p>
+            <div class="confirm-actions">
+                <button class="btn btn-danger" @onclick="DoDelete">Yes, Delete</button>
+                <button class="btn btn-outline" @onclick="CancelDelete">Cancel</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private PagedResult<BlogPostSummaryDto>? _result;
+    private string _search = "";
+    private string _statusFilter = "all";
+    private int _page = 1;
+    private bool _loading = true;
+    private string? _error;
+    private Guid? _confirmDeleteId;
+    private string? _confirmDeleteTitle;
+
+    private int TotalPages => _result is null || _result.PageSize == 0 ? 1
+        : (int)Math.Ceiling(_result.TotalCount / (double)_result.PageSize);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var profile = await ProfileService.GetActiveProfileAsync();
+        if (profile?.IsTokenValid != true) { Nav.NavigateTo("/login"); return; }
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+        try { _result = await Api.GetPostsAsync(_search, _page, _statusFilter); }
+        catch (Exception ex) { _error = ex.Message; }
+        _loading = false;
+    }
+
+    private async Task OnSearchKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") { _page = 1; await LoadAsync(); }
+    }
+
+    private void EditPost(Guid id) => Nav.NavigateTo($"/posts/{id}");
+
+    private async Task PublishAsync(Guid id) { await Api.PublishPostAsync(id); await LoadAsync(); }
+    private async Task UnpublishAsync(Guid id) { await Api.UnpublishPostAsync(id); await LoadAsync(); }
+
+    private void ConfirmDelete(Guid id, string title) { _confirmDeleteId = id; _confirmDeleteTitle = title; }
+    private void CancelDelete() { _confirmDeleteId = null; _confirmDeleteTitle = null; }
+
+    private async Task DoDelete()
+    {
+        if (_confirmDeleteId is null) return;
+        await Api.DeletePostAsync(_confirmDeleteId.Value);
+        CancelDelete();
+        await LoadAsync();
+    }
+
+    private async Task PrevPage() { _page--; await LoadAsync(); }
+    private async Task NextPage() { _page++; await LoadAsync(); }
+}
+

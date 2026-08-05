@@ -1,0 +1,155 @@
+@page "/users"
+@attribute [Authorize]
+@inject ApiClient Api
+@inject AuthenticationStateProvider AuthProvider
+
+<PageTitle>Users — BlogIt Admin</PageTitle>
+
+<div class="page-header">
+    <h1 class="page-title">Users</h1>
+    <button class="btn btn-primary" @onclick="() => showNewUserForm = !showNewUserForm">+ New User</button>
+</div>
+
+@if (!string.IsNullOrEmpty(errorMsg))
+{
+    <div class="alert alert-error">@errorMsg</div>
+}
+@if (!string.IsNullOrEmpty(successMsg))
+{
+    <div class="alert alert-success">@successMsg</div>
+}
+
+@if (showNewUserForm)
+{
+    <div class="inline-form-panel">
+        <h2 class="panel-title">New User</h2>
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">Username</label>
+                <input class="form-input" @bind="newUsername" placeholder="username" />
+            </div>
+            <div class="form-group">
+                <label class="form-label">Display Name</label>
+                <input class="form-input" @bind="newDisplayName" placeholder="Display Name" />
+            </div>
+            <div class="form-group">
+                <label class="form-label">Password</label>
+                <input class="form-input" type="password" @bind="newPassword" />
+            </div>
+        </div>
+        <div class="form-actions">
+            <button class="btn btn-secondary" @onclick="() => showNewUserForm = false">Cancel</button>
+            <button class="btn btn-primary" @onclick="CreateUser" disabled="@isCreating">
+                @if (isCreating) { <span class="spinner-sm"></span> } else { <span>Create User</span> }
+            </button>
+        </div>
+    </div>
+}
+
+@if (isLoading)
+{
+    <div class="loading-spinner-wrap"><div class="spinner"></div></div>
+}
+else if (users == null || users.Count == 0)
+{
+    <p class="empty-state">No users found.</p>
+}
+else
+{
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Username</th>
+                <th>Display Name</th>
+                <th>Created</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var user in users)
+            {
+                <tr>
+                    <td>@user.Username</td>
+                    <td>@user.DisplayName</td>
+                    <td>@user.CreatedAt.ToString("MMM d, yyyy")</td>
+                    <td class="actions">
+                        @if (user.Username != currentUsername)
+                        {
+                            <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDelete(user)">Delete</button>
+                        }
+                        else
+                        {
+                            <span class="text-muted">You</span>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+<ConfirmDialog IsOpen="showConfirm"
+    Title="Delete User"
+    Message=@($"Delete user \"{userToDelete?.Username}\"?")
+    OnConfirm="DeleteUser"
+    OnCancel="() => showConfirm = false" />
+
+@code {
+    private IReadOnlyList<AppUserDto>? users;
+    private bool isLoading = true;
+    private bool isCreating;
+    private bool showNewUserForm;
+    private string errorMsg = "";
+    private string successMsg = "";
+    private string newUsername = "";
+    private string newDisplayName = "";
+    private string newPassword = "";
+    private bool showConfirm;
+    private AppUserDto? userToDelete;
+    private string? currentUsername;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthProvider.GetAuthenticationStateAsync();
+        currentUsername = state.User.FindFirst("name")?.Value ?? state.User.Identity?.Name;
+        try { users = await Api.GetUsersAsync(); }
+        catch (Exception ex) { errorMsg = ex.Message; }
+        finally { isLoading = false; }
+    }
+
+    private async Task CreateUser()
+    {
+        if (string.IsNullOrWhiteSpace(newUsername) || string.IsNullOrWhiteSpace(newPassword))
+        {
+            errorMsg = "Username and password are required.";
+            return;
+        }
+        isCreating = true;
+        errorMsg = "";
+        try
+        {
+            await Api.CreateUserAsync(new CreateUserRequest(newUsername, newDisplayName, newPassword));
+            newUsername = newDisplayName = newPassword = "";
+            showNewUserForm = false;
+            successMsg = "User created.";
+            users = await Api.GetUsersAsync();
+        }
+        catch (Exception ex) { errorMsg = ex.Message; }
+        finally { isCreating = false; }
+    }
+
+    private void ConfirmDelete(AppUserDto user) { userToDelete = user; showConfirm = true; }
+
+    private async Task DeleteUser()
+    {
+        showConfirm = false;
+        if (userToDelete == null) return;
+        try
+        {
+            await Api.DeleteUserAsync(userToDelete.Id);
+            successMsg = $"User '{userToDelete.Username}' deleted.";
+            users = await Api.GetUsersAsync();
+        }
+        catch (Exception ex) { errorMsg = ex.Message; }
+    }
+}

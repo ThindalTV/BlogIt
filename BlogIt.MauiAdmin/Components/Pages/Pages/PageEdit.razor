@@ -1,0 +1,148 @@
+@page "/pages/new"
+@page "/pages/{Id:guid}"
+@inject MauiApiClient Api
+@inject NavigationManager Nav
+@inject SiteProfileService ProfileService
+
+<div class="page-header">
+    <h1 class="page-title">@(_isNew ? "New Page" : "Edit Page")</h1>
+    <button class="btn btn-outline" @onclick='() => Nav.NavigateTo("/pages")'>← Back to Pages</button>
+</div>
+
+@if (!string.IsNullOrEmpty(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+
+@if (!string.IsNullOrEmpty(_success))
+{
+    <div class="alert alert-success">@_success</div>
+}
+
+@if (_loading)
+{
+    <p>Loading…</p>
+}
+else
+{
+    <div class="card">
+        <div class="form-group">
+            <label>Title <span class="required">*</span></label>
+            <input class="form-control" @bind="_title" placeholder="Page title" />
+        </div>
+
+        <div class="form-group">
+            <label>Slug <span class="required">*</span></label>
+            <input class="form-control" @bind="_slug" placeholder="url-slug" />
+        </div>
+
+        <div class="form-group">
+            <label>Content</label>
+            <textarea class="form-control" rows="16" @bind="_content" placeholder="Page content (Markdown)"></textarea>
+        </div>
+
+        <div class="form-group form-check">
+            <label>
+                <input type="checkbox" @bind="_isPublished" />
+                Published
+            </label>
+        </div>
+
+        <details class="seo-fields">
+            <summary>SEO &amp; OG Fields</summary>
+            <div class="form-group" style="margin-top:1rem">
+                <label>SEO Title</label>
+                <input class="form-control" @bind="_seoTitle" />
+            </div>
+            <div class="form-group">
+                <label>SEO Description</label>
+                <textarea class="form-control" rows="2" @bind="_seoDescription"></textarea>
+            </div>
+            <div class="form-group">
+                <label>OG Image URL</label>
+                <input class="form-control" @bind="_ogImageUrl" placeholder="https://…" />
+            </div>
+        </details>
+
+        <div class="form-actions">
+            <button class="btn btn-primary" @onclick="SaveAsync" disabled="@_saving">
+                @(_saving ? "Saving…" : "Save")
+            </button>
+            <button class="btn btn-outline" @onclick='() => Nav.NavigateTo("/pages")'>Cancel</button>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+
+    private bool _isNew;
+    private bool _isPublished;
+    private bool _loading = true;
+    private bool _saving;
+    private string? _error;
+    private string? _success;
+
+    private string _title = "";
+    private string _slug = "";
+    private string _content = "";
+    private string _seoTitle = "";
+    private string _seoDescription = "";
+    private string _ogImageUrl = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var profile = await ProfileService.GetActiveProfileAsync();
+        if (profile?.IsTokenValid != true) { Nav.NavigateTo("/login"); return; }
+
+        _isNew = Id is null;
+
+        if (!_isNew)
+        {
+            try
+            {
+                var page = await Api.GetPageAsync(Id!.Value);
+                if (page is null) { Nav.NavigateTo("/pages"); return; }
+                _title = page.Title ?? "";
+                _slug = page.Slug ?? "";
+                _content = page.Content ?? "";
+                _isPublished = page.IsPublished;
+                _seoTitle = page.SeoTitle ?? "";
+                _seoDescription = page.SeoDescription ?? "";
+                _ogImageUrl = page.OgImageUrl ?? "";
+            }
+            catch (Exception ex) { _error = ex.Message; }
+        }
+
+        _loading = false;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_title)) { _error = "Title is required."; return; }
+        if (string.IsNullOrWhiteSpace(_slug)) { _error = "Slug is required."; return; }
+
+        _saving = true;
+        _error = null;
+        _success = null;
+
+        if (_isNew)
+        {
+            var created = await Api.CreatePageAsync(new CreatePageRequest(
+                _title, _slug, _content, _seoTitle, _seoDescription, null, _ogImageUrl, _isPublished));
+            if (created is not null)
+                Nav.NavigateTo($"/pages/{created.Id}");
+            else
+                _error = "Failed to create page.";
+        }
+        else
+        {
+            var updated = await Api.UpdatePageAsync(Id!.Value,
+                new UpdatePageRequest(_title, _slug, _content, _seoTitle, _seoDescription, null, _ogImageUrl, _isPublished));
+            if (updated is not null) _success = "Page saved.";
+            else _error = "Failed to save page.";
+        }
+
+        _saving = false;
+    }
+}

@@ -1,0 +1,116 @@
+# Build results
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+[Ww][Ii][Nn]32/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+
+# Visual Studio cache/options
+.vs/
+
+# Visual Studio Code
+.vscode/
+*.code-workspace
+
+# Rider
+.idea/
+*.sln.iml
+*.sln.DotSettings.user
+
+# User-specific files
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Local History for Visual Studio
+.localhistory/
+
+# BeatPulse Health Checks
+healthchecksdb
+
+# Backup & temp files
+*.bak
+*.tmp
+*.swp
+*~
+*.swn
+
+# NuGet
+*.nupkg
+*.snupkg
+*.nuget.props
+*.nuget.targets
+.nuget/
+
+# .NET Core
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# .NET MAUI / WinUI
+.maui/
+MauiProgram.cs.template
+
+# Blazor/WebAssembly
+.blazor/
+
+# Test Results
+TestResults/
+*.trx
+*.coverage
+
+# Publishing
+PublishProfiles/
+*.publish.xml
+*.azurePubxml
+
+# User secrets
+secrets.json
+secrets.*.json
+
+# Application Insights
+ApplicationInsights.config
+*.ApplicationInsights.config
+
+# Local .env files
+.env
+.env.local
+.env.*.local
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# IDE files
+*.sln.iml
+.vscode/launch.json
+.vscode/settings.json
+
+# Build output
+bin/
+obj/
+.outputs/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# EF Core migrations temporary files
+*.ef
+
+# Coverage reports
+coverage/
+*.coverage
+opencover/

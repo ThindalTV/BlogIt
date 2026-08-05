@@ -1,0 +1,237 @@
+@page "/pages/new"
+@page "/pages/{Id:guid}"
+@attribute [Authorize]
+@inject ApiClient Api
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+<PageTitle>@(isNew ? "New Page" : page?.Title ?? "Edit Page") — BlogIt Admin</PageTitle>
+
+<div class="page-header">
+    <h1 class="page-title">@(isNew ? "New Page" : page?.Title ?? "Edit Page")</h1>
+    <div class="header-actions">
+        @if (!isNew && Id.HasValue)
+        {
+            <button class="btn btn-secondary" @onclick="Preview">Preview</button>
+        }
+        <button class="btn btn-primary" @onclick="Save" disabled="@isSaving">
+            @if (isSaving) { <span class="spinner-sm"></span> } else { <span>Save</span> }
+        </button>
+    </div>
+</div>
+
+@if (!string.IsNullOrEmpty(errorMsg))
+{
+    <div class="alert alert-error">@errorMsg</div>
+}
+@if (!string.IsNullOrEmpty(successMsg))
+{
+    <div class="alert alert-success">@successMsg</div>
+}
+
+@if (isLoading)
+{
+    <div class="loading-spinner-wrap"><div class="spinner"></div></div>
+}
+else
+{
+    <div class="editor-layout">
+        <div class="editor-main">
+            <div class="form-group">
+                <label class="form-label">Title</label>
+                <input class="form-input form-input-lg" @bind="title" placeholder="Page title…" />
+            </div>
+            <div class="form-group">
+                <label class="form-label">Slug</label>
+                <input class="form-input" @bind="slug" placeholder="my-page"
+                       disabled="@(page?.HasBeenPublished == true)" />
+                @if (page?.HasBeenPublished == true)
+                {
+                    <p class="form-hint">The slug was locked by the first publication.</p>
+                }
+                else
+                {
+                    <p class="form-hint">Editable until this page is published for the first time.</p>
+                }
+            </div>
+            <div class="form-group">
+                <label class="form-label">Content (Markdown)</label>
+                <textarea id="page-content-editor" @ref="editorRef">@content</textarea>
+            </div>
+        </div>
+        <aside class="editor-sidebar">
+            <div class="sidebar-panel">
+                <h3 class="sidebar-panel-title">Status</h3>
+                <label class="form-check">
+                    <input type="checkbox" @bind="isPublished" />
+                    <span>Published</span>
+                </label>
+                @if (page is not null)
+                {
+                    <p class="form-hint">Current state: @ScheduleLabel(page.ScheduleState)</p>
+                }
+                <div class="form-group">
+                    <label class="form-label">Publish at</label>
+                    <input class="form-input" type="datetime-local" value="@scheduledPublishLocal"
+                           @onchange="e => scheduledPublishLocal = e.Value?.ToString() ?? string.Empty"
+                           disabled="@isPublished" />
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Unpublish at</label>
+                    <input class="form-input" type="datetime-local" value="@scheduledUnpublishLocal"
+                           @onchange="e => scheduledUnpublishLocal = e.Value?.ToString() ?? string.Empty"
+                           disabled="@(!isPublished && string.IsNullOrWhiteSpace(scheduledPublishLocal))" />
+                </div>
+                <p class="form-hint">Times are shown in your local time and saved as UTC. Leave blank for no schedule.</p>
+            </div>
+            <div class="sidebar-panel">
+                <h3 class="sidebar-panel-title">SEO</h3>
+                <div class="form-group">
+                    <label class="form-label">SEO Title</label>
+                    <input class="form-input" @bind="seoTitle" />
+                </div>
+                <div class="form-group">
+                    <label class="form-label">SEO Description</label>
+                    <textarea class="form-textarea" @bind="seoDescription" rows="2"></textarea>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">SEO Keywords</label>
+                    <input class="form-input" @bind="seoKeywords" />
+                </div>
+                <div class="form-group">
+                    <label class="form-label">OG Image URL</label>
+                    <input class="form-input" @bind="ogImageUrl" />
+                </div>
+            </div>
+        </aside>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+
+    private PageDto? page;
+    private bool isNew => Id == null;
+    private bool isLoading = true;
+    private bool isSaving;
+    private string errorMsg = "";
+    private string successMsg = "";
+    private ElementReference editorRef;
+    private DotNetObjectReference<PageEdit>? dotNetRef;
+    private bool editorInitialized;
+
+    private string title = "";
+    private string slug = "";
+    private string content = "";
+    private bool isPublished;
+    private string seoTitle = "";
+    private string seoDescription = "";
+    private string seoKeywords = "";
+    private string ogImageUrl = "";
+    private string scheduledPublishLocal = "";
+    private string scheduledUnpublishLocal = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!isNew && Id.HasValue)
+        {
+            page = await Api.GetPageAsync(Id.Value);
+            if (page != null)
+            {
+                title = page.Title;
+                slug = page.Slug;
+                content = page.Content;
+                isPublished = page.IsPublished;
+                seoTitle = page.SeoTitle ?? "";
+                seoDescription = page.SeoDescription ?? "";
+                seoKeywords = page.SeoKeywords ?? "";
+                ogImageUrl = page.OgImageUrl ?? "";
+                scheduledPublishLocal = ToLocalInput(page.ScheduledPublishAt);
+                scheduledUnpublishLocal = ToLocalInput(page.ScheduledUnpublishAt);
+            }
+        }
+        isLoading = false;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!editorInitialized && !isLoading)
+        {
+            editorInitialized = true;
+            dotNetRef = DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("blogitInterop.initEditor", "page-content-editor", dotNetRef);
+            if (!string.IsNullOrEmpty(content))
+                await JS.InvokeVoidAsync("blogitInterop.setEditorValue", "page-content-editor", content);
+        }
+    }
+
+    [JSInvokable]
+    public void OnContentChanged(string value) => content = value;
+
+    private async Task Save()
+    {
+        isSaving = true;
+        errorMsg = "";
+        successMsg = "";
+        try
+        {
+            content = await JS.InvokeAsync<string>("blogitInterop.getEditorValue", "page-content-editor");
+            var scheduledPublishAt = ToUtc(scheduledPublishLocal);
+            var scheduledUnpublishAt = ToUtc(scheduledUnpublishLocal);
+            var scheduleError = PublicationSchedule.Validate(scheduledPublishAt, scheduledUnpublishAt);
+            if (scheduleError is not null)
+                throw new InvalidOperationException(scheduleError);
+
+            if (isNew)
+            {
+                var req = new CreatePageRequest(
+                    title, slug, content, seoTitle, seoDescription, seoKeywords, ogImageUrl,
+                    isPublished, scheduledPublishAt, scheduledUnpublishAt);
+                var created = await Api.CreatePageAsync(req);
+                if (created != null)
+                    Nav.NavigateTo($"pages/{created.Id}", replace: true);
+            }
+            else if (Id.HasValue)
+            {
+                var req = new UpdatePageRequest(
+                    title, slug, content, seoTitle, seoDescription, seoKeywords, ogImageUrl,
+                    isPublished, scheduledPublishAt, scheduledUnpublishAt);
+                await Api.UpdatePageAsync(Id.Value, req);
+                successMsg = "Page saved.";
+                page = await Api.GetPageAsync(Id.Value);
+                if (page is not null)
+                {
+                    scheduledPublishLocal = ToLocalInput(page.ScheduledPublishAt);
+                    scheduledUnpublishLocal = ToLocalInput(page.ScheduledUnpublishAt);
+                }
+            }
+        }
+        catch (Exception ex) { errorMsg = $"Save failed: {ex.Message}"; }
+        finally { isSaving = false; }
+    }
+
+    private async Task Preview()
+    {
+        if (!Id.HasValue) return;
+        var preview = await Api.CreatePagePreviewAsync(Id.Value);
+        if (preview is not null)
+            Nav.NavigateTo(preview.Url, forceLoad: true);
+    }
+
+    private static DateTime? ToUtc(string value) =>
+        string.IsNullOrWhiteSpace(value) ? null : DateTime.Parse(value).ToUniversalTime();
+
+    private static string ToLocalInput(DateTime? utc) =>
+        utc?.ToLocalTime().ToString("yyyy-MM-ddTHH:mm") ?? "";
+
+    private static string ScheduleLabel(PublicationScheduleState state) => state switch
+    {
+        PublicationScheduleState.ScheduledForPublishing => "Scheduled for publishing",
+        PublicationScheduleState.ScheduledForUnpublishing => "Published; unpublishing scheduled",
+        PublicationScheduleState.Published => "Published",
+        _ => "Draft"
+    };
+
+    public async ValueTask DisposeAsync() => dotNetRef?.Dispose();
+}

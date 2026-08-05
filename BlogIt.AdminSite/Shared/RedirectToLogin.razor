@@ -1,0 +1,10 @@
+@inject NavigationManager Nav
+@inject ApiClient Api
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        var status = await Api.GetSetupStatusAsync();
+        Nav.NavigateTo(status?.IsComplete == true ? "login" : "setup", replace: true);
+    }
+}

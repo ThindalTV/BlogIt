@@ -1,0 +1,143 @@
+@page "/ai/{Id:guid}"
+@inject MauiApiClient Api
+@inject NavigationManager Nav
+@inject SiteProfileService ProfileService
+
+<div class="page-header">
+    <h1 class="page-title">@(_conversation?.Title ?? "Conversation")</h1>
+    <button class="btn btn-outline" @onclick='() => Nav.NavigateTo("/ai")'>← Back</button>
+</div>
+
+@if (!string.IsNullOrEmpty(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+
+@if (!string.IsNullOrEmpty(_exportSuccess))
+{
+    <div class="alert alert-success">@_exportSuccess</div>
+}
+
+@if (_loading)
+{
+    <p>Loading…</p>
+}
+else if (_conversation is not null)
+{
+    <div class="chat-container card">
+        <div class="chat-messages" id="chat-messages">
+            @if (_conversation.Messages.Count == 0)
+            {
+                <p class="text-muted chat-empty">No messages yet. Say something to start!</p>
+            }
+            @foreach (var msg in _conversation.Messages)
+            {
+                <div class="chat-message chat-message--@msg.Role">
+                    <div class="chat-message__label">@(msg.Role == "user" ? "You" : "AI")</div>
+                    <div class="chat-message__body">@msg.Content</div>
+                    <div class="chat-message__time">@msg.CreatedAt.ToString("HH:mm")</div>
+                </div>
+            }
+            @if (_sending)
+            {
+                <div class="chat-message chat-message--assistant">
+                    <div class="chat-message__label">AI</div>
+                    <div class="chat-message__body chat-typing">Thinking…</div>
+                </div>
+            }
+        </div>
+
+        <div class="chat-input-bar">
+            <textarea class="form-control chat-input" rows="3" @bind="_message"
+                      placeholder="Type a message…"
+                      @onkeydown="OnMessageKey"
+                      disabled="@_sending"></textarea>
+            <button class="btn btn-primary" @onclick="SendAsync" disabled="@(_sending || string.IsNullOrWhiteSpace(_message))">
+                @(_sending ? "…" : "Send")
+            </button>
+        </div>
+    </div>
+
+    <div class="card" style="margin-top:1rem">
+        <h3 class="card-title">Export as Draft Post</h3>
+        <div class="form-group">
+            <label>Instructions (optional)</label>
+            <textarea class="form-control" rows="3" @bind="_exportInstructions"
+                      placeholder="e.g. Write a blog post in a conversational tone summarising this discussion"></textarea>
+        </div>
+        <button class="btn btn-primary" @onclick="ExportAsync" disabled="@_exporting">
+            @(_exporting ? "Exporting…" : "Export as Draft")
+        </button>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private AiConversationDetailDto? _conversation;
+    private bool _loading = true;
+    private bool _sending;
+    private bool _exporting;
+    private string _message = "";
+    private string _exportInstructions = "";
+    private string? _error;
+    private string? _exportSuccess;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var profile = await ProfileService.GetActiveProfileAsync();
+        if (profile?.IsTokenValid != true) { Nav.NavigateTo("/login"); return; }
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+        try { _conversation = await Api.GetConversationAsync(Id); }
+        catch (Exception ex) { _error = ex.Message; }
+        _loading = false;
+    }
+
+    private async Task OnMessageKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && e.CtrlKey) await SendAsync();
+    }
+
+    private async Task SendAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_message) || _sending) return;
+        _sending = true;
+        _error = null;
+        var text = _message.Trim();
+        _message = "";
+
+        var updated = await Api.SendMessageAsync(Id, text);
+        if (updated is not null)
+            _conversation = updated;
+        else
+            _error = "Failed to send message.";
+
+        _sending = false;
+    }
+
+    private async Task ExportAsync()
+    {
+        _exporting = true;
+        _error = null;
+        _exportSuccess = null;
+
+        var postId = await Api.ExportDraftAsync(Id, string.IsNullOrWhiteSpace(_exportInstructions) ? null : _exportInstructions.Trim());
+        if (postId.HasValue)
+        {
+            _exportSuccess = "Draft post created successfully.";
+            _exportInstructions = "";
+        }
+        else
+        {
+            _error = "Failed to export conversation as draft.";
+        }
+
+        _exporting = false;
+    }
+}

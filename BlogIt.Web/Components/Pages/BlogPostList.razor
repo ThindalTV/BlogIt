@@ -1,0 +1,94 @@
+@page "/archive"
+@inject IPublicContentService ContentService
+@inject BlogIt.Web.Services.ISettingsService SettingsService
+
+<SeoHead Title="Archive"
+         Description="@siteDescription"
+         CanonicalUrl="@($"{siteUrl}/archive")"
+         OgType="blog"
+         SchemaType="SeoSchemaType.Blog" />
+
+<GaScript />
+
+<h1>Archive</h1>
+
+@if (posts.Count == 0)
+{
+    <p>No posts yet.</p>
+}
+else
+{
+    @foreach (var post in posts)
+    {
+        <article class="post-card">
+            <h2 class="post-title">
+                @if (post.HasFullContent)
+                {
+                    <a href="@BlogUrlHelper.GetPostPath(post.Slug, post.PublishedAt, post.CreatedAt)">@post.Title</a>
+                }
+                else
+                {
+                    @post.Title
+                }
+            </h2>
+            <p class="post-meta">
+                <time datetime="@post.PublishedAt!.Value.ToString("yyyy-MM-dd")">
+                    @post.PublishedAt!.Value.ToString("MMMM d, yyyy")
+                </time>
+                @if (!string.IsNullOrEmpty(post.AuthorDisplayName))
+                {
+                    <span class="post-author"> · @post.AuthorDisplayName</span>
+                }
+            </p>
+            <div class="post-summary">@((MarkupString)MarkdownHelper.ToHtml(post.Summary))</div>
+            @if (post.Tags.Any())
+            {
+                <div class="tag-list">
+                    @foreach (var tag in post.Tags)
+                    {
+                        <a class="tag-chip" href="/tags/@tag.Slug">@tag.Name</a>
+                    }
+                </div>
+            }
+            @if (post.HasFullContent)
+            {
+                <a class="read-more" href="@BlogUrlHelper.GetPostPath(post.Slug, post.PublishedAt, post.CreatedAt)">Read more &rarr;</a>
+            }
+        </article>
+    }
+
+    <nav class="pagination" aria-label="Pagination">
+        @if (Page > 1)
+        {
+            <a href="/archive?page=@(Page - 1)" class="pagination-prev">&larr; Newer</a>
+        }
+        <span class="pagination-info">Page @Page of @totalPages</span>
+        @if (Page < totalPages)
+        {
+            <a href="/archive?page=@(Page + 1)" class="pagination-next">Older &rarr;</a>
+        }
+    </nav>
+}
+
+@code {
+    [SupplyParameterFromQuery] public int Page { get; set; } = 1;
+
+    private const int PageSize = 10;
+    private IReadOnlyList<BlogPostSummaryDto> posts = [];
+    private int totalPages;
+    private string? siteDescription;
+    private string? siteUrl;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Page < 1) Page = 1;
+
+        siteDescription = await SettingsService.GetAsync(BlogIt.Shared.SettingKeys.SiteDescription);
+        siteUrl = await SettingsService.GetAsync(BlogIt.Shared.SettingKeys.SiteUrl) ?? "";
+
+        var postPage = await ContentService.GetPostsAsync(Page, PageSize);
+        Page = postPage.Page;
+        totalPages = postPage.TotalPages;
+        posts = postPage.Posts;
+    }
+}

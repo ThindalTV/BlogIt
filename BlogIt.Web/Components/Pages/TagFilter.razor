@@ -1,0 +1,93 @@
+@page "/tags/{Slug}"
+@inject IPublicContentService ContentService
+@inject BlogIt.Web.Services.ISettingsService SettingsService
+
+<SeoHead Title="@($"Posts tagged \"{tagName}\"")"
+         CanonicalUrl="@($"{siteUrl}/tags/{Slug}")"
+         SchemaType="SeoSchemaType.CollectionPage" />
+<GaScript />
+
+<h1>Posts tagged "<em>@tagName</em>"</h1>
+
+@if (posts.Count == 0)
+{
+    <p>No posts found for this tag.</p>
+}
+else
+{
+    @foreach (var post in posts)
+    {
+        <article class="post-card">
+            <h2 class="post-title">
+                @if (post.HasFullContent)
+                {
+                    <a href="@BlogUrlHelper.GetPostPath(post.Slug, post.PublishedAt, post.CreatedAt)">@post.Title</a>
+                }
+                else
+                {
+                    @post.Title
+                }
+            </h2>
+            <p class="post-meta">
+                <time datetime="@post.PublishedAt!.Value.ToString("yyyy-MM-dd")">
+                    @post.PublishedAt!.Value.ToString("MMMM d, yyyy")
+                </time>
+            </p>
+            <div class="post-summary">@((MarkupString)MarkdownHelper.ToHtml(post.Summary))</div>
+            @if (post.Tags.Any())
+            {
+                <div class="tag-list">
+                    @foreach (var tag in post.Tags)
+                    {
+                        <a class="tag-chip" href="/tags/@tag.Slug">@tag.Name</a>
+                    }
+                </div>
+            }
+            @if (post.HasFullContent)
+            {
+                <a class="read-more" href="@BlogUrlHelper.GetPostPath(post.Slug, post.PublishedAt, post.CreatedAt)">Read more &rarr;</a>
+            }
+        </article>
+    }
+
+    @if (totalPages > 1)
+    {
+        <nav class="pagination" aria-label="Pagination">
+            @if (Page > 1)
+            {
+                <a href="/tags/@Slug?page=@(Page - 1)" class="pagination-prev">&larr; Prev</a>
+            }
+            <span class="pagination-info">Page @Page of @totalPages</span>
+            @if (Page < totalPages)
+            {
+                <a href="/tags/@Slug?page=@(Page + 1)" class="pagination-next">Next &rarr;</a>
+            }
+        </nav>
+    }
+}
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    [SupplyParameterFromQuery] public int Page { get; set; } = 1;
+
+    private const int PageSize = 10;
+    private IReadOnlyList<BlogPostSummaryDto> posts = [];
+    private int totalPages;
+    private string tagName = "";
+    private string? siteUrl;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Page < 1) Page = 1;
+
+        siteUrl = await SettingsService.GetAsync(BlogIt.Shared.SettingKeys.SiteUrl) ?? "";
+
+        var postPage = await ContentService.GetPostsByTagAsync(Slug, Page, PageSize);
+        if (postPage.TagName is null) return;
+
+        tagName = postPage.TagName;
+        Page = postPage.Page;
+        totalPages = postPage.TotalPages;
+        posts = postPage.Posts;
+    }
+}
