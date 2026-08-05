@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk.Razor">
+<Project Sdk="Microsoft.NET.Sdk.Razor">
 
     <PropertyGroup>
         <TargetFrameworks>net10.0-android</TargetFrameworks>
@@ -74,7 +74,7 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\BlogIt.Shared\BlogIt.Shared.csproj" />
+      <ProjectReference Include="..\src\BlogIt.Contracts\BlogIt.Contracts.csproj" />
     </ItemGroup>
 
 </Project>

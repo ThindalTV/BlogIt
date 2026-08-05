@@ -9,7 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace BlogIt.Tests.Integration;
 
-public class PreviewApiTests(BlogItWebFactory factory) : IClassFixture<BlogItWebFactory>
+public class PreviewApiTests(BlogItSampleFactory factory) : IClassFixture<BlogItSampleFactory>
 {
     [Fact]
     public async Task CreatePostPreview_RequiresAuthentication()

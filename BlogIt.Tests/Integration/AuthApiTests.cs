@@ -6,7 +6,7 @@ using FluentAssertions;
 
 namespace BlogIt.Tests.Integration;
 
-public class AuthApiTests(BlogItWebFactory factory) : IClassFixture<BlogItWebFactory>
+public class AuthApiTests(BlogItSampleFactory factory) : IClassFixture<BlogItSampleFactory>
 {
     [Fact]
     public async Task Login_WithValidCredentials_ReturnsToken()

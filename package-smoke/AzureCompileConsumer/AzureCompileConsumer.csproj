@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <BlogItPackageVersion Condition="'$(BlogItPackageVersion)' == ''">0.0.0-local</BlogItPackageVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BlogIt.AzureStorage" Version="$(BlogItPackageVersion)" />
+  </ItemGroup>
+
+</Project>

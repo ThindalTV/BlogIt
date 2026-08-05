@@ -1,6 +1,6 @@
 using BlogIt.Shared.Data;
 using BlogIt.Shared.Entities;
-using BlogIt.Web.Services;
+using BlogIt.Services;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 

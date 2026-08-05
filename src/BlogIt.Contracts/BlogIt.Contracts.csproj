@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>BlogIt.Contracts</AssemblyName>
+    <PackageId>BlogIt.Contracts</PackageId>
+    <IsPackable>false</IsPackable>
+    <Description>Browser-safe contracts shared by BlogIt clients and the server.</Description>
+  </PropertyGroup>
+
+</Project>

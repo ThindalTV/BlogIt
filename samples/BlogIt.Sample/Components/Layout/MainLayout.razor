@@ -1,0 +1,35 @@
+@inherits LayoutComponentBase
+@inject BlogIt.Services.ISettingsService SettingsService
+
+<header class="site-header">
+    <div class="container">
+        <a class="site-title" href="/">@siteName</a>
+        <nav class="site-nav">
+            <a href="/">Home</a>
+            <a href="/archive">Archive</a>
+        </nav>
+        <form class="search-form" action="/search" method="get">
+            <input type="search" name="q" placeholder="Search…" aria-label="Search" />
+            <button type="submit">Search</button>
+        </form>
+    </div>
+</header>
+
+<main class="container">
+    @Body
+</main>
+
+<footer class="site-footer">
+    <div class="container">
+        <p>&copy; @DateTime.UtcNow.Year @siteName</p>
+    </div>
+</footer>
+
+@code {
+    private string siteName = "BlogIt";
+
+    protected override async Task OnInitializedAsync()
+    {
+        siteName = await SettingsService.GetAsync(BlogIt.Shared.SettingKeys.SiteName) ?? "BlogIt";
+    }
+}

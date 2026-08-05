@@ -4,7 +4,7 @@ using System.Security.Claims;
 using System.Text;
 using BlogIt.Shared.Data;
 using BlogIt.Shared.Entities;
-using BlogIt.Web.Services;
+using BlogIt.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 
@@ -15,7 +15,7 @@ public static class TestHelpers
     /// <summary>Creates a valid JWT for the given user, signed with the test secret.</summary>
     public static string CreateToken(Guid userId, string username = "testuser")
     {
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(BlogItWebFactory.TestJwtSecret));
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(BlogItSampleFactory.TestJwtSecret));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
         var token = new JwtSecurityToken(
             claims:
@@ -38,7 +38,7 @@ public static class TestHelpers
     }
 
     /// <summary>Seeds a user + hashed password in the test DB and returns their ID.</summary>
-    public static async Task<Guid> SeedUserAsync(this BlogItWebFactory factory,
+    public static async Task<Guid> SeedUserAsync(this BlogItSampleFactory factory,
         string username = "testuser", string password = "Password1!")
     {
         using var scope = factory.Services.CreateScope();
@@ -52,12 +52,12 @@ public static class TestHelpers
         db.Users.Add(user);
         await db.SaveChangesAsync();
         var settings = scope.ServiceProvider.GetRequiredService<ISettingsService>();
-        await settings.SetAsync(BlogIt.Shared.SettingKeys.JwtSecret, BlogItWebFactory.TestJwtSecret);
+        await settings.SetAsync(BlogIt.Shared.SettingKeys.JwtSecret, BlogItSampleFactory.TestJwtSecret);
         return user.Id;
     }
 
     /// <summary>Seeds a published blog post in the test DB.</summary>
-    public static async Task<BlogPost> SeedPostAsync(this BlogItWebFactory factory,
+    public static async Task<BlogPost> SeedPostAsync(this BlogItSampleFactory factory,
         Guid authorId, bool published = true)
     {
         using var scope = factory.Services.CreateScope();

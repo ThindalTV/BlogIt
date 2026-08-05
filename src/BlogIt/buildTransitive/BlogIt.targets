@@ -1,0 +1,17 @@
+<Project>
+  <PropertyGroup>
+    <_BlogItAdminPackageAssets>$(MSBuildThisFileDirectory)..\staticwebassets\BlogItAdminAssets\</_BlogItAdminPackageAssets>
+  </PropertyGroup>
+
+  <ItemGroup Condition="Exists('$(_BlogItAdminPackageAssets)index.html')">
+    <Content Include="$(_BlogItAdminPackageAssets)**\*">
+      <Link>BlogItAdminAssets\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <TargetPath>BlogItAdminAssets\%(RecursiveDir)%(Filename)%(Extension)</TargetPath>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+      <Pack>false</Pack>
+      <Visible>false</Visible>
+    </Content>
+  </ItemGroup>
+</Project>

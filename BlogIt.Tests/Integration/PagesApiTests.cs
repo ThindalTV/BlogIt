@@ -6,7 +6,7 @@ using FluentAssertions;
 
 namespace BlogIt.Tests.Integration;
 
-public class PagesApiTests(BlogItWebFactory factory) : IClassFixture<BlogItWebFactory>
+public class PagesApiTests(BlogItSampleFactory factory) : IClassFixture<BlogItSampleFactory>
 {
     [Fact]
     public async Task CreatePage_WithAuth_Returns201()

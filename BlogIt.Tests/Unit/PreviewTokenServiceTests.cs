@@ -1,4 +1,4 @@
-using BlogIt.Web.Services;
+using BlogIt.Services;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 

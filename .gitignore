@@ -57,6 +57,7 @@ healthchecksdb
 project.lock.json
 project.fragment.lock.json
 artifacts/
+samples/BlogIt.Sample/App_Data/
 
 # .NET MAUI / WinUI
 .maui/

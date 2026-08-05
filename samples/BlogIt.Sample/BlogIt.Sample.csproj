@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\BlogIt\BlogIt.csproj" />
+    <!-- Source builds need the bundled contracts assembly as a compile reference. The BlogIt package supplies it itself. -->
+    <ProjectReference Include="..\..\src\BlogIt.Contracts\BlogIt.Contracts.csproj"
+                      PrivateAssets="all" />
+    <ProjectReference Include="..\BlogIt.Sample.ServiceDefaults\BlogIt.Sample.ServiceDefaults.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.0-preview.*" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>BlogIt.Sample</AssemblyName>
+    <RootNamespace>BlogIt.Sample</RootNamespace>
+    <UserSecretsId>BlogIt.Sample-67b54a46-833e-4c56-86c9-09a8d3cc1ee0</UserSecretsId>
+  </PropertyGroup>
+
+</Project>

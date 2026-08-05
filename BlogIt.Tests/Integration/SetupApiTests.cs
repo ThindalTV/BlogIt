@@ -6,13 +6,13 @@ using FluentAssertions;
 
 namespace BlogIt.Tests.Integration;
 
-public class SetupApiTests(BlogItWebFactory factory) : IClassFixture<BlogItWebFactory>
+public class SetupApiTests(BlogItSampleFactory factory) : IClassFixture<BlogItSampleFactory>
 {
     [Fact]
     public async Task GetStatus_WhenNoUsers_ReturnsIncomplete()
     {
         // Use fresh factory so no users are seeded
-        await using var freshFactory = new BlogItWebFactory();
+        await using var freshFactory = new BlogItSampleFactory();
         var client = freshFactory.CreateClient();
         var response = await client.GetFromJsonAsync<SetupStatusResponse>("/api/setup/status");
         response.Should().NotBeNull();
@@ -32,7 +32,7 @@ public class SetupApiTests(BlogItWebFactory factory) : IClassFixture<BlogItWebFa
     public async Task Initialize_WhenNoUsers_CreatesUserAndSettings()
     {
         // Use a fresh factory instance for this test to have a clean DB
-        await using var freshFactory = new BlogItWebFactory();
+        await using var freshFactory = new BlogItSampleFactory();
         var client = freshFactory.CreateClient();
 
         var request = new SetupInitializeRequest(

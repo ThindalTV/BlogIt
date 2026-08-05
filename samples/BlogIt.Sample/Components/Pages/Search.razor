@@ -1,0 +1,80 @@
+@page "/search"
+@inject IPublicContentService ContentService
+@inject BlogIt.Services.ISettingsService SettingsService
+
+<SeoHead Title="@(string.IsNullOrWhiteSpace(Q) ? "Search" : $"Search: {Q}")"
+         CanonicalUrl="@($"{siteUrl}/search")"
+         SchemaType="SeoSchemaType.SearchResultsPage" />
+<GaScript />
+
+<h1>Search</h1>
+
+<form class="search-form search-form-page" action="/search" method="get">
+    <input type="search" name="q" value="@Q" placeholder="Search posts…" aria-label="Search" />
+    <button type="submit">Search</button>
+</form>
+
+@if (!string.IsNullOrWhiteSpace(Q))
+{
+    <p class="search-results-count">
+        @results.Count result@(results.Count == 1 ? "" : "s") for "<strong>@Q</strong>"
+    </p>
+
+    @if (results.Count == 0)
+    {
+        <p>No posts matched your search.</p>
+    }
+    else
+    {
+        @foreach (var post in results)
+        {
+            <article class="post-card">
+                <h2 class="post-title">
+                    @if (post.HasFullContent)
+                    {
+                        <a href="@BlogUrlHelper.GetPostPath(post.Slug, post.PublishedAt, post.CreatedAt)">@post.Title</a>
+                    }
+                    else
+                    {
+                        @post.Title
+                    }
+                </h2>
+                <p class="post-meta">
+                    <time datetime="@post.PublishedAt!.Value.ToString("yyyy-MM-dd")">
+                        @post.PublishedAt!.Value.ToString("MMMM d, yyyy")
+                    </time>
+                </p>
+                <div class="post-summary">@((MarkupString)MarkdownHelper.ToHtml(post.Summary))</div>
+                @if (post.Tags.Any())
+                {
+                    <div class="tag-list">
+                        @foreach (var tag in post.Tags)
+                        {
+                            <a class="tag-chip" href="/tags/@tag.Slug">@tag.Name</a>
+                        }
+                    </div>
+                }
+                @if (post.HasFullContent)
+                {
+                    <a class="read-more" href="@BlogUrlHelper.GetPostPath(post.Slug, post.PublishedAt, post.CreatedAt)">Read more &rarr;</a>
+                }
+            </article>
+        }
+    }
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "q")] public string? Q { get; set; }
+
+    private IReadOnlyList<BlogPostSummaryDto> results = [];
+    private string? siteUrl;
+
+    protected override async Task OnInitializedAsync()
+    {
+        siteUrl = await SettingsService.GetAsync(BlogIt.Shared.SettingKeys.SiteUrl) ?? "";
+
+        if (string.IsNullOrWhiteSpace(Q)) return;
+
+        results = await ContentService.SearchPostsAsync(Q);
+    }
+}

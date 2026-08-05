@@ -6,35 +6,46 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   test:
     name: Build and test
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Setup .NET 10
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with:
           dotnet-version: "10.0.x"
           dotnet-quality: "preview"
 
       - name: Restore dependencies
-        run: dotnet restore BlogIt.sln
+        run: dotnet restore BlogIt.slnx --property:Configuration=Release
 
       - name: Build solution
-        run: dotnet build BlogIt.sln --no-restore --configuration Release
+        run: dotnet build BlogIt.slnx --no-restore --configuration Release
 
       - name: Run tests
-        run: dotnet test BlogIt.Tests/BlogIt.Tests.csproj --no-build --configuration Release --verbosity normal --logger "trx;LogFileName=test-results.trx"
-
-      - name: AppHost smoke test
-        run: dotnet run --project BlogIt.AppHost/BlogIt.AppHost.csproj --no-build --configuration Release -- --help
+        run: >-
+          dotnet test BlogIt.Tests/BlogIt.Tests.csproj
+          --no-build
+          --no-restore
+          --configuration Release
+          --verbosity normal
+          --logger "trx;LogFileName=test-results.trx"
+          --results-directory artifacts/test-results
 
       - name: Upload test results
-        uses: actions/upload-artifact@v4
         if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: test-results
-          path: BlogIt.Tests/TestResults/test-results.trx
+          path: artifacts/test-results/*.trx
+          if-no-files-found: warn
+          retention-days: 7

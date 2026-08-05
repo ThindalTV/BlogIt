@@ -1,0 +1,173 @@
+name: Installed package smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      package-version:
+        description: Optional vMAJOR.MINOR.PATCH or SemVer package version
+        required: false
+        type: string
+  workflow_call:
+    inputs:
+      package-version:
+        description: Optional vMAJOR.MINOR.PATCH or SemVer package version
+        required: false
+        type: string
+    outputs:
+      normalized_version:
+        description: Normalized NuGet package version validated by this workflow
+        value: ${{ jobs.smoke.outputs.normalized_version }}
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Pack and validate installed products
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    outputs:
+      normalized_version: ${{ steps.version.outputs.normalized_version }}
+    services:
+      sqlserver:
+        # SQL Server 2022 CU17 for Ubuntu 22.04, pinned by manifest digest.
+        image: mcr.microsoft.com/mssql/server@sha256:d252932ef839c24c61c1139cc98f69c85ca774fa7c6bfaaa0015b7eb02b9dc87
+        env:
+          ACCEPT_EULA: "Y"
+          MSSQL_PID: Developer
+          MSSQL_SA_PASSWORD: "BlogIt_Package_Smoke_2026!"
+        ports:
+          - 1433:1433
+        options: >-
+          --health-cmd="/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'BlogIt_Package_Smoke_2026!' -C -Q 'SELECT 1' -b"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=20
+          --health-start-period=20s
+    env:
+      PACKAGE_FEED: ${{ github.workspace }}/artifacts/packages
+      SQL_CONNECTION_STRING: "Server=127.0.0.1,1433;Database=BlogItPackageSmoke_${{ github.run_id }}_${{ github.run_attempt }};User ID=sa;Password=BlogIt_Package_Smoke_2026!;Encrypt=True;TrustServerCertificate=True;Connect Timeout=30"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          dotnet-version: "10.0.x"
+          dotnet-quality: "preview"
+
+      - name: Normalize package version
+        id: version
+        shell: pwsh
+        env:
+          RAW_PACKAGE_VERSION: ${{ inputs['package-version'] }}
+        run: |
+          $defaultVersion = "0.0.0-smoke.${{ github.run_number }}.${{ github.run_attempt }}"
+          $version = & ./package-smoke/normalize-version.ps1 `
+            -Version $env:RAW_PACKAGE_VERSION `
+            -DefaultVersion $defaultVersion
+          "normalized_version=$version" >> $env:GITHUB_OUTPUT
+          Write-Host "Validating package version $version"
+
+      - name: Restore dependencies
+        run: dotnet restore BlogIt.slnx --property:Configuration=Release
+
+      - name: Build solution
+        run: dotnet build BlogIt.slnx --no-restore --configuration Release
+
+      - name: Run tests
+        run: >-
+          dotnet test BlogIt.Tests/BlogIt.Tests.csproj
+          --no-build
+          --no-restore
+          --configuration Release
+          --verbosity normal
+          --logger "trx;LogFileName=package-smoke-tests.trx"
+          --results-directory artifacts/test-results
+
+      - name: Pack release artifacts once
+        shell: pwsh
+        env:
+          PACKAGE_VERSION: ${{ steps.version.outputs.normalized_version }}
+        run: |
+          New-Item $env:PACKAGE_FEED -ItemType Directory -Force | Out-Null
+          dotnet pack src/BlogIt/BlogIt.csproj `
+            --configuration Release `
+            --no-restore `
+            --output $env:PACKAGE_FEED `
+            "-p:PackageVersion=$env:PACKAGE_VERSION"
+          if ($LASTEXITCODE -ne 0) { throw "Packing BlogIt failed." }
+
+          dotnet pack src/BlogIt.AzureStorage/BlogIt.AzureStorage.csproj `
+            --configuration Release `
+            --no-restore `
+            --output $env:PACKAGE_FEED `
+            "-p:PackageVersion=$env:PACKAGE_VERSION"
+          if ($LASTEXITCODE -ne 0) { throw "Packing BlogIt.AzureStorage failed." }
+
+      - name: Validate package layout and deterministic consumers
+        shell: pwsh
+        env:
+          PACKAGE_VERSION: ${{ steps.version.outputs.normalized_version }}
+        run: >-
+          ./packaging-spike/verify.ps1
+          -PackageVersion $env:PACKAGE_VERSION
+          -PackageFeed $env:PACKAGE_FEED
+          -SkipPack
+
+      - name: Run installed-package SQL smoke
+        shell: pwsh
+        env:
+          PACKAGE_VERSION: ${{ steps.version.outputs.normalized_version }}
+        run: >-
+          ./package-smoke/run.ps1
+          -PackageVersion $env:PACKAGE_VERSION
+          -PackageFeed $env:PACKAGE_FEED
+          -ConnectionString $env:SQL_CONNECTION_STRING
+          -OutputPath "${{ runner.temp }}/blogit-installed-package-smoke"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: package-smoke-test-results
+          path: artifacts/test-results/*.trx
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Record validated artifact checksums
+        shell: pwsh
+        run: |
+          $packages = @(
+            Get-ChildItem $env:PACKAGE_FEED -File |
+              Where-Object Extension -In @(".nupkg", ".snupkg") |
+              Sort-Object Name
+          )
+          if (@($packages | Where-Object Extension -EQ ".nupkg").Count -ne 2) {
+            throw "Expected exactly two validated nupkgs."
+          }
+          if (@($packages | Where-Object Extension -EQ ".snupkg").Count -ne 2) {
+            throw "Expected exactly two validated snupkgs."
+          }
+          $checksums = @(
+            $packages | ForEach-Object {
+              "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant())  $($_.Name)"
+            }
+          )
+          [IO.File]::WriteAllLines(
+            (Join-Path $env:PACKAGE_FEED "SHA256SUMS"),
+            $checksums)
+
+      - name: Upload validated NuGet packages
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: blogit-nuget-packages
+          path: |
+            artifacts/packages/*.nupkg
+            artifacts/packages/*.snupkg
+            artifacts/packages/SHA256SUMS
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14

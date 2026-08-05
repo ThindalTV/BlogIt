@@ -6,7 +6,7 @@ using FluentAssertions;
 
 namespace BlogIt.Tests.Integration;
 
-public class SettingsApiTests(BlogItWebFactory factory) : IClassFixture<BlogItWebFactory>
+public class SettingsApiTests(BlogItSampleFactory factory) : IClassFixture<BlogItSampleFactory>
 {
     [Fact]
     public async Task GetSettings_RequiresAuth()

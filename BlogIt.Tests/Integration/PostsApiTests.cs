@@ -4,7 +4,7 @@ using BlogIt.Shared.DTOs;
 using BlogIt.Shared.Data;
 using BlogIt.Shared.Entities;
 using BlogIt.Tests.Helpers;
-using BlogIt.Web.Services;
+using BlogIt.Services;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -12,7 +12,7 @@ using Microsoft.Extensions.Logging;
 
 namespace BlogIt.Tests.Integration;
 
-public class PostsApiTests(BlogItWebFactory factory) : IClassFixture<BlogItWebFactory>
+public class PostsApiTests(BlogItSampleFactory factory) : IClassFixture<BlogItSampleFactory>
 {
     [Fact]
     public async Task GetPosts_RequiresAuth()

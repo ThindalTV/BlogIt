@@ -1,0 +1,95 @@
+@page "/{Slug}"
+@inject IPublicContentService ContentService
+@inject BlogIt.Services.ISettingsService SettingsService
+@inject BlogIt.Services.IPreviewTokenService PreviewTokens
+@inject IHttpContextAccessor HttpContextAccessor
+
+@if (notFound)
+{
+    <SeoHead Title="Page Not Found" />
+    @if (!Preview.HasValue)
+    {
+        <GaScript />
+    }
+    <h1>404 — Page not found</h1>
+    <p><a href="/">Go home</a></p>
+}
+else if (customPage != null)
+{
+    @if (isPreview)
+    {
+        <HeadContent>
+            <meta name="robots" content="noindex,nofollow" />
+        </HeadContent>
+        <div class="draft-preview-banner" role="status">
+            <strong>DRAFT PREVIEW</strong>
+            <span>This single-use preview does not publish the page.</span>
+        </div>
+    }
+    <SeoHead Title="@(customPage.SeoTitle ?? customPage.Title)"
+             Description="@(customPage.SeoDescription)"
+             Keywords="@(customPage.SeoKeywords)"
+             OgImage="@(customPage.OgImageUrl)"
+             CanonicalUrl="@($"{siteUrl}/{customPage.Slug}")"
+             OgType="article"
+             SchemaType="@(isPreview ? SeoSchemaType.None : SeoSchemaType.WebPage)"
+             StructuredDataName="@customPage.Title" />
+    @if (!isPreview)
+    {
+        <GaScript />
+    }
+
+    <article class="page-full">
+        <header>
+            <h1>@customPage.Title</h1>
+        </header>
+        <div class="page-content">
+            @((MarkupString)MarkdownHelper.ToHtml(customPage.Content))
+        </div>
+    </article>
+}
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    [SupplyParameterFromQuery(Name = "preview")] public Guid? Preview { get; set; }
+
+    private PageDto? customPage;
+    private bool notFound;
+    private string? siteUrl;
+    private bool isPreview;
+
+    protected override async Task OnInitializedAsync()
+    {
+        customPage = await ContentService.GetPageAsync(Slug);
+
+        if (customPage is null)
+        {
+            notFound = true;
+            return;
+        }
+
+        if (Preview.HasValue)
+        {
+            isPreview = HttpContextAccessor.HttpContext is not null
+                && PreviewTokens.TryAuthorize(
+                HttpContextAccessor.HttpContext,
+                Preview,
+                BlogIt.Services.PreviewContentType.Page,
+                customPage.Id);
+            if (!isPreview)
+            {
+                customPage = null;
+                notFound = true;
+                return;
+            }
+        }
+        else if (!customPage.IsPublished)
+        {
+            customPage = null;
+            notFound = true;
+            return;
+        }
+
+        siteUrl = await SettingsService.GetAsync(BlogIt.Shared.SettingKeys.SiteUrl) ?? "";
+    }
+}

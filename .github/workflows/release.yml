@@ -1,0 +1,166 @@
+name: Release NuGet packages
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+jobs:
+  smoke:
+    name: Validate tagged packages
+    permissions:
+      contents: read
+    uses: ./.github/workflows/package-smoke.yml
+    with:
+      package-version: ${{ github.ref_name }}
+
+  publish:
+    name: Publish validated packages
+    needs: smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+    env:
+      # Set NUGET_SOURCE as a repository variable for GitHub Packages or a private feed.
+      # It defaults to NuGet.org. NUGET_SYMBOL_SOURCE is optional and defaults to
+      # NUGET_SOURCE. Store API keys in NUGET_API_KEY and, optionally,
+      # NUGET_SYMBOL_API_KEY repository secrets. Set the optional NUGET_USERNAME
+      # variable for feeds using basic authentication. GitHub Packages defaults the
+      # username to the repository owner and can use GITHUB_TOKEN.
+      NUGET_SOURCE: ${{ vars.NUGET_SOURCE || 'https://api.nuget.org/v3/index.json' }}
+      NUGET_SYMBOL_SOURCE: ${{ vars.NUGET_SYMBOL_SOURCE }}
+      NUGET_USERNAME: ${{ vars.NUGET_USERNAME }}
+      NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+      NUGET_SYMBOL_API_KEY: ${{ secrets.NUGET_SYMBOL_API_KEY }}
+      GITHUB_TOKEN: ${{ github.token }}
+      GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}
+      PACKAGE_VERSION: ${{ needs.smoke.outputs.normalized_version }}
+
+    steps:
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          dotnet-version: "10.0.x"
+          dotnet-quality: "preview"
+
+      - name: Download validated packages
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: blogit-nuget-packages
+          path: artifacts/packages
+
+      - name: Verify downloaded artifact checksums
+        shell: pwsh
+        run: |
+          $root = Resolve-Path artifacts/packages
+          $manifestPath = Join-Path $root "SHA256SUMS"
+          if (-not (Test-Path $manifestPath -PathType Leaf)) {
+            throw "Validated package artifact is missing SHA256SUMS."
+          }
+
+          $expected = @{}
+          foreach ($line in Get-Content $manifestPath) {
+            if ($line -notmatch "^([0-9a-fA-F]{64})  (.+)$") {
+              throw "Invalid SHA256SUMS line: $line"
+            }
+            $expected[$Matches[2]] = $Matches[1].ToLowerInvariant()
+          }
+
+          $packages = @(
+            Get-ChildItem $root -File |
+              Where-Object Extension -In @(".nupkg", ".snupkg")
+          )
+          if (@($packages | Where-Object Extension -EQ ".nupkg").Count -ne 2) {
+            throw "Validated artifact must contain exactly two nupkgs."
+          }
+          if (@($packages | Where-Object Extension -EQ ".snupkg").Count -ne 2) {
+            throw "Validated artifact must contain exactly two snupkgs."
+          }
+          if ($packages.Count -ne $expected.Count) {
+            throw "Validated artifact package count does not match SHA256SUMS."
+          }
+          foreach ($package in $packages) {
+            $actual = (Get-FileHash $package.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            if (-not $expected.ContainsKey($package.Name) -or
+                $expected[$package.Name] -ne $actual) {
+              throw "Checksum validation failed for $($package.Name)."
+            }
+          }
+          Write-Host "Verified $($packages.Count) package checksum(s) for $env:PACKAGE_VERSION."
+
+      - name: Publish exact validated packages
+        shell: pwsh
+        run: |
+          $source = $env:NUGET_SOURCE.Trim()
+          if ([string]::IsNullOrWhiteSpace($source)) {
+            throw "NUGET_SOURCE must not be empty."
+          }
+
+          $apiKey = $env:NUGET_API_KEY
+          if ([string]::IsNullOrWhiteSpace($apiKey) -and
+              $source -match "^https://nuget\.pkg\.github\.com/") {
+            $apiKey = $env:GITHUB_TOKEN
+          }
+          if ([string]::IsNullOrWhiteSpace($apiKey)) {
+            throw "Set the NUGET_API_KEY repository secret for the configured NUGET_SOURCE."
+          }
+
+          $username = $env:NUGET_USERNAME
+          if ([string]::IsNullOrWhiteSpace($username) -and
+              $source -match "^https://nuget\.pkg\.github\.com/") {
+            $username = $env:GITHUB_REPOSITORY_OWNER
+          }
+
+          $pushSource = $source
+          if (-not [string]::IsNullOrWhiteSpace($username)) {
+            & dotnet nuget add source $source `
+              --name blogit-release `
+              --username $username `
+              --password $apiKey `
+              --store-password-in-clear-text
+            if ($LASTEXITCODE -ne 0) {
+              throw "Configuring authenticated NuGet source failed with exit code $LASTEXITCODE."
+            }
+            $pushSource = "blogit-release"
+          }
+
+          $packages = @(
+            Get-ChildItem artifacts/packages -File |
+              Where-Object Extension -EQ ".nupkg" |
+              Sort-Object Name
+          )
+          foreach ($package in $packages) {
+            $arguments = @(
+              "nuget", "push", $package.FullName,
+              "--source", $pushSource,
+              "--api-key", $apiKey,
+              "--skip-duplicate"
+            )
+
+            $symbolPath = [IO.Path]::ChangeExtension($package.FullName, ".snupkg")
+            if (Test-Path $symbolPath -PathType Leaf) {
+              $symbolSource = if ([string]::IsNullOrWhiteSpace($env:NUGET_SYMBOL_SOURCE)) {
+                $pushSource
+              } else {
+                $env:NUGET_SYMBOL_SOURCE.Trim()
+              }
+              $symbolApiKey = if ([string]::IsNullOrWhiteSpace($env:NUGET_SYMBOL_API_KEY)) {
+                $apiKey
+              } else {
+                $env:NUGET_SYMBOL_API_KEY
+              }
+              $arguments += @(
+                "--symbol-source", $symbolSource,
+                "--symbol-api-key", $symbolApiKey
+              )
+            } else {
+              $arguments += "--no-symbols"
+            }
+
+            & dotnet @arguments
+            if ($LASTEXITCODE -ne 0) {
+              throw "Publishing $($package.Name) failed with exit code $LASTEXITCODE."
+            }
+          }

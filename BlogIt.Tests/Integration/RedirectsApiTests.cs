@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace BlogIt.Tests.Integration;
 
-public class RedirectsApiTests(BlogItWebFactory factory) : IClassFixture<BlogItWebFactory>
+public class RedirectsApiTests(BlogItSampleFactory factory) : IClassFixture<BlogItSampleFactory>
 {
     [Fact]
     public async Task RedirectManagement_RequiresAuthentication()

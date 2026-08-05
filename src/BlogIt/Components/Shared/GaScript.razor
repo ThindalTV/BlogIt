@@ -1,0 +1,25 @@
+@using BlogIt.Services
+@namespace BlogIt.Components.Shared
+@inject ISettingsService SettingsService
+
+@if (!string.IsNullOrEmpty(measurementId))
+{
+    <HeadContent>
+        <script async src="https://www.googletagmanager.com/gtag/js?id=@measurementId"></script>
+        <script>
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', '@measurementId');
+        </script>
+    </HeadContent>
+}
+
+@code {
+    private string? measurementId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        measurementId = await SettingsService.GetAsync(BlogIt.Shared.SettingKeys.GoogleAnalyticsMeasurementId);
+    }
+}

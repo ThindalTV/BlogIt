@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -23,8 +23,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\BlogIt.Shared\BlogIt.Shared.csproj" />
-    <ProjectReference Include="..\BlogIt.Web\BlogIt.Web.csproj" />
+    <ProjectReference Include="..\src\BlogIt.AzureStorage\BlogIt.AzureStorage.csproj" />
+    <ProjectReference Include="..\src\BlogIt\BlogIt.csproj" />
+    <ProjectReference Include="..\src\BlogIt.Contracts\BlogIt.Contracts.csproj" />
+    <ProjectReference Include="..\samples\BlogIt.Sample\BlogIt.Sample.csproj" />
   </ItemGroup>
 
 </Project>
