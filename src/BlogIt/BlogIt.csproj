@@ -56,6 +56,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Content Update="$(NuGetPackageRoot)microsoft.codeanalysis.workspaces.msbuild\*\contentFiles\any\any\BuildHost-*\**"
+             Visible="false" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Include="README.md"
           Pack="true"
           PackagePath="\" />
