@@ -102,6 +102,7 @@ Desktop.ini
 # Build output
 bin/
 obj/
+**/BuildHost-*/
 .outputs/
 *.exe
 *.dll
