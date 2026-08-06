@@ -9,14 +9,6 @@
             <span class="topbar-logo">✦</span>
             <span class="topbar-name">BlogIt Admin</span>
         </div>
-        <div class="topbar-user">
-            <AuthorizeView>
-                <Authorized>
-                    <span class="topbar-username">@context.User.FindFirst("name")?.Value ?? context.User.Identity?.Name</span>
-                    <button class="btn-logout" @onclick="Logout">Logout</button>
-                </Authorized>
-            </AuthorizeView>
-        </div>
     </header>
 
     <div class="admin-body">
@@ -33,6 +25,17 @@
                 <li><NavLink href="settings" class="nav-link"><span class="nav-icon">⚙</span>Settings</NavLink></li>
                 <li><NavLink href="account" class="nav-link"><span class="nav-icon">🔑</span>My Account</NavLink></li>
             </ul>
+            <AuthorizeView>
+                <Authorized>
+                    <div class="sidebar-user">
+                        <div class="sidebar-user-identity">
+                            <span class="sidebar-user-icon">👤</span>
+                            <span class="sidebar-username">@(context.User.Identity?.Name ?? "Admin")</span>
+                        </div>
+                        <button type="button" class="btn-logout" @onclick="Logout">Logout</button>
+                    </div>
+                </Authorized>
+            </AuthorizeView>
         </nav>
 
         <main class="main-content">

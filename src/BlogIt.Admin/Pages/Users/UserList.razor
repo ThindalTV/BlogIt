@@ -111,7 +111,7 @@ else
     protected override async Task OnInitializedAsync()
     {
         var state = await AuthProvider.GetAuthenticationStateAsync();
-        currentUsername = state.User.FindFirst("name")?.Value ?? state.User.Identity?.Name;
+        currentUsername = state.User.Identity?.Name;
         try { users = await Api.GetUsersAsync(); }
         catch (Exception ex) { errorMsg = ex.Message; }
         finally { isLoading = false; }

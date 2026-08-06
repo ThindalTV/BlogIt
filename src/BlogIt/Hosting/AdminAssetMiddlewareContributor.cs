@@ -57,7 +57,7 @@ internal sealed partial class AdminAssetMiddlewareContributor(
                 context.Context.Response.Headers.CacheControl =
                     FingerprintedFileRegex().IsMatch(fileName)
                         ? "public,max-age=31536000,immutable"
-                        : "public,max-age=3600";
+                        : "no-cache";
             }
         });
     }

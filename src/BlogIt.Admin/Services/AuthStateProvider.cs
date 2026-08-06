@@ -74,14 +74,17 @@ public class AuthStateProvider(LocalStorageService localStorage) : Authenticatio
             var claims = new List<Claim>();
             foreach (var (key, value) in dict)
             {
+                var claimType = key is "name" or "unique_name"
+                    ? ClaimTypes.Name
+                    : key;
                 if (value.ValueKind == JsonValueKind.Array)
                 {
                     foreach (var item in value.EnumerateArray())
-                        claims.Add(new Claim(key, item.GetString() ?? ""));
+                        claims.Add(new Claim(claimType, item.GetString() ?? ""));
                 }
                 else
                 {
-                    claims.Add(new Claim(key, value.ToString()));
+                    claims.Add(new Claim(claimType, value.ToString()));
                 }
             }
             return claims;

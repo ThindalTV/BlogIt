@@ -29,6 +29,9 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\BlogIt.Admin\BlogIt.Admin.csproj"
+                      ReferenceOutputAssembly="false"
+                      PrivateAssets="all" />
     <ProjectReference Include="..\BlogIt.Contracts\BlogIt.Contracts.csproj"
                       PrivateAssets="all" />
   </ItemGroup>
@@ -66,7 +69,7 @@
           Condition="'$(DesignTimeBuild)' != 'true'">
     <RemoveDir Directories="$(AdminPublishDir)" />
     <MSBuild Projects="$(AdminProject)"
-             Targets="Restore;Publish"
+             Targets="Publish"
              BuildInParallel="false"
              Properties="Configuration=$(Configuration);PublishTrimmed=false;PublishDir=$(AdminPublishDir);BlogItAdminBuildRoot=$(AdminBuildRoot);BlogItBundledAdminBuild=true" />
     <Error Condition="!Exists('$(AdminAssetsDir)index.html')"
