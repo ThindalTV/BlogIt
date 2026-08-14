@@ -18,8 +18,9 @@ public class AnalyticsService(ISettingsService settings) : IAnalyticsService
         GoogleCredential credential;
         try
         {
-            credential = GoogleCredential
-                .FromJson(credentialsJson)
+            credential = CredentialFactory
+                .FromJson<ServiceAccountCredential>(credentialsJson)
+                .ToGoogleCredential()
                 .CreateScoped("https://www.googleapis.com/auth/analytics.readonly");
         }
         catch

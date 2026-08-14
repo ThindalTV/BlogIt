@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentView xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:BlogIt.MauiAdmin.ViewModels.Sites"
+             xmlns:models="clr-namespace:BlogIt.MauiAdmin.Models"
+             x:Class="BlogIt.MauiAdmin.Views.Sites.SiteSwitcherView"
+             x:DataType="vm:SiteSwitcherViewModel">
+    <VerticalStackLayout Spacing="4">
+        <Label Text="BlogIt Admin" FontAttributes="Bold" FontSize="16" />
+        <Label Text="{Binding ActiveSiteLabel}" FontSize="13" Opacity="0.8" />
+
+        <Picker x:Name="SitePicker" Title="Switch site" ItemsSource="{Binding Sites}"
+                ItemDisplayBinding="{Binding DisplayLabel}" Margin="0,8,0,0"
+                SelectedIndexChanged="OnSiteSelected" />
+
+        <Button Text="Manage Sites" Command="{Binding ManageCommand}" Margin="0,4,0,0" FontSize="12" />
+    </VerticalStackLayout>
+</ContentView>

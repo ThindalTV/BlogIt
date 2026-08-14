@@ -59,6 +59,12 @@ public static class MediaApi
             ? titleVal.ToString()
             : Path.GetFileNameWithoutExtension(file.FileName);
 
+        // INTENTIONAL: the client-supplied Content-Type is trusted as-is, with no server-side
+        // magic-byte validation or allow-list — this endpoint requires authentication, so
+        // whatever gets uploaded (including an .html file that executes same-origin script
+        // when visited) can only originate from a trusted, already-authenticated user, not an
+        // anonymous visitor. Consistent with the "every user is a fully trusted author"
+        // decision documented in MarkdownHelper.cs and AUDIT_REPORT.md finding #0.
         await using var stream = file.OpenReadStream();
         var storageKey = await mediaStorage.StoreAsync(
             stream,

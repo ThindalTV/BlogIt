@@ -26,6 +26,15 @@ public sealed class AdminAssetIntegrationTests(BlogItSampleFactory factory)
         var shell = await _client.GetStringAsync("/blogit/");
         shell.Should().Contain("<title>BlogIt Admin</title>");
         shell.Should().Contain("<base href=\"/blogit/\" />");
+        shell.Should().NotContain("unpkg.com");
+        shell.Should().Contain("lib/easymde/dist/easymde.min.js");
+        shell.Should().Contain("lib/easymde/dist/easymde.min.css");
+
+        var easymdeScript = await _client.GetAsync("/blogit/lib/easymde/dist/easymde.min.js");
+        easymdeScript.StatusCode.Should().Be(HttpStatusCode.OK);
+        easymdeScript.Headers.TryGetValues("X-Content-Type-Options", out var nosniffValues)
+            .Should().BeTrue();
+        nosniffValues!.Should().Contain("nosniff");
 
         var directIndex = await _client.GetStringAsync("/blogit/index.html");
         directIndex.Should().Contain("<base href=\"/blogit/\" />");

@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using BlogIt.Shared.DTOs;
+using BlogIt.Shared.Helpers;
 using BlogIt.Services;
 
 namespace BlogIt.Api;
@@ -16,13 +17,23 @@ public static class AuthApi
             if (response is null)
                 return Results.Unauthorized();
             return Results.Ok(response);
-        }).AllowAnonymous();
+        })
+            .AllowAnonymous()
+            .RequireRateLimiting(BlogItDefaults.LoginRateLimiterPolicy);
 
         group.MapPost("/change-password", async (
             ChangePasswordRequest request,
             ClaimsPrincipal user,
             IAuthService authService) =>
         {
+            if (PasswordPolicy.Validate(request.NewPassword) is string passwordError)
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["newPassword"] = [passwordError]
+                });
+            }
+
             var userId = Guid.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)
                 ?? user.FindFirstValue("sub")!);
 

@@ -10,7 +10,6 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace BlogIt.Migrations
 {
-    [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
     [DbContext(typeof(BlogItDbContext))]
     partial class BlogItDbContextModelSnapshot : ModelSnapshot
     {
@@ -37,6 +36,9 @@ namespace BlogIt.Migrations
 
                     b.Property<Guid?>("LinkedDraftId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Summary")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Title")
                         .IsRequired()
@@ -70,6 +72,9 @@ namespace BlogIt.Migrations
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsCompacted")
+                        .HasColumnType("bit");
 
                     b.Property<string>("Role")
                         .IsRequired()
@@ -293,6 +298,16 @@ namespace BlogIt.Migrations
                         .IsUnique();
 
                     b.ToTable("Pages");
+                });
+
+            modelBuilder.Entity("BlogIt.Shared.Entities.SetupLock", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("SetupLocks");
                 });
 
             modelBuilder.Entity("BlogIt.Shared.Entities.SiteSetting", b =>

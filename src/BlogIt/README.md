@@ -32,6 +32,16 @@ builder.Services.AddBlogIt(options =>
     options.UseFileSystemStorage(storage =>
         storage.RootPath = Path.Combine("App_Data", "blogit"));
 });
+```
+
+Hosting on Azure SQL Database instead of a dedicated SQL Server? Use `UseAzureSql(...)` in place of
+`UseSqlServer(...)` — same provider, but with EF Core's connection-retry strategy turned on by
+default, since Azure SQL is more prone to transient faults (throttling, failover, elastic pool
+moves). With retries enabled, any multi-step write that must be atomic needs to go through
+`BlogItDbContext.ExecuteInTransactionAsync(...)` instead of a bare `Database.BeginTransactionAsync()`
+— see that method's doc comment for why.
+
+```csharp
 
 var app = builder.Build();
 await app.MigrateBlogItAsync();

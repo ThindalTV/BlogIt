@@ -58,6 +58,54 @@ public class PostsApiTests(BlogItSampleFactory factory) : IClassFixture<BlogItSa
         post.IsPublished.Should().BeFalse();
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task CreatePost_WithBlankTitle_ReturnsBadRequest(string blankTitle)
+    {
+        var userId = await factory.SeedUserAsync($"post_blank_title_{Guid.NewGuid():N}");
+        var client = factory.CreateClient().WithAuth(userId);
+
+        var request = new CreateBlogPostRequest(
+            Title: blankTitle,
+            Summary: "A summary",
+            Content: null,
+            SeoTitle: null, SeoDescription: null, SeoKeywords: null, OgImageUrl: null,
+            TagNames: []);
+
+        var response = await client.PostAsJsonAsync("/api/posts", request);
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task UpdatePost_WithBlankTitle_ReturnsBadRequestAndDoesNotClearTitle()
+    {
+        var userId = await factory.SeedUserAsync($"post_update_blank_title_{Guid.NewGuid():N}");
+        var client = factory.CreateClient().WithAuth(userId);
+
+        var create = new CreateBlogPostRequest(
+            Title: "Original Title",
+            Summary: "A summary",
+            Content: null,
+            SeoTitle: null, SeoDescription: null, SeoKeywords: null, OgImageUrl: null,
+            TagNames: []);
+        var createResponse = await client.PostAsJsonAsync("/api/posts", create);
+        var created = await createResponse.Content.ReadFromJsonAsync<BlogPostDetailDto>();
+
+        var update = new UpdateBlogPostRequest(
+            Title: "   ",
+            Summary: "A summary",
+            Content: null,
+            SeoTitle: null, SeoDescription: null, SeoKeywords: null, OgImageUrl: null,
+            TagNames: [], ScheduledPublishAt: null, ScheduledUnpublishAt: null, Slug: created!.Slug);
+
+        var response = await client.PutAsJsonAsync($"/api/posts/{created.Id}", update);
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        var reloaded = await client.GetFromJsonAsync<BlogPostDetailDto>($"/api/posts/{created.Id}");
+        reloaded!.Title.Should().Be("Original Title");
+    }
+
     [Fact]
     public async Task CreatePost_GeneratesUniqueSlug_WhenDuplicate()
     {
@@ -175,6 +223,7 @@ public class PostsApiTests(BlogItSampleFactory factory) : IClassFixture<BlogItSa
 
         var scheduler = new PublicationSchedulingService(
             factory.Services.GetRequiredService<IDbContextFactory<BlogItDbContext>>(),
+            factory.Services.GetRequiredService<IPreviewTokenService>(),
             factory.Services.GetRequiredService<TimeProvider>(),
             factory.Services.GetRequiredService<ILogger<PublicationSchedulingService>>());
         await scheduler.ProcessDueSchedulesAsync();

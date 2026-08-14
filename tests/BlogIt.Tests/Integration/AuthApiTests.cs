@@ -70,6 +70,18 @@ public class AuthApiTests(BlogItSampleFactory factory) : IClassFixture<BlogItSam
     }
 
     [Fact]
+    public async Task ChangePassword_WithWeakNewPassword_ReturnsBadRequest()
+    {
+        var userId = await factory.SeedUserAsync("erin", "RealPass1!");
+        var client = factory.CreateClient().WithAuth(userId, "erin");
+
+        var response = await client.PostAsJsonAsync("/api/auth/change-password",
+            new ChangePasswordRequest("RealPass1!", "weak"));
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
     public async Task ChangePassword_WithoutAuth_ReturnsUnauthorized()
     {
         var client = factory.CreateClient();

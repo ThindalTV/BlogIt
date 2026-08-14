@@ -1,11 +1,20 @@
 using BlogIt.Shared.Data;
 using BlogIt.Shared.DTOs;
 using BlogIt.Shared.Entities;
+using BlogIt.Shared.Helpers;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 
 namespace BlogIt.Api;
 
+// INTENTIONAL: there is no role/permission tier here — every AppUser is fully privileged and
+// there's no ownership check on Posts/Pages/Media (any authenticated user can edit/delete
+// content created by any other user). Creating a second user account is equivalent to granting
+// full site control, by design, for the same reason MarkdownHelper.cs's HTML passthrough is
+// unsanitized: BlogIt currently assumes every author is as trusted as the site owner. See
+// AUDIT_REPORT.md finding #6. [[roles-and-permissions]] tracks the plan to add roles later —
+// the codebase already has the ownership FKs (BlogPost.AuthorId, MediaFile.UploadedByUserId)
+// needed to build that without a rework.
 public static class UsersApi
 {
     public static IEndpointRouteBuilder MapUsersApi(this IEndpointRouteBuilder app)
@@ -37,6 +46,14 @@ public static class UsersApi
     {
         if (await db.Users.AnyAsync(u => u.Username == req.Username))
             return Results.Conflict("Username already exists.");
+
+        if (PasswordPolicy.Validate(req.Password) is string passwordError)
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["password"] = [passwordError]
+            });
+        }
 
         var user = new AppUser
         {

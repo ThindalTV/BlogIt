@@ -55,7 +55,10 @@ public class SqlServerProviderTests
         dbContext.Model.FindEntityType(typeof(BlogPost)).Should().NotBeNull();
         dbContext.Model.FindEntityType(typeof(Tag)).Should().NotBeNull();
         dbContext.Database.GetMigrations().Should().Equal(
-            "20260805232419_InitialCreate");
+            "20260805232419_InitialCreate",
+            "20260814204048_AddSetupLock",
+            "20260814205906_AddAiConversationSummary",
+            "20260814220335_AddAiMessageIsCompacted");
     }
 
     private static ServiceProvider CreateServices(

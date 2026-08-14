@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:BlogIt.MauiAdmin.ViewModels.Media"
+             x:Class="BlogIt.MauiAdmin.Views.Media.MediaPickerModalPage"
+             x:DataType="vm:MediaPickerViewModel"
+             Title="Insert Media">
+    <Grid RowDefinitions="Auto,Auto,Auto,*,Auto" Padding="16" RowSpacing="8">
+        <Grid Grid.Row="0" ColumnDefinitions="*,Auto" ColumnSpacing="8">
+            <SearchBar Grid.Column="0" Placeholder="Search media" Text="{Binding SearchText}" SearchCommand="{Binding SearchCommand}" />
+            <Button Grid.Column="1" Text="Cancel" Clicked="OnCancelClicked" />
+        </Grid>
+
+        <FlexLayout Grid.Row="1" Wrap="Wrap" JustifyContent="Start">
+            <Button Text="📷 Take Photo" Margin="0,0,6,6" IsVisible="{Binding IsCaptureSupported}" Command="{Binding TakePhotoCommand}" />
+            <Button Text="🎥 Record Video" Margin="0,0,6,6" IsVisible="{Binding IsCaptureSupported}" Command="{Binding RecordVideoCommand}" />
+            <Button Text="🖼 Choose Photo" Margin="0,0,6,6" Command="{Binding ChoosePhotoCommand}" />
+            <Button Text="📼 Choose Video" Margin="0,0,6,6" Command="{Binding ChooseVideoCommand}" />
+            <Button Text="📄 Choose File" Margin="0,0,6,6" Command="{Binding ChooseFileCommand}" />
+        </FlexLayout>
+
+        <Label Grid.Row="2" Text="{Binding ErrorMessage}" TextColor="Red" IsVisible="{Binding ErrorMessage, Converter={StaticResource IsNotNullOrEmptyConverter}}" />
+
+        <CollectionView Grid.Row="3" ItemsSource="{Binding Items}">
+            <CollectionView.ItemsLayout>
+                <GridItemsLayout Orientation="Vertical" Span="3" />
+            </CollectionView.ItemsLayout>
+            <CollectionView.EmptyView>
+                <Label Text="No media yet." HorizontalOptions="Center" Margin="0,32,0,0" />
+            </CollectionView.EmptyView>
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="vm:MediaItemRow">
+                    <Grid Padding="6">
+                        <Grid.GestureRecognizers>
+                            <TapGestureRecognizer
+                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MediaPickerViewModel}}, Path=SelectCommand}"
+                                CommandParameter="{Binding .}" />
+                        </Grid.GestureRecognizers>
+                        <VerticalStackLayout Spacing="2">
+                            <Border StrokeShape="RoundRectangle 6" HeightRequest="80">
+                                <Grid>
+                                    <Image Source="{Binding ImageUrl}" Aspect="AspectFill" IsVisible="{Binding IsImage}" />
+                                    <Label Text="📄" FontSize="28" HorizontalOptions="Center" VerticalOptions="Center" IsVisible="{Binding IsImage, Converter={StaticResource InvertedBoolConverter}}" />
+                                </Grid>
+                            </Border>
+                            <Label Text="{Binding Title}" FontSize="10" LineBreakMode="TailTruncation" />
+                        </VerticalStackLayout>
+                    </Grid>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+
+        <ActivityIndicator Grid.Row="4" IsRunning="{Binding IsBusy}" IsVisible="{Binding IsBusy}" />
+    </Grid>
+</ContentPage>

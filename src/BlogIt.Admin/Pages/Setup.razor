@@ -180,12 +180,17 @@
         else if (currentStep == 2)
         {
             if (string.IsNullOrWhiteSpace(model.SiteName)) { errorMsg = "Site name is required."; return; }
-            if (string.IsNullOrWhiteSpace(model.SiteUrl)) { errorMsg = "Site URL is required."; return; }
+            if (!IsValidAbsoluteHttpUrl(model.SiteUrl)) { errorMsg = "Site URL must be an absolute http:// or https:// URL."; return; }
         }
         currentStep++;
     }
 
     private void PrevStep() => currentStep--;
+
+    private static bool IsValidAbsoluteHttpUrl(string? value) =>
+        !string.IsNullOrWhiteSpace(value)
+        && Uri.TryCreate(value, UriKind.Absolute, out var uri)
+        && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
 
     private async Task Submit()
     {

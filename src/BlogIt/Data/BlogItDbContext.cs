@@ -14,6 +14,7 @@ public class BlogItDbContext(DbContextOptions<BlogItDbContext> options) : DbCont
     public DbSet<AiConversation> AiConversations => Set<AiConversation>();
     public DbSet<AiMessage> AiMessages => Set<AiMessage>();
     public DbSet<UrlRedirect> UrlRedirects => Set<UrlRedirect>();
+    public DbSet<SetupLock> SetupLocks => Set<SetupLock>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -89,6 +90,7 @@ public class BlogItDbContext(DbContextOptions<BlogItDbContext> options) : DbCont
         {
             e.HasKey(c => c.Id);
             e.Property(c => c.Title).HasMaxLength(500).IsRequired();
+            e.Property(c => c.Summary).IsRequired(false);
             e.HasOne(c => c.CreatedByUser)
              .WithMany(u => u.AiConversations)
              .HasForeignKey(c => c.CreatedByUserId)
@@ -117,6 +119,12 @@ public class BlogItDbContext(DbContextOptions<BlogItDbContext> options) : DbCont
             e.HasIndex(item => item.SourcePath).IsUnique();
             e.Property(item => item.SourcePath).HasMaxLength(1000).IsRequired();
             e.Property(item => item.TargetUrl).HasMaxLength(2000).IsRequired();
+        });
+
+        modelBuilder.Entity<SetupLock>(e =>
+        {
+            e.HasKey(s => s.Id);
+            e.Property(s => s.Id).ValueGeneratedNever();
         });
     }
 }

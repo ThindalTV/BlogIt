@@ -37,7 +37,9 @@ public class PreviewApiTests(BlogItSampleFactory factory) : IClassFixture<BlogIt
         (await client.GetStringAsync(preview.Url)).Should().Contain("DRAFT PREVIEW");
 
         var replayClient = factory.CreateClient();
-        (await replayClient.GetStringAsync(preview.Url)).Should().Contain("Post Not Found");
+        var replayResponse = await replayClient.GetAsync(preview.Url);
+        replayResponse.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await replayResponse.Content.ReadAsStringAsync()).Should().Contain("Post not found");
     }
 
     [Fact]
@@ -80,4 +82,5 @@ public class PreviewApiTests(BlogItSampleFactory factory) : IClassFixture<BlogIt
         response.EnsureSuccessStatusCode();
         response.RequestMessage!.RequestUri!.AbsolutePath.Should().Be(expectedPath);
     }
+
 }

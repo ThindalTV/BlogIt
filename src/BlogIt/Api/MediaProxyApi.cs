@@ -41,6 +41,10 @@ public static class MediaProxyApi
             return Results.NotFound();
 
         httpContext.Response.Headers.CacheControl = "public, max-age=31536000";
+        // Defense-in-depth for the accepted Content-Type-trust decision on upload (see
+        // MediaApi.cs): stops a browser from re-sniffing a mislabeled file's actual bytes into
+        // something more dangerous than its declared type.
+        httpContext.Response.Headers["X-Content-Type-Options"] = "nosniff";
 
         return Results.Stream(
             stream,

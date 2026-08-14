@@ -34,6 +34,65 @@ public class PagesApiTests(BlogItSampleFactory factory) : IClassFixture<BlogItSa
     }
 
     [Fact]
+    public async Task CreatePage_WithBlankSlug_GeneratesSlugFromTitle()
+    {
+        // Regression test: unlike CreatePost, CreatePage had no fallback to the title when Slug
+        // was left blank, and no check that the resulting slug was non-empty — a page saved with
+        // a blank Slug field became permanently unreachable (its slug locks on first publish).
+        var userId = await factory.SeedUserAsync($"page_blank_slug_{Guid.NewGuid():N}");
+        var client = factory.CreateClient().WithAuth(userId);
+
+        var request = new CreatePageRequest(
+            Title: "Contact Us",
+            Slug: "",
+            Content: "Content",
+            SeoTitle: null, SeoDescription: null, SeoKeywords: null, OgImageUrl: null,
+            IsPublished: false);
+
+        var response = await client.PostAsJsonAsync("/api/pages", request);
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+
+        var page = await response.Content.ReadFromJsonAsync<PageDto>();
+        page!.Slug.Should().Be("contact-us");
+    }
+
+    [Fact]
+    public async Task CreatePage_WithBlankTitle_ReturnsBadRequest()
+    {
+        var userId = await factory.SeedUserAsync($"page_blank_title_{Guid.NewGuid():N}");
+        var client = factory.CreateClient().WithAuth(userId);
+
+        var request = new CreatePageRequest(
+            Title: "   ",
+            Slug: "some-slug",
+            Content: "Content",
+            SeoTitle: null, SeoDescription: null, SeoKeywords: null, OgImageUrl: null,
+            IsPublished: false);
+
+        var response = await client.PostAsJsonAsync("/api/pages", request);
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task UpdatePage_WithBlankSlug_KeepsExistingSlug()
+    {
+        var userId = await factory.SeedUserAsync($"page_update_blank_slug_{Guid.NewGuid():N}");
+        var client = factory.CreateClient().WithAuth(userId);
+        var create = new CreatePageRequest(
+            "Original", "original-slug", "Content", null, null, null, null, false);
+        var created = await (await client.PostAsJsonAsync("/api/pages", create))
+            .Content.ReadFromJsonAsync<PageDto>();
+
+        var update = new UpdatePageRequest(
+            created!.Title, "", created.Content, null, null, null, null, false);
+        var response = await client.PutAsJsonAsync($"/api/pages/{created.Id}", update);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var reloaded = await response.Content.ReadFromJsonAsync<PageDto>();
+        reloaded!.Slug.Should().Be("original-slug");
+    }
+
+    [Fact]
     public async Task GetPages_RequiresAuth()
     {
         var response = await factory.CreateClient().GetAsync("/api/pages");

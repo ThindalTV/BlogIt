@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:BlogIt.MauiAdmin.ViewModels.Posts"
+             x:Class="BlogIt.MauiAdmin.Views.Posts.PostEditPage"
+             x:DataType="vm:PostEditViewModel"
+             Title="{Binding PageTitle}">
+    <ScrollView>
+        <VerticalStackLayout Padding="16" Spacing="10">
+
+            <HorizontalStackLayout Spacing="8">
+                <Button Text="Save" Command="{Binding SaveCommand}" />
+                <Button Text="Publish" Command="{Binding PublishCommand}" IsVisible="{Binding IsPublished, Converter={StaticResource InvertedBoolConverter}}" />
+                <Button Text="Unpublish" Command="{Binding UnpublishCommand}" IsVisible="{Binding IsPublished}" BackgroundColor="IndianRed" />
+                <Button Text="Preview" Command="{Binding PreviewCommand}" />
+                <Button Text="Delete" Command="{Binding DeleteCommand}" />
+            </HorizontalStackLayout>
+
+            <Label Text="{Binding ErrorMessage}" TextColor="Red" IsVisible="{Binding ErrorMessage, Converter={StaticResource IsNotNullOrEmptyConverter}}" />
+            <Label Text="{Binding StatusMessage}" TextColor="Green" IsVisible="{Binding StatusMessage, Converter={StaticResource IsNotNullOrEmptyConverter}}" />
+
+            <Label Text="Title" FontAttributes="Bold" />
+            <Entry Text="{Binding Title}" Placeholder="Post title" />
+
+            <Label Text="Slug" FontAttributes="Bold" />
+            <Entry Text="{Binding Slug}" IsEnabled="{Binding SlugLocked, Converter={StaticResource InvertedBoolConverter}}" Placeholder="auto-generated from title if blank" />
+
+            <Label Text="Summary" FontAttributes="Bold" />
+            <Editor Text="{Binding Summary}" HeightRequest="60" AutoSize="TextChanges" />
+
+            <Grid ColumnDefinitions="*,Auto">
+                <Label Grid.Column="0" Text="Content (Markdown)" FontAttributes="Bold" VerticalOptions="Center" />
+                <Button Grid.Column="1" Text="Insert Media" FontSize="12" Clicked="OnInsertMediaClicked" />
+            </Grid>
+            <Editor x:Name="ContentEditor" Text="{Binding Content}" HeightRequest="320" AutoSize="Disabled" />
+
+            <Label Text="Tags (comma-separated)" FontAttributes="Bold" />
+            <Entry Text="{Binding TagsText}" Placeholder="travel, food, tips" />
+
+            <Label Text="SEO &amp; Open Graph" FontSize="16" FontAttributes="Bold" Margin="0,12,0,0" />
+            <Label Text="SEO Title" />
+            <Entry Text="{Binding SeoTitle}" />
+            <Label Text="SEO Description" />
+            <Editor Text="{Binding SeoDescription}" HeightRequest="60" AutoSize="TextChanges" />
+            <Label Text="SEO Keywords" />
+            <Entry Text="{Binding SeoKeywords}" />
+            <Label Text="OG Image URL" />
+            <Entry Text="{Binding OgImageUrl}" Keyboard="Url" />
+
+            <Label Text="Scheduling" FontSize="16" FontAttributes="Bold" Margin="0,12,0,0" />
+            <HorizontalStackLayout Spacing="8">
+                <Switch IsToggled="{Binding SchedulePublishEnabled}" IsEnabled="{Binding SlugLocked, Converter={StaticResource InvertedBoolConverter}}" />
+                <Label Text="Scheduled publish" VerticalOptions="Center" />
+            </HorizontalStackLayout>
+            <HorizontalStackLayout Spacing="8" IsVisible="{Binding SchedulePublishEnabled}">
+                <DatePicker Date="{Binding SchedulePublishDate}" />
+                <TimePicker Time="{Binding SchedulePublishTime}" />
+            </HorizontalStackLayout>
+
+            <HorizontalStackLayout Spacing="8">
+                <Switch IsToggled="{Binding ScheduleUnpublishEnabled}" />
+                <Label Text="Scheduled unpublish" VerticalOptions="Center" />
+            </HorizontalStackLayout>
+            <HorizontalStackLayout Spacing="8" IsVisible="{Binding ScheduleUnpublishEnabled}">
+                <DatePicker Date="{Binding ScheduleUnpublishDate}" />
+                <TimePicker Time="{Binding ScheduleUnpublishTime}" />
+            </HorizontalStackLayout>
+
+            <Button Text="Cancel Schedule" Command="{Binding CancelScheduleCommand}" HorizontalOptions="Start" FontSize="12" />
+
+            <ActivityIndicator IsRunning="{Binding IsBusy}" IsVisible="{Binding IsBusy}" />
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

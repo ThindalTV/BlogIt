@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:BlogIt.MauiAdmin.ViewModels.Sites"
+             xmlns:models="clr-namespace:BlogIt.MauiAdmin.Models"
+             x:Class="BlogIt.MauiAdmin.Views.Sites.SiteListPage"
+             x:DataType="vm:SiteListViewModel"
+             Title="Sites">
+    <Grid RowDefinitions="Auto,*" Padding="16" RowSpacing="12">
+        <Button Grid.Row="0" Text="+ Add Blog" Command="{Binding AddCommand}" HorizontalOptions="Start" />
+
+        <CollectionView Grid.Row="1" ItemsSource="{Binding Sites}">
+            <CollectionView.EmptyView>
+                <Label Text="No sites added yet. Tap &quot;+ Add Blog&quot; to connect one." HorizontalOptions="Center" Margin="0,32,0,0" />
+            </CollectionView.EmptyView>
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="models:SiteProfile">
+                    <Grid Padding="12" ColumnDefinitions="*,Auto,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="8">
+                        <Grid.GestureRecognizers>
+                            <TapGestureRecognizer
+                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:SiteListViewModel}}, Path=ActivateCommand}"
+                                CommandParameter="{Binding .}" />
+                        </Grid.GestureRecognizers>
+                        <Label Grid.Row="0" Grid.Column="0" Text="{Binding DisplayLabel}" FontAttributes="Bold" FontSize="16" />
+                        <Label Grid.Row="1" Grid.Column="0" TextColor="Gray" FontSize="13"
+                               Text="{Binding IsTokenValid, Converter={StaticResource BoolToTextConverter}, ConverterParameter='Signed in|Sign-in needed'}" />
+                        <Button Grid.Row="0" Grid.RowSpan="2" Grid.Column="1" Text="Edit"
+                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:SiteListViewModel}}, Path=EditCommand}"
+                                CommandParameter="{Binding .}" />
+                        <Button Grid.Row="0" Grid.RowSpan="2" Grid.Column="2" Text="Remove"
+                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:SiteListViewModel}}, Path=DeleteCommand}"
+                                CommandParameter="{Binding .}" />
+                    </Grid>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+    </Grid>
+</ContentPage>

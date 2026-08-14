@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:BlogIt.MauiAdmin.ViewModels.Sites"
+             x:Class="BlogIt.MauiAdmin.Views.Sites.LoginPage"
+             x:DataType="vm:LoginViewModel"
+             Title="Sign In">
+    <ScrollView>
+        <VerticalStackLayout Padding="24" Spacing="12" MaximumWidthRequest="420" VerticalOptions="Center">
+            <Label FontSize="22" FontAttributes="Bold" Margin="0,0,0,12">
+                <Label.FormattedText>
+                    <FormattedString>
+                        <Span Text="Sign in to " />
+                        <Span Text="{Binding SiteLabel}" FontAttributes="Bold" />
+                    </FormattedString>
+                </Label.FormattedText>
+            </Label>
+
+            <Label Text="Username" />
+            <Entry Text="{Binding Username}" />
+
+            <Label Text="Password" />
+            <Entry Text="{Binding Password}" IsPassword="True" />
+
+            <Label Text="{Binding ErrorMessage}" TextColor="Red" Margin="0,8,0,0"
+                   IsVisible="{Binding ErrorMessage, Converter={StaticResource IsNotNullOrEmptyConverter}}" />
+
+            <Button Text="Sign In" Command="{Binding SignInCommand}" Margin="0,12,0,0"
+                    IsEnabled="{Binding IsBusy, Converter={StaticResource InvertedBoolConverter}}" />
+            <ActivityIndicator IsRunning="{Binding IsBusy}" IsVisible="{Binding IsBusy}" />
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

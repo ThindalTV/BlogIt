@@ -81,6 +81,9 @@ public static class PostsApi
         if (scheduleError is not null)
             return ScheduleValidationProblem(scheduleError);
 
+        if (string.IsNullOrWhiteSpace(req.Title))
+            return TitleValidationProblem();
+
         var authorId = Guid.Parse(user.FindFirstValue("sub") ?? user.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
         var baseSlug = SlugHelper.Slugify(
@@ -143,6 +146,9 @@ public static class PostsApi
         var scheduleError = PublicationSchedule.Validate(req.ScheduledPublishAt, req.ScheduledUnpublishAt);
         if (scheduleError is not null)
             return ScheduleValidationProblem(scheduleError);
+
+        if (string.IsNullOrWhiteSpace(req.Title))
+            return TitleValidationProblem();
 
         post.Title = req.Title;
         post.Summary = req.Summary;
@@ -260,4 +266,10 @@ public static class PostsApi
 
     private static IResult SlugValidationProblem(string error) =>
         Results.ValidationProblem(new Dictionary<string, string[]> { ["slug"] = [error] });
+
+    private static IResult TitleValidationProblem() =>
+        Results.ValidationProblem(new Dictionary<string, string[]>
+        {
+            ["title"] = ["Title is required."]
+        });
 }

@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:BlogIt.MauiAdmin.ViewModels.Users"
+             x:Class="BlogIt.MauiAdmin.Views.Users.UserListPage"
+             x:DataType="vm:UserListViewModel"
+             Title="Users">
+    <Grid RowDefinitions="Auto,Auto,*" Padding="16" RowSpacing="10">
+        <Button Grid.Row="0" Text="+ New User" Command="{Binding ToggleNewUserFormCommand}" HorizontalOptions="Start" />
+
+        <VerticalStackLayout Grid.Row="1" Spacing="6" IsVisible="{Binding ShowNewUserForm}">
+            <Entry Placeholder="Username" Text="{Binding NewUsername}" />
+            <Entry Placeholder="Display name" Text="{Binding NewDisplayName}" />
+            <Entry Placeholder="Password" Text="{Binding NewPassword}" IsPassword="True" />
+            <Label Text="{Binding ErrorMessage}" TextColor="Red" IsVisible="{Binding ErrorMessage, Converter={StaticResource IsNotNullOrEmptyConverter}}" />
+            <Button Text="Create" Command="{Binding CreateCommand}" HorizontalOptions="Start" />
+        </VerticalStackLayout>
+
+        <CollectionView Grid.Row="2" ItemsSource="{Binding Users}">
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="vm:UserRow">
+                    <Grid Padding="10" ColumnDefinitions="*,Auto">
+                        <VerticalStackLayout Grid.Column="0">
+                            <Label Text="{Binding DisplayName}" FontAttributes="Bold" />
+                            <Label Text="{Binding Username}" FontSize="12" TextColor="Gray" />
+                        </VerticalStackLayout>
+                        <Button Grid.Column="1" Text="Delete" FontSize="11"
+                                IsVisible="{Binding IsCurrentUser, Converter={StaticResource InvertedBoolConverter}}"
+                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:UserListViewModel}}, Path=DeleteCommand}"
+                                CommandParameter="{Binding .}" />
+                    </Grid>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+
+        <ActivityIndicator Grid.Row="2" IsRunning="{Binding IsBusy}" IsVisible="{Binding IsBusy}" VerticalOptions="Start" />
+    </Grid>
+</ContentPage>

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="BlogIt.MauiAdmin.Views.More.MorePage"
+             Title="More">
+    <CollectionView ItemsSource="{Binding Items}" Margin="0,8,0,0">
+        <CollectionView.ItemTemplate>
+            <DataTemplate x:DataType="x:String">
+                <Grid Padding="16,14">
+                    <Label Text="{Binding .}" FontSize="16" VerticalOptions="Center" />
+                    <Grid.GestureRecognizers>
+                        <TapGestureRecognizer Tapped="OnItemTapped" CommandParameter="{Binding .}" />
+                    </Grid.GestureRecognizers>
+                </Grid>
+            </DataTemplate>
+        </CollectionView.ItemTemplate>
+    </CollectionView>
+</ContentPage>

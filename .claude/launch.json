@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "blogit-sample",
+      "runtimeExecutable": "powershell",
+      "runtimeArgs": [
+        "-NoProfile",
+        "-Command",
+        "$env:ASPNETCORE_URLS = \"http://localhost:$env:PORT\"; dotnet run --project samples/BlogIt.Sample/BlogIt.Sample.csproj --no-build --no-launch-profile"
+      ],
+      "env": { "ASPNETCORE_ENVIRONMENT": "Development" },
+      "autoPort": true,
+      "port": 5107
+    }
+  ]
+}

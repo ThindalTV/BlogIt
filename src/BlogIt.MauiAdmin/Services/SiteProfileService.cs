@@ -4,13 +4,17 @@ using BlogIt.MauiAdmin.Models;
 namespace BlogIt.MauiAdmin.Services;
 
 /// <summary>
-/// Manages the list of site profiles and which one is currently active.
-/// Profiles are persisted as JSON in SecureStorage.
+/// Manages the list of site profiles and which one is currently active. Profile
+/// metadata (host/port/username/etc., never a secret) is persisted as one JSON blob in
+/// SecureStorage. The JWT itself lives in a separate per-site SecureStorage key
+/// ("blogit_jwt_{id}") so that a corrupted/invalidated secret for one site can't wipe
+/// every other site's session the way a single shared blob would.
 /// </summary>
 public class SiteProfileService
 {
     private const string ProfilesKey = "blogit_site_profiles";
     private const string ActiveIdKey = "blogit_active_site_id";
+    private static string TokenKey(string profileId) => $"blogit_jwt_{profileId}";
 
     private List<SiteProfile> _profiles = [];
     private string? _activeSiteId;
@@ -76,6 +80,8 @@ public class SiteProfileService
     {
         await LoadAsync();
         _profiles.RemoveAll(p => p.Id == profileId);
+        SecureStorage.Remove(TokenKey(profileId));
+
         if (_activeSiteId == profileId)
         {
             _activeSiteId = _profiles.FirstOrDefault()?.Id;
@@ -95,11 +101,22 @@ public class SiteProfileService
         var profile = _profiles.FirstOrDefault(p => p.Id == profileId);
         if (profile is null) return;
 
-        profile.JwtToken = token;
+        await SecureStorage.SetAsync(TokenKey(profileId), token);
+
+        profile.HasStoredToken = true;
         profile.TokenExpiresAt = expiresAt;
         profile.Username = username;
         profile.DisplayName = displayName;
         await PersistAsync();
+        OnChanged?.Invoke();
+    }
+
+    public async Task<string?> GetTokenAsync(string profileId)
+    {
+        await LoadAsync();
+        var profile = _profiles.FirstOrDefault(p => p.Id == profileId);
+        if (profile is null || !profile.HasStoredToken) return null;
+        return await SecureStorage.GetAsync(TokenKey(profileId));
     }
 
     public async Task ClearTokenAsync(string profileId)
@@ -107,9 +124,12 @@ public class SiteProfileService
         await LoadAsync();
         var profile = _profiles.FirstOrDefault(p => p.Id == profileId);
         if (profile is null) return;
-        profile.JwtToken = null;
+
+        SecureStorage.Remove(TokenKey(profileId));
+        profile.HasStoredToken = false;
         profile.TokenExpiresAt = null;
         await PersistAsync();
+        OnChanged?.Invoke();
     }
 
     private async Task PersistAsync()

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:BlogIt.MauiAdmin.ViewModels.Sites"
+             x:Class="BlogIt.MauiAdmin.Views.Sites.SetupRequiredPage"
+             x:DataType="vm:SetupRequiredViewModel"
+             Title="Setup Required">
+    <VerticalStackLayout Padding="24" Spacing="14" MaximumWidthRequest="420" VerticalOptions="Center">
+        <Label FontSize="22" FontAttributes="Bold">
+            <Label.FormattedText>
+                <FormattedString>
+                    <Span Text="{Binding SiteLabel}" FontAttributes="Bold" />
+                    <Span Text=" hasn't finished first-run setup yet." />
+                </FormattedString>
+            </Label.FormattedText>
+        </Label>
+        <Label Text="Finish the setup wizard in a browser, then come back and check again." />
+
+        <Button Text="Open Setup in Browser" Command="{Binding OpenSetupCommand}" Margin="0,12,0,0" />
+        <Button Text="Check Again" Command="{Binding CheckAgainCommand}"
+                IsEnabled="{Binding IsBusy, Converter={StaticResource InvertedBoolConverter}}" />
+        <ActivityIndicator IsRunning="{Binding IsBusy}" IsVisible="{Binding IsBusy}" />
+    </VerticalStackLayout>
+</ContentPage>

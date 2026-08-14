@@ -8,4 +8,5 @@ public static class BlogItDefaults
 
     public const string AuthenticationScheme = "BlogIt.Jwt";
     public const string AdminAuthorizationPolicy = "BlogIt.Admin";
+    public const string LoginRateLimiterPolicy = "BlogIt.LoginRateLimit";
 }

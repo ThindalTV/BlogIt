@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:BlogIt.MauiAdmin.ViewModels.Sites"
+             x:Class="BlogIt.MauiAdmin.Views.Sites.AddSitePage"
+             x:DataType="vm:AddSiteViewModel"
+             Title="{Binding PageTitle}">
+    <ScrollView>
+        <VerticalStackLayout Padding="24" Spacing="12" MaximumWidthRequest="480">
+            <Label Text="{Binding PageTitle}" FontSize="24" FontAttributes="Bold" Margin="0,0,0,12" />
+
+            <Label Text="Name (optional)" />
+            <Entry Text="{Binding Name}" Placeholder="My Blog" />
+
+            <Label Text="Domain" />
+            <Entry Text="{Binding Domain}" Placeholder="myblog.com" Keyboard="Url" />
+
+            <Label Text="Port (optional — leave blank for 443/80)" />
+            <Entry Text="{Binding PortText}" Placeholder="e.g. 8443" Keyboard="Numeric" />
+
+            <Button Text="Advanced" FontAttributes="Bold" HorizontalOptions="Start" Margin="0,12,0,0"
+                    Command="{Binding ToggleAdvancedCommand}" />
+            <VerticalStackLayout Spacing="8" Padding="0,4,0,0" IsVisible="{Binding IsAdvancedExpanded}">
+                <HorizontalStackLayout Spacing="8">
+                    <Switch IsToggled="{Binding UseHttp}" />
+                    <Label Text="Use HTTP instead of HTTPS" VerticalOptions="Center" />
+                </HorizontalStackLayout>
+                <Label Text="Custom API path" />
+                <Entry Text="{Binding CustomApiPath}" Placeholder="/api" />
+            </VerticalStackLayout>
+
+            <Label Text="{Binding ErrorMessage}" TextColor="Red" Margin="0,12,0,0"
+                   IsVisible="{Binding ErrorMessage, Converter={StaticResource IsNotNullOrEmptyConverter}}" />
+
+            <Button Text="Continue" Command="{Binding ContinueCommand}" Margin="0,12,0,0"
+                    IsEnabled="{Binding IsBusy, Converter={StaticResource InvertedBoolConverter}}" />
+            <ActivityIndicator IsRunning="{Binding IsBusy}" IsVisible="{Binding IsBusy}" />
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

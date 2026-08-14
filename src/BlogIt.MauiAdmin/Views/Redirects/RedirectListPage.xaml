@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:BlogIt.MauiAdmin.ViewModels.Redirects"
+             xmlns:dtos="clr-namespace:BlogIt.Shared.DTOs;assembly=BlogIt.Contracts"
+             x:Class="BlogIt.MauiAdmin.Views.Redirects.RedirectListPage"
+             x:DataType="vm:RedirectListViewModel"
+             Title="Redirects">
+    <Grid RowDefinitions="Auto,Auto,*" Padding="16" RowSpacing="10">
+        <Button Grid.Row="0" Text="+ New Redirect" Command="{Binding NewRedirectCommand}" HorizontalOptions="Start" />
+
+        <VerticalStackLayout Grid.Row="1" Spacing="6" IsVisible="{Binding ShowEditor}">
+            <Label Text="{Binding EditorTitle}" FontAttributes="Bold" />
+            <Entry Placeholder="Source path (e.g. /old-page)" Text="{Binding SourcePath}" />
+            <Entry Placeholder="Target URL or path" Text="{Binding TargetUrl}" />
+            <HorizontalStackLayout Spacing="8">
+                <Switch IsToggled="{Binding IsPermanent}" />
+                <Label Text="Permanent (301)" VerticalOptions="Center" />
+            </HorizontalStackLayout>
+            <Label Text="{Binding ErrorMessage}" TextColor="Red" IsVisible="{Binding ErrorMessage, Converter={StaticResource IsNotNullOrEmptyConverter}}" />
+            <HorizontalStackLayout Spacing="8">
+                <Button Text="Save" Command="{Binding SaveCommand}" />
+                <Button Text="Cancel" Command="{Binding CancelEditCommand}" />
+            </HorizontalStackLayout>
+        </VerticalStackLayout>
+
+        <CollectionView Grid.Row="2" ItemsSource="{Binding Redirects}">
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="dtos:UrlRedirectDto">
+                    <Grid Padding="10" ColumnDefinitions="*,Auto,Auto">
+                        <Grid.GestureRecognizers>
+                            <TapGestureRecognizer
+                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:RedirectListViewModel}}, Path=EditCommand}"
+                                CommandParameter="{Binding .}" />
+                        </Grid.GestureRecognizers>
+                        <VerticalStackLayout Grid.Column="0">
+                            <Label Text="{Binding SourcePath}" FontAttributes="Bold" />
+                            <Label FontSize="12" TextColor="Gray">
+                                <Label.FormattedText>
+                                    <FormattedString>
+                                        <Span Text="→ " />
+                                        <Span Text="{Binding TargetUrl}" />
+                                    </FormattedString>
+                                </Label.FormattedText>
+                            </Label>
+                        </VerticalStackLayout>
+                        <Label Grid.Column="1" VerticalOptions="Center" FontSize="11" TextColor="Gray"
+                               Text="{Binding IsPermanent, Converter={StaticResource BoolToTextConverter}, ConverterParameter='301|302'}" />
+                        <Button Grid.Column="2" Text="Delete" FontSize="11"
+                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:RedirectListViewModel}}, Path=DeleteCommand}"
+                                CommandParameter="{Binding .}" />
+                    </Grid>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+
+        <ActivityIndicator Grid.Row="2" IsRunning="{Binding IsBusy}" IsVisible="{Binding IsBusy}" VerticalOptions="Start" />
+    </Grid>
+</ContentPage>

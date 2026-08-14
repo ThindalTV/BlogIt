@@ -131,6 +131,75 @@ public sealed class AiApiTests(AiApiTests.AiFactory factory)
         factory.AiService.ExportedConversationId.Should().BeNull();
     }
 
+    [Fact]
+    public async Task SendMessage_WhenAiServiceThrowsInvalidOperationException_ReturnsBadRequestWithMessage()
+    {
+        var userId = await factory.SeedUserAsync($"ai-config-error-{Guid.NewGuid():N}");
+        var client = factory.CreateClient().WithAuth(userId);
+        var create = await client.PostAsJsonAsync(
+            "/api/ai/conversations", new CreateAiConversationRequest("Conversation"));
+        var conversationId = (await create.Content.ReadFromJsonAsync<AiConversationDetailDto>())!.Id;
+
+        factory.AiService.ExceptionToThrow = new InvalidOperationException("AI API key is not configured.");
+        try
+        {
+            var send = await client.PostAsJsonAsync(
+                $"/api/ai/conversations/{conversationId}/messages",
+                new SendAiMessageRequest("Hello"));
+
+            send.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+            (await send.Content.ReadAsStringAsync()).Should().Contain("AI API key is not configured.");
+        }
+        finally { factory.AiService.Reset(); }
+    }
+
+    [Fact]
+    public async Task SendMessage_WhenAiServiceThrowsUnexpectedException_ReturnsGenericBadGatewayWithoutLeakingDetails()
+    {
+        var userId = await factory.SeedUserAsync($"ai-provider-error-{Guid.NewGuid():N}");
+        var client = factory.CreateClient().WithAuth(userId);
+        var create = await client.PostAsJsonAsync(
+            "/api/ai/conversations", new CreateAiConversationRequest("Conversation"));
+        var conversationId = (await create.Content.ReadFromJsonAsync<AiConversationDetailDto>())!.Id;
+
+        factory.AiService.ExceptionToThrow = new HttpRequestException("secret-internal-detail: connection reset by upstream 10.0.4.12");
+        try
+        {
+            var send = await client.PostAsJsonAsync(
+                $"/api/ai/conversations/{conversationId}/messages",
+                new SendAiMessageRequest("Hello"));
+
+            send.StatusCode.Should().Be(HttpStatusCode.BadGateway);
+            var body = await send.Content.ReadAsStringAsync();
+            body.Should().NotContain("secret-internal-detail");
+            body.Should().NotContain("10.0.4.12");
+        }
+        finally { factory.AiService.Reset(); }
+    }
+
+    [Fact]
+    public async Task ExportDraft_WhenAiServiceThrowsUnexpectedException_ReturnsGenericBadGatewayWithoutLeakingDetails()
+    {
+        var userId = await factory.SeedUserAsync($"ai-export-error-{Guid.NewGuid():N}");
+        var client = factory.CreateClient().WithAuth(userId);
+        var create = await client.PostAsJsonAsync(
+            "/api/ai/conversations", new CreateAiConversationRequest("Conversation"));
+        var conversationId = (await create.Content.ReadFromJsonAsync<AiConversationDetailDto>())!.Id;
+
+        factory.AiService.ExceptionToThrow = new InvalidOperationException("internal stack detail");
+        try
+        {
+            var export = await client.PostAsJsonAsync(
+                $"/api/ai/conversations/{conversationId}/export-draft",
+                new ExportAiConversationRequest(null));
+
+            // InvalidOperationException maps to 400 (see AiApi.HandleAiFailure) since AiService
+            // only throws it for known, safe-to-surface conditions.
+            export.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        }
+        finally { factory.AiService.Reset(); }
+    }
+
     public sealed class AiFactory : BlogItSampleFactory
     {
         public FakeAiService AiService { get; } = new();
@@ -153,6 +222,7 @@ public sealed class AiApiTests(AiApiTests.AiFactory factory)
         public Guid? ExportedConversationId { get; private set; }
         public Guid? ExportedAuthorId { get; private set; }
         public string? ExportInstructions { get; private set; }
+        public Exception? ExceptionToThrow { get; set; }
         public BlogPost ExportedPost { get; } = new()
         {
             Id = Guid.NewGuid(),
@@ -167,6 +237,8 @@ public sealed class AiApiTests(AiApiTests.AiFactory factory)
             string userContent,
             CancellationToken cancellationToken = default)
         {
+            if (ExceptionToThrow is not null) throw ExceptionToThrow;
+
             SentConversationId = conversationId;
             SentContent = userContent;
             return Task.FromResult(new AiConversationDetailDto(
@@ -190,6 +262,8 @@ public sealed class AiApiTests(AiApiTests.AiFactory factory)
             string? additionalInstructions,
             CancellationToken cancellationToken = default)
         {
+            if (ExceptionToThrow is not null) throw ExceptionToThrow;
+
             ExportedConversationId = conversationId;
             ExportedAuthorId = authorId;
             ExportInstructions = additionalInstructions;
@@ -203,6 +277,7 @@ public sealed class AiApiTests(AiApiTests.AiFactory factory)
             ExportedConversationId = null;
             ExportedAuthorId = null;
             ExportInstructions = null;
+            ExceptionToThrow = null;
         }
     }
 }

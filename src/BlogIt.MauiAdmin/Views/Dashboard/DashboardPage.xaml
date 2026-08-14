@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:BlogIt.MauiAdmin.ViewModels.Dashboard"
+             xmlns:dtos="clr-namespace:BlogIt.Shared.DTOs;assembly=BlogIt.Contracts"
+             x:Class="BlogIt.MauiAdmin.Views.Dashboard.DashboardPage"
+             x:DataType="vm:DashboardViewModel"
+             Title="Dashboard">
+    <ScrollView>
+        <VerticalStackLayout Padding="16" Spacing="16">
+            <Label Text="{Binding ErrorMessage}" TextColor="Red"
+                   IsVisible="{Binding ErrorMessage, Converter={StaticResource IsNotNullOrEmptyConverter}}" />
+
+            <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="8">
+                <Border StrokeShape="RoundRectangle 8" Grid.Column="0" Padding="12">
+                    <VerticalStackLayout>
+                        <Label Text="{Binding PublishedCount}" FontSize="26" FontAttributes="Bold" />
+                        <Label Text="Published" FontSize="12" />
+                    </VerticalStackLayout>
+                </Border>
+                <Border StrokeShape="RoundRectangle 8" Grid.Column="1" Padding="12">
+                    <VerticalStackLayout>
+                        <Label Text="{Binding DraftCount}" FontSize="26" FontAttributes="Bold" />
+                        <Label Text="Drafts" FontSize="12" />
+                    </VerticalStackLayout>
+                </Border>
+                <Border StrokeShape="RoundRectangle 8" Grid.Column="2" Padding="12">
+                    <VerticalStackLayout>
+                        <Label Text="{Binding PagesCount}" FontSize="26" FontAttributes="Bold" />
+                        <Label Text="Pages" FontSize="12" />
+                    </VerticalStackLayout>
+                </Border>
+                <Border StrokeShape="RoundRectangle 8" Grid.Column="3" Padding="12">
+                    <VerticalStackLayout>
+                        <Label Text="{Binding MediaCount}" FontSize="26" FontAttributes="Bold" />
+                        <Label Text="Media" FontSize="12" />
+                    </VerticalStackLayout>
+                </Border>
+            </Grid>
+
+            <Label Text="Recent Posts" FontSize="18" FontAttributes="Bold" Margin="0,12,0,0" />
+            <CollectionView ItemsSource="{Binding RecentPosts}">
+                <CollectionView.EmptyView>
+                    <Label Text="No posts yet." Margin="0,8,0,0" />
+                </CollectionView.EmptyView>
+                <CollectionView.ItemTemplate>
+                    <DataTemplate x:DataType="dtos:BlogPostSummaryDto">
+                        <Grid Padding="8" ColumnDefinitions="*,Auto">
+                            <Label Grid.Column="0" Text="{Binding Title}" LineBreakMode="TailTruncation" />
+                            <Label Grid.Column="1" Text="{Binding IsPublished, Converter={StaticResource BoolToTextConverter}, ConverterParameter='Published|Draft'}"
+                                   TextColor="Gray" FontSize="12" />
+                        </Grid>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
+
+            <Label Text="Analytics (last 30 days)" FontSize="18" FontAttributes="Bold" Margin="0,12,0,0" />
+            <Label Text="Analytics is not configured for this site." IsVisible="{Binding AnalyticsConfigured, Converter={StaticResource InvertedBoolConverter}}" />
+            <Grid ColumnDefinitions="*,*,*" ColumnSpacing="8" IsVisible="{Binding AnalyticsConfigured}">
+                <Border StrokeShape="RoundRectangle 8" Grid.Column="0" Padding="12">
+                    <VerticalStackLayout>
+                        <Label Text="{Binding AnalyticsSessions}" FontSize="22" FontAttributes="Bold" />
+                        <Label Text="Sessions" FontSize="12" />
+                    </VerticalStackLayout>
+                </Border>
+                <Border StrokeShape="RoundRectangle 8" Grid.Column="1" Padding="12">
+                    <VerticalStackLayout>
+                        <Label Text="{Binding AnalyticsUsers}" FontSize="22" FontAttributes="Bold" />
+                        <Label Text="Users" FontSize="12" />
+                    </VerticalStackLayout>
+                </Border>
+                <Border StrokeShape="RoundRectangle 8" Grid.Column="2" Padding="12">
+                    <VerticalStackLayout>
+                        <Label Text="{Binding AnalyticsPageViews}" FontSize="22" FontAttributes="Bold" />
+                        <Label Text="Page Views" FontSize="12" />
+                    </VerticalStackLayout>
+                </Border>
+            </Grid>
+
+            <ActivityIndicator IsRunning="{Binding IsBusy}" IsVisible="{Binding IsBusy}" />
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

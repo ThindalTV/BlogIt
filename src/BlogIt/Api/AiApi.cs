@@ -80,6 +80,7 @@ public static class AiApi
         BlogItDbContext db,
         IAiService aiService,
         ClaimsPrincipal user,
+        ILogger<AiService> logger,
         CancellationToken ct)
     {
         var userId = Guid.Parse(user.FindFirstValue("sub") ?? user.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -87,8 +88,15 @@ public static class AiApi
         var exists = await db.AiConversations.AnyAsync(c => c.Id == id && c.CreatedByUserId == userId, ct);
         if (!exists) return Results.NotFound();
 
-        var result = await aiService.SendMessageAsync(id, req.Content, ct);
-        return Results.Ok(result);
+        try
+        {
+            var result = await aiService.SendMessageAsync(id, req.Content, ct);
+            return Results.Ok(result);
+        }
+        catch (Exception ex) when (HandleAiFailure(ex, id, logger, out var problem))
+        {
+            return problem;
+        }
     }
 
     private static async Task<IResult> ExportDraft(
@@ -98,6 +106,7 @@ public static class AiApi
         IAiService aiService,
         BlogItOptions options,
         ClaimsPrincipal user,
+        ILogger<AiService> logger,
         CancellationToken ct)
     {
         var userId = Guid.Parse(user.FindFirstValue("sub") ?? user.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -105,10 +114,51 @@ public static class AiApi
         var exists = await db.AiConversations.AnyAsync(c => c.Id == id && c.CreatedByUserId == userId, ct);
         if (!exists) return Results.NotFound();
 
-        var post = await aiService.ExportToDraftAsync(id, userId, req.AdditionalInstructions, ct);
-        return Results.Created(
-            BlogItPath.Combine(options.ApiPath, $"posts/{post.Id}"),
-            new ExportAiConversationResponse(post.Id, post.Slug));
+        try
+        {
+            var post = await aiService.ExportToDraftAsync(id, userId, req.AdditionalInstructions, ct);
+            return Results.Created(
+                BlogItPath.Combine(options.ApiPath, $"posts/{post.Id}"),
+                new ExportAiConversationResponse(post.Id, post.Slug));
+        }
+        catch (Exception ex) when (HandleAiFailure(ex, id, logger, out var problem))
+        {
+            return problem;
+        }
+    }
+
+    // Runs inside the `when` clause of a catch so it observes the exception without unwinding
+    // the stack twice, and logs the real exception server-side while the caller only ever sees
+    // a generic message — a missing API key, a provider HTTP error, or the KeyNotFoundException
+    // possible if the conversation is deleted between the existence check above and this call
+    // would otherwise propagate as an unhandled 500 with internal details attached.
+    private static bool HandleAiFailure(
+        Exception ex,
+        Guid conversationId,
+        ILogger<AiService> logger,
+        out IResult problem)
+    {
+        switch (ex)
+        {
+            case KeyNotFoundException:
+                problem = Results.NotFound();
+                return true;
+
+            case InvalidOperationException:
+                // AiService only throws this for two known, safe-to-surface conditions: a
+                // missing AI API key, or the provider returning no text — not a leaked secret
+                // or stack trace.
+                logger.LogWarning(ex, "AI request rejected for conversation {ConversationId}", conversationId);
+                problem = Results.Problem(ex.Message, statusCode: StatusCodes.Status400BadRequest);
+                return true;
+
+            default:
+                logger.LogError(ex, "AI provider request failed for conversation {ConversationId}", conversationId);
+                problem = Results.Problem(
+                    "The AI request failed. Please try again.",
+                    statusCode: StatusCodes.Status502BadGateway);
+                return true;
+        }
     }
 
     private static async Task<IResult> DeleteConversation(

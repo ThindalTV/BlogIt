@@ -153,6 +153,14 @@ else
         isSaving = true;
         errorMsg = "";
         successMsg = "";
+
+        if (!IsValidAbsoluteHttpUrl(siteUrl))
+        {
+            errorMsg = "Site URL must be an absolute http:// or https:// URL.";
+            isSaving = false;
+            return;
+        }
+
         try
         {
             var settings = new Dictionary<string, string>
@@ -182,4 +190,9 @@ else
         catch (Exception ex) { errorMsg = $"Save failed: {ex.Message}"; }
         finally { isSaving = false; }
     }
+
+    private static bool IsValidAbsoluteHttpUrl(string? value) =>
+        !string.IsNullOrWhiteSpace(value)
+        && Uri.TryCreate(value, UriKind.Absolute, out var uri)
+        && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
 }

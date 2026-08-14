@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:BlogIt.MauiAdmin.ViewModels.Account"
+             x:Class="BlogIt.MauiAdmin.Views.Account.AccountPage"
+             x:DataType="vm:AccountViewModel"
+             Title="My Account">
+    <VerticalStackLayout Padding="16" Spacing="10" MaximumWidthRequest="420">
+        <Label FontSize="16" FontAttributes="Bold">
+            <Label.FormattedText>
+                <FormattedString>
+                    <Span Text="Signed in as " />
+                    <Span Text="{Binding DisplayName}" FontAttributes="Bold" />
+                </FormattedString>
+            </Label.FormattedText>
+        </Label>
+        <Label Text="{Binding Username}" FontSize="12" TextColor="Gray" />
+
+        <Label Text="Change Password" FontSize="16" FontAttributes="Bold" Margin="0,16,0,0" />
+        <Label Text="Current Password" FontSize="12" />
+        <Entry Text="{Binding CurrentPassword}" IsPassword="True" />
+        <Label Text="New Password" FontSize="12" />
+        <Entry Text="{Binding NewPassword}" IsPassword="True" />
+        <Label Text="Confirm New Password" FontSize="12" />
+        <Entry Text="{Binding ConfirmPassword}" IsPassword="True" />
+
+        <Label Text="{Binding ErrorMessage}" TextColor="Red" IsVisible="{Binding ErrorMessage, Converter={StaticResource IsNotNullOrEmptyConverter}}" />
+        <Label Text="{Binding StatusMessage}" TextColor="Green" IsVisible="{Binding StatusMessage, Converter={StaticResource IsNotNullOrEmptyConverter}}" />
+
+        <Button Text="Change Password" Command="{Binding ChangePasswordCommand}" Margin="0,8,0,0" />
+        <ActivityIndicator IsRunning="{Binding IsBusy}" IsVisible="{Binding IsBusy}" />
+    </VerticalStackLayout>
+</ContentPage>

@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:BlogIt.MauiAdmin.ViewModels.Posts"
+             xmlns:dtos="clr-namespace:BlogIt.Shared.DTOs;assembly=BlogIt.Contracts"
+             x:Class="BlogIt.MauiAdmin.Views.Posts.PostListPage"
+             x:DataType="vm:PostListViewModel"
+             Title="Posts">
+    <Grid RowDefinitions="Auto,Auto,*,Auto" Padding="16" RowSpacing="10">
+        <Grid Grid.Row="0" ColumnDefinitions="*,Auto" ColumnSpacing="8">
+            <SearchBar Grid.Column="0" Placeholder="Search posts" Text="{Binding SearchText}" SearchCommand="{Binding SearchCommand}" />
+            <Button Grid.Column="1" Text="+ New" Command="{Binding NewPostCommand}" />
+        </Grid>
+
+        <Picker Grid.Row="1" Title="Status" SelectedItem="{Binding StatusFilter}" HorizontalOptions="Start" WidthRequest="160">
+            <Picker.ItemsSource>
+                <x:Array Type="{x:Type x:String}">
+                    <x:String>all</x:String>
+                    <x:String>published</x:String>
+                    <x:String>draft</x:String>
+                    <x:String>scheduled</x:String>
+                </x:Array>
+            </Picker.ItemsSource>
+        </Picker>
+
+        <CollectionView Grid.Row="2" ItemsSource="{Binding Posts}">
+            <CollectionView.EmptyView>
+                <Label Text="No posts found." HorizontalOptions="Center" Margin="0,32,0,0" />
+            </CollectionView.EmptyView>
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="dtos:BlogPostSummaryDto">
+                    <Grid Padding="8" ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">
+                        <Grid.GestureRecognizers>
+                            <TapGestureRecognizer
+                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:PostListViewModel}}, Path=EditCommand}"
+                                CommandParameter="{Binding .}" />
+                        </Grid.GestureRecognizers>
+                        <Label Grid.Row="0" Grid.Column="0" Text="{Binding Title}" FontAttributes="Bold" LineBreakMode="TailTruncation" />
+                        <Label Grid.Row="1" Grid.Column="0" TextColor="Gray" FontSize="12"
+                               Text="{Binding IsPublished, Converter={StaticResource BoolToTextConverter}, ConverterParameter='Published|Draft'}" />
+                        <HorizontalStackLayout Grid.Row="0" Grid.RowSpan="2" Grid.Column="1" Spacing="4">
+                            <Button Text="Preview" FontSize="11"
+                                    Command="{Binding Source={RelativeSource AncestorType={x:Type vm:PostListViewModel}}, Path=PreviewCommand}"
+                                    CommandParameter="{Binding .}" />
+                            <Button Text="Publish" FontSize="11" IsVisible="{Binding IsPublished, Converter={StaticResource InvertedBoolConverter}}"
+                                    Command="{Binding Source={RelativeSource AncestorType={x:Type vm:PostListViewModel}}, Path=PublishCommand}"
+                                    CommandParameter="{Binding .}" />
+                            <Button Text="Unpublish" FontSize="11" IsVisible="{Binding IsPublished}"
+                                    Command="{Binding Source={RelativeSource AncestorType={x:Type vm:PostListViewModel}}, Path=UnpublishCommand}"
+                                    CommandParameter="{Binding .}" />
+                            <Button Text="Delete" FontSize="11"
+                                    Command="{Binding Source={RelativeSource AncestorType={x:Type vm:PostListViewModel}}, Path=DeleteCommand}"
+                                    CommandParameter="{Binding .}" />
+                        </HorizontalStackLayout>
+                    </Grid>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+
+        <Grid Grid.Row="3" ColumnDefinitions="Auto,*,Auto">
+            <Button Grid.Column="0" Text="◀ Prev" Command="{Binding PreviousPageCommand}" />
+            <Label Grid.Column="1" Text="{Binding Page, StringFormat='Page {0}'}" HorizontalOptions="Center" VerticalOptions="Center" />
+            <Button Grid.Column="2" Text="Next ▶" Command="{Binding NextPageCommand}" />
+        </Grid>
+    </Grid>
+</ContentPage>

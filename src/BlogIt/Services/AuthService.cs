@@ -11,12 +11,18 @@ namespace BlogIt.Services;
 
 public class AuthService(BlogItDbContext db, ISettingsService settings) : IAuthService
 {
+    // Verified against whenever the username isn't found, so a nonexistent username takes the
+    // same BCrypt-verify time as a real one and can't be distinguished by response timing.
+    private static readonly string DummyPasswordHash =
+        BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString());
+
     public async Task<LoginResponse?> LoginAsync(LoginRequest request)
     {
         var user = await db.Users
             .FirstOrDefaultAsync(u => u.Username == request.Username);
 
-        if (user is null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
+        var passwordValid = BCrypt.Net.BCrypt.Verify(request.Password, user?.PasswordHash ?? DummyPasswordHash);
+        if (user is null || !passwordValid)
             return null;
 
         var secret = await settings.GetAsync(SettingKeys.JwtSecret) ?? string.Empty;

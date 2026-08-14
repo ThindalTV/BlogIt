@@ -82,7 +82,7 @@ else
                     </td>
                     <td class="actions">
                         <button class="btn btn-sm btn-secondary" @onclick="() => BeginEdit(redirect)">Edit</button>
-                        <button class="btn btn-sm btn-danger" @onclick="() => Delete(redirect)">Delete</button>
+                        <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDelete(redirect)">Delete</button>
                     </td>
                 </tr>
             }
@@ -90,11 +90,19 @@ else
     </table>
 }
 
+<ConfirmDialog IsOpen="showConfirm"
+    Title="Delete Redirect"
+    Message=@($"Delete the redirect from \"{redirectToDelete?.SourcePath}\"? This cannot be undone.")
+    OnConfirm="Delete"
+    OnCancel="() => showConfirm = false" />
+
 @code {
     private IReadOnlyList<UrlRedirectDto> redirects = [];
     private bool isLoading = true;
     private bool isSaving;
     private bool showForm;
+    private bool showConfirm;
+    private UrlRedirectDto? redirectToDelete;
     private Guid? editingId;
     private string sourcePath = "";
     private string targetUrl = "";
@@ -160,16 +168,21 @@ else
         finally { isSaving = false; }
     }
 
-    private async Task Delete(UrlRedirectDto redirect)
+    private void ConfirmDelete(UrlRedirectDto redirect) { redirectToDelete = redirect; showConfirm = true; }
+
+    private async Task Delete()
     {
+        showConfirm = false;
+        if (redirectToDelete is null) return;
         errorMsg = "";
         successMsg = "";
         try
         {
-            await Api.DeleteRedirectAsync(redirect.Id);
+            await Api.DeleteRedirectAsync(redirectToDelete.Id);
             successMsg = "Redirect deleted.";
             await Load();
         }
         catch (Exception ex) { errorMsg = ex.Message; }
+        finally { redirectToDelete = null; }
     }
 }

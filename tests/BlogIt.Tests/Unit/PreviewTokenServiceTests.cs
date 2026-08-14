@@ -47,6 +47,27 @@ public class PreviewTokenServiceTests
             .Should().BeFalse();
     }
 
+    [Fact]
+    public void SweepExpired_RemovesOnlyExpiredNeverLookedUpGrants()
+    {
+        var time = new TestTimeProvider();
+        var service = new PreviewTokenService(time);
+
+        service.Issue(PreviewContentType.Post, Guid.NewGuid()); // never looked up, will expire
+        service.GrantCount.Should().Be(1);
+
+        time.Advance(TimeSpan.FromMinutes(15));
+        var freshContentId = Guid.NewGuid();
+        var (freshToken, _) = service.Issue(PreviewContentType.Post, freshContentId); // still valid
+        service.GrantCount.Should().Be(2);
+
+        service.SweepExpired();
+
+        service.GrantCount.Should().Be(1);
+        service.TryAuthorize(CreateContext("/still-valid"), freshToken, PreviewContentType.Post, freshContentId)
+            .Should().BeTrue();
+    }
+
     private static DefaultHttpContext CreateContext(string path)
     {
         var context = new DefaultHttpContext();

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Shell xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+       xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+       xmlns:dashboard="clr-namespace:BlogIt.MauiAdmin.Views.Dashboard"
+       xmlns:posts="clr-namespace:BlogIt.MauiAdmin.Views.Posts"
+       xmlns:pagesNs="clr-namespace:BlogIt.MauiAdmin.Views.Pages"
+       xmlns:media="clr-namespace:BlogIt.MauiAdmin.Views.Media"
+       xmlns:more="clr-namespace:BlogIt.MauiAdmin.Views.More"
+       x:Class="BlogIt.MauiAdmin.Views.Navigation.PhoneShell"
+       FlyoutBehavior="Disabled"
+       Title="BlogIt Admin">
+    <!-- Phone idiom: a 10-item flat nav doesn't fit a bottom bar, so secondary
+         areas (AI, Redirects, Users, Settings, Account, Sites) live under "More". -->
+    <TabBar>
+        <ShellContent Title="Dashboard" Route="dashboard" ContentTemplate="{DataTemplate dashboard:DashboardPage}" />
+        <ShellContent Title="Posts" Route="posts" ContentTemplate="{DataTemplate posts:PostListPage}" />
+        <ShellContent Title="Pages" Route="pages" ContentTemplate="{DataTemplate pagesNs:PageListPage}" />
+        <ShellContent Title="Media" Route="media" ContentTemplate="{DataTemplate media:MediaListPage}" />
+        <ShellContent Title="More" Route="more" ContentTemplate="{DataTemplate more:MorePage}" />
+    </TabBar>
+</Shell>

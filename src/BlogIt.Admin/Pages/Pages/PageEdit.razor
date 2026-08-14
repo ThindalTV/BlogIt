@@ -67,6 +67,10 @@ else
                     <input type="checkbox" @bind="isPublished" />
                     <span>Published</span>
                 </label>
+                @if (!isNew && page?.IsPublished == true && !isPublished)
+                {
+                    <p class="form-hint form-hint-warning">Unchecking this and saving will take the page offline immediately.</p>
+                }
                 @if (page is not null)
                 {
                     <p class="form-hint">Current state: @ScheduleLabel(page.ScheduleState)</p>
@@ -176,6 +180,9 @@ else
         successMsg = "";
         try
         {
+            if (string.IsNullOrWhiteSpace(title))
+                throw new InvalidOperationException("Title is required.");
+
             content = await JS.InvokeAsync<string>("blogitInterop.getEditorValue", "page-content-editor");
             var scheduledPublishAt = ToUtc(scheduledPublishLocal);
             var scheduledUnpublishAt = ToUtc(scheduledUnpublishLocal);

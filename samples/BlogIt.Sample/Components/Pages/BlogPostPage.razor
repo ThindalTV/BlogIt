@@ -5,17 +5,7 @@
 @inject IHttpContextAccessor HttpContextAccessor
 @inject NavigationManager Nav
 
-@if (notFound)
-{
-    <SeoHead Title="Post Not Found" />
-    @if (!Preview.HasValue)
-    {
-        <GaScript />
-    }
-    <h1>404 — Post not found</h1>
-    <p><a href="/archive">Back to archive</a></p>
-}
-else if (post != null)
+@if (post != null)
 {
     @if (isPreview)
     {
@@ -109,7 +99,6 @@ else if (post != null)
     private BlogPostDetailDto? post;
     private BlogPostSummaryDto? prevPost;
     private BlogPostSummaryDto? nextPost;
-    private bool notFound;
     private string? siteUrl;
     private bool isPreview;
 
@@ -124,7 +113,7 @@ else if (post != null)
 
         if (post is null)
         {
-            notFound = true;
+            MarkNotFound();
             return;
         }
 
@@ -141,7 +130,7 @@ else if (post != null)
             if (!isPreview)
             {
                 post = null;
-                notFound = true;
+                MarkNotFound();
                 return;
             }
         }
@@ -150,7 +139,7 @@ else if (post != null)
             if (!post.IsPublished || post.PublishedAt is null)
             {
                 post = null;
-                notFound = true;
+                MarkNotFound();
                 return;
             }
 
@@ -166,4 +155,11 @@ else if (post != null)
 
         siteUrl = await SettingsService.GetAsync(BlogIt.Shared.SettingKeys.SiteUrl) ?? "";
     }
+
+    // Flags the request for NotFoundResponseMiddleware, which renders a real 404 with real HTML
+    // afterward — see that class's remarks for why this isn't done directly here (both
+    // HttpContext.Response.StatusCode = 404 and NavigationManager.NotFound() hit confirmed
+    // framework issues in this pipeline).
+    private void MarkNotFound() =>
+        HttpContextAccessor.HttpContext?.Items[BlogIt.Sample.NotFoundResponseMiddleware.ItemKey] = true;
 }

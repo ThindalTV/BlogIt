@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:BlogIt.MauiAdmin.ViewModels.Ai"
+             xmlns:dtos="clr-namespace:BlogIt.Shared.DTOs;assembly=BlogIt.Contracts"
+             x:Class="BlogIt.MauiAdmin.Views.Ai.ConversationChatPage"
+             x:DataType="vm:ConversationChatViewModel"
+             Title="{Binding Title}">
+    <Grid RowDefinitions="*,Auto,Auto,Auto" Padding="12" RowSpacing="8">
+
+        <CollectionView Grid.Row="0" ItemsSource="{Binding Messages}">
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="dtos:AiMessageDto">
+                    <Grid Padding="6" ColumnDefinitions="Auto,*">
+                        <Label Grid.Column="0" Text="{Binding Role, StringFormat='{0}:'}" FontAttributes="Bold" Margin="0,0,8,0" />
+                        <Label Grid.Column="1" Text="{Binding Content}" LineBreakMode="WordWrap" />
+                    </Grid>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+
+        <Label Grid.Row="1" Text="{Binding ErrorMessage}" TextColor="Red"
+               IsVisible="{Binding ErrorMessage, Converter={StaticResource IsNotNullOrEmptyConverter}}" />
+        <ActivityIndicator Grid.Row="1" IsRunning="{Binding IsSending}" IsVisible="{Binding IsSending}" />
+
+        <Grid Grid.Row="2" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
+            <Editor Grid.Column="0" Text="{Binding NewMessageText}" Placeholder="Message..." HeightRequest="44" AutoSize="Disabled" />
+            <Button Grid.Column="1" Text="Send" Command="{Binding SendCommand}" />
+            <Button Grid.Column="2" Text="Export ▾" Command="{Binding ToggleExportPanelCommand}" />
+        </Grid>
+
+        <VerticalStackLayout Grid.Row="3" Spacing="6" IsVisible="{Binding ShowExportPanel}">
+            <Label Text="Additional instructions (optional)" FontSize="12" />
+            <Editor Text="{Binding ExportInstructions}" HeightRequest="60" AutoSize="TextChanges" />
+            <Button Text="Export as Draft Post" Command="{Binding ExportDraftCommand}" HorizontalOptions="Start" />
+        </VerticalStackLayout>
+
+        <VerticalStackLayout Grid.Row="3" Spacing="4" IsVisible="{Binding LinkedDraftId, Converter={StaticResource IsNotNullConverter}}">
+            <Label Text="{Binding ExportMessage}" TextColor="Green" IsVisible="{Binding ExportMessage, Converter={StaticResource IsNotNullOrEmptyConverter}}" />
+            <Button Text="Open Draft Post" Command="{Binding OpenDraftCommand}" HorizontalOptions="Start" FontSize="12" />
+        </VerticalStackLayout>
+    </Grid>
+</ContentPage>

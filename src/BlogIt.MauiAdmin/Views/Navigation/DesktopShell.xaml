@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Shell xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+       xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+       xmlns:dashboard="clr-namespace:BlogIt.MauiAdmin.Views.Dashboard"
+       xmlns:posts="clr-namespace:BlogIt.MauiAdmin.Views.Posts"
+       xmlns:pagesNs="clr-namespace:BlogIt.MauiAdmin.Views.Pages"
+       xmlns:media="clr-namespace:BlogIt.MauiAdmin.Views.Media"
+       xmlns:ai="clr-namespace:BlogIt.MauiAdmin.Views.Ai"
+       xmlns:redirects="clr-namespace:BlogIt.MauiAdmin.Views.Redirects"
+       xmlns:users="clr-namespace:BlogIt.MauiAdmin.Views.Users"
+       xmlns:settings="clr-namespace:BlogIt.MauiAdmin.Views.Settings"
+       xmlns:account="clr-namespace:BlogIt.MauiAdmin.Views.Account"
+       xmlns:sites="clr-namespace:BlogIt.MauiAdmin.Views.Sites"
+       x:Class="BlogIt.MauiAdmin.Views.Navigation.DesktopShell"
+       FlyoutBehavior="Locked"
+       Title="BlogIt Admin">
+    <!-- Windows desktop: same flat item list as Compact, but the flyout is a
+         permanent, non-collapsible nav rail (FlyoutBehavior=Locked) — this is the
+         "wide, non-responsive" layout, not a squeezed phone layout. -->
+    <Shell.FlyoutHeader>
+        <ContentView Padding="16,20,16,12">
+            <views:SiteSwitcherView xmlns:views="clr-namespace:BlogIt.MauiAdmin.Views.Sites" />
+        </ContentView>
+    </Shell.FlyoutHeader>
+    <FlyoutItem Title="Dashboard" Route="dashboard">
+        <ShellContent ContentTemplate="{DataTemplate dashboard:DashboardPage}" />
+    </FlyoutItem>
+    <FlyoutItem Title="Posts" Route="posts">
+        <ShellContent ContentTemplate="{DataTemplate posts:PostListPage}" />
+    </FlyoutItem>
+    <FlyoutItem Title="Pages" Route="pages">
+        <ShellContent ContentTemplate="{DataTemplate pagesNs:PageListPage}" />
+    </FlyoutItem>
+    <FlyoutItem Title="Media" Route="media">
+        <ShellContent ContentTemplate="{DataTemplate media:MediaListPage}" />
+    </FlyoutItem>
+    <FlyoutItem Title="AI" Route="ai">
+        <ShellContent ContentTemplate="{DataTemplate ai:ConversationListPage}" />
+    </FlyoutItem>
+    <FlyoutItem Title="Redirects" Route="redirects">
+        <ShellContent ContentTemplate="{DataTemplate redirects:RedirectListPage}" />
+    </FlyoutItem>
+    <MenuItem Text="―" IsEnabled="False" />
+    <FlyoutItem Title="Users" Route="users">
+        <ShellContent ContentTemplate="{DataTemplate users:UserListPage}" />
+    </FlyoutItem>
+    <FlyoutItem Title="Settings" Route="settings">
+        <ShellContent ContentTemplate="{DataTemplate settings:SettingsPage}" />
+    </FlyoutItem>
+    <FlyoutItem Title="My Account" Route="account">
+        <ShellContent ContentTemplate="{DataTemplate account:AccountPage}" />
+    </FlyoutItem>
+    <FlyoutItem Title="Sites" Route="sites">
+        <ShellContent ContentTemplate="{DataTemplate sites:SiteListPage}" />
+    </FlyoutItem>
+</Shell>

@@ -60,7 +60,19 @@ public static class PagesApi
         if (scheduleError is not null)
             return ScheduleValidationProblem(scheduleError);
 
-        var slug = SlugHelper.Slugify(req.Slug.Trim());
+        if (string.IsNullOrWhiteSpace(req.Title))
+            return TitleValidationProblem();
+
+        // Unlike PostsApi, this had no fallback to the title when Slug was left blank, and no
+        // check that the result was non-empty — a page saved with a blank Slug field became
+        // permanently unreachable (SlugHelper.Slugify("") is "", and there was nothing after
+        // creation that could ever change it, since a page's slug locks on first publish).
+        var baseSlug = SlugHelper.Slugify(
+            string.IsNullOrWhiteSpace(req.Slug) ? req.Title : req.Slug);
+        if (baseSlug.Length == 0)
+            return SlugValidationProblem("Slug must contain at least one letter or number.");
+        var existingSlugs = await db.Pages.Select(p => p.Slug).ToListAsync();
+        var slug = SlugHelper.EnsureUnique(baseSlug, existingSlugs);
 
         var page = new Page
         {
@@ -92,7 +104,11 @@ public static class PagesApi
         var page = await db.Pages.FindAsync(id);
         if (page is null) return Results.NotFound();
 
-        var requestedSlug = SlugHelper.Slugify(req.Slug.Trim());
+        var requestedSlug = string.IsNullOrWhiteSpace(req.Slug)
+            ? page.Slug
+            : SlugHelper.Slugify(req.Slug);
+        if (requestedSlug.Length == 0)
+            return SlugValidationProblem("Slug must contain at least one letter or number.");
         if (requestedSlug != page.Slug)
         {
             if (page.HasBeenPublished)
@@ -105,6 +121,9 @@ public static class PagesApi
         var scheduleError = PublicationSchedule.Validate(req.ScheduledPublishAt, req.ScheduledUnpublishAt);
         if (scheduleError is not null)
             return ScheduleValidationProblem(scheduleError);
+
+        if (string.IsNullOrWhiteSpace(req.Title))
+            return TitleValidationProblem();
 
         page.Title = req.Title;
         page.Content = req.Content;
@@ -167,4 +186,10 @@ public static class PagesApi
 
     private static IResult SlugValidationProblem(string error) =>
         Results.ValidationProblem(new Dictionary<string, string[]> { ["slug"] = [error] });
+
+    private static IResult TitleValidationProblem() =>
+        Results.ValidationProblem(new Dictionary<string, string[]>
+        {
+            ["title"] = ["Title is required."]
+        });
 }

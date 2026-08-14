@@ -4,17 +4,7 @@
 @inject BlogIt.Services.IPreviewTokenService PreviewTokens
 @inject IHttpContextAccessor HttpContextAccessor
 
-@if (notFound)
-{
-    <SeoHead Title="Page Not Found" />
-    @if (!Preview.HasValue)
-    {
-        <GaScript />
-    }
-    <h1>404 — Page not found</h1>
-    <p><a href="/">Go home</a></p>
-}
-else if (customPage != null)
+@if (customPage != null)
 {
     @if (isPreview)
     {
@@ -54,7 +44,6 @@ else if (customPage != null)
     [SupplyParameterFromQuery(Name = "preview")] public Guid? Preview { get; set; }
 
     private PageDto? customPage;
-    private bool notFound;
     private string? siteUrl;
     private bool isPreview;
 
@@ -64,7 +53,7 @@ else if (customPage != null)
 
         if (customPage is null)
         {
-            notFound = true;
+            MarkNotFound();
             return;
         }
 
@@ -79,17 +68,24 @@ else if (customPage != null)
             if (!isPreview)
             {
                 customPage = null;
-                notFound = true;
+                MarkNotFound();
                 return;
             }
         }
         else if (!customPage.IsPublished)
         {
             customPage = null;
-            notFound = true;
+            MarkNotFound();
             return;
         }
 
         siteUrl = await SettingsService.GetAsync(BlogIt.Shared.SettingKeys.SiteUrl) ?? "";
     }
+
+    // Flags the request for NotFoundResponseMiddleware, which renders a real 404 with real HTML
+    // afterward — see that class's remarks for why this isn't done directly here (both
+    // HttpContext.Response.StatusCode = 404 and NavigationManager.NotFound() hit confirmed
+    // framework issues in this pipeline).
+    private void MarkNotFound() =>
+        HttpContextAccessor.HttpContext?.Items[BlogIt.Sample.NotFoundResponseMiddleware.ItemKey] = true;
 }

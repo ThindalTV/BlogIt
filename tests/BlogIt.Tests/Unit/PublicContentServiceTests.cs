@@ -24,15 +24,47 @@ public class PublicContentServiceTests
         }
 
         var page = await service.GetPostsAsync(1, 1);
-        var search = await service.SearchPostsAsync("Newest");
+        var search = await service.SearchPostsAsync("Newest", 1, 10);
         var tagged = await service.GetPostsByTagAsync("c-sharp", 1, 10);
 
         page.Posts.Should().ContainSingle().Which.Title.Should().Be("Newest");
         page.TotalPages.Should().Be(2);
-        search.Should().ContainSingle().Which.Slug.Should().Be("newest");
+        search.Posts.Should().ContainSingle().Which.Slug.Should().Be("newest");
         tagged.TagName.Should().Be("C Sharp");
         tagged.Posts.Select(post => post.Title).Should().Equal("Newest", "Older");
         tagged.Posts.Should().OnlyContain(post => post.AuthorDisplayName == "Author");
+    }
+
+    [Fact]
+    public async Task SearchPostsAsync_PaginatesResultsAndExcludesFullContent()
+    {
+        var (service, factory) = CreateService();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var author = CreateAuthor();
+            var tag = new Tag { Name = "Search", Slug = "search" };
+            for (var i = 0; i < 5; i++)
+            {
+                var post = CreatePost(author, $"Searchable {i}", $"searchable-{i}", new DateTime(2025, 1, 1 + i), tag);
+                post.Content = "Full body content that should not come back in search results.";
+                db.BlogPosts.Add(post);
+            }
+            await db.SaveChangesAsync();
+        }
+
+        var firstPage = await service.SearchPostsAsync("Searchable", 1, 2);
+        firstPage.Posts.Should().HaveCount(2);
+        firstPage.TotalPages.Should().Be(3);
+        firstPage.Page.Should().Be(1);
+        firstPage.Posts.Should().OnlyContain(post => post.HasFullContent);
+
+        var lastPage = await service.SearchPostsAsync("Searchable", 3, 2);
+        lastPage.Posts.Should().ContainSingle();
+        lastPage.Page.Should().Be(3);
+
+        var beyondLastPage = await service.SearchPostsAsync("Searchable", 99, 2);
+        beyondLastPage.Page.Should().Be(3);
+        beyondLastPage.Posts.Should().ContainSingle();
     }
 
     [Fact]

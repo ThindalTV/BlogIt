@@ -1,5 +1,6 @@
 using BlogIt.Middleware;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace BlogIt;
 
@@ -16,6 +17,7 @@ internal sealed class EngineMiddlewareContributor : IBlogItMiddlewareContributor
         }
 
         application.UseUrlRedirects();
+        application.UseRateLimiter();
         application.UseAuthentication();
         application.UseAuthorization();
     }

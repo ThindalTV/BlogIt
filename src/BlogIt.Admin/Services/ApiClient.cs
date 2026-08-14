@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json;
 using BlogIt.Shared.DTOs;
 
 namespace BlogIt.Admin.Services;
@@ -12,6 +13,70 @@ public class ApiClient(HttpClient http, LocalStorageService localStorage)
         http.DefaultRequestHeaders.Authorization = string.IsNullOrWhiteSpace(token)
             ? null
             : new AuthenticationHeaderValue("Bearer", token);
+    }
+
+    // Server endpoints report failures as a plain JSON string (Results.BadRequest(string)/
+    // Results.Conflict(string)) or as an RFC7807 ValidationProblem (Results.ValidationProblem)
+    // with per-field messages under "errors". Surface the actual reason instead of the default
+    // "net_http_message_not_success_statuscode_reason" text EnsureSuccessStatusCode() would throw.
+    private static async Task EnsureSuccessAsync(HttpResponseMessage response)
+    {
+        if (response.IsSuccessStatusCode)
+            return;
+
+        var body = await response.Content.ReadAsStringAsync();
+        var message = ExtractErrorMessage(body);
+
+        throw new HttpRequestException(
+            string.IsNullOrWhiteSpace(message) ? $"Request failed ({(int)response.StatusCode})." : message,
+            null,
+            response.StatusCode);
+    }
+
+    private static string? ExtractErrorMessage(string body)
+    {
+        if (string.IsNullOrWhiteSpace(body))
+            return null;
+
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            var root = doc.RootElement;
+
+            if (root.ValueKind == JsonValueKind.String)
+                return root.GetString();
+
+            if (root.ValueKind == JsonValueKind.Object
+                && root.TryGetProperty("errors", out var errors)
+                && errors.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var field in errors.EnumerateObject())
+                {
+                    if (field.Value.ValueKind == JsonValueKind.Array && field.Value.GetArrayLength() > 0)
+                        return field.Value[0].GetString();
+                }
+            }
+
+            if (root.ValueKind == JsonValueKind.Object
+                && root.TryGetProperty("detail", out var detail)
+                && detail.ValueKind == JsonValueKind.String)
+            {
+                return detail.GetString();
+            }
+
+            if (root.ValueKind == JsonValueKind.Object
+                && root.TryGetProperty("title", out var title)
+                && title.ValueKind == JsonValueKind.String)
+            {
+                return title.GetString();
+            }
+
+            return body;
+        }
+        catch (JsonException)
+        {
+            return body;
+        }
     }
 
     // ── Auth ────────────────────────────────────────────────────────────────
@@ -27,7 +92,7 @@ public class ApiClient(HttpClient http, LocalStorageService localStorage)
     {
         await PrepareAuthAsync();
         var resp = await http.PostAsJsonAsync("auth/change-password", request);
-        resp.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(resp);
     }
 
     // ── Setup ───────────────────────────────────────────────────────────────
@@ -40,7 +105,7 @@ public class ApiClient(HttpClient http, LocalStorageService localStorage)
     public async Task InitializeAsync(SetupInitializeRequest request)
     {
         var resp = await http.PostAsJsonAsync("setup/initialize", request);
-        resp.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(resp);
     }
 
     // ── Posts ───────────────────────────────────────────────────────────────
@@ -64,7 +129,7 @@ public class ApiClient(HttpClient http, LocalStorageService localStorage)
     {
         await PrepareAuthAsync();
         var resp = await http.PostAsJsonAsync("posts", request);
-        resp.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(resp);
         return await resp.Content.ReadFromJsonAsync<BlogPostDetailDto>();
     }
 
@@ -72,7 +137,7 @@ public class ApiClient(HttpClient http, LocalStorageService localStorage)
     {
         await PrepareAuthAsync();
         var resp = await http.PutAsJsonAsync($"posts/{id}", request);
-        resp.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(resp);
     }
 
     public async Task DeletePostAsync(Guid id)
@@ -100,7 +165,7 @@ public class ApiClient(HttpClient http, LocalStorageService localStorage)
     {
         await PrepareAuthAsync();
         var resp = await http.PutAsJsonAsync($"posts/{id}/schedule", request);
-        resp.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(resp);
     }
 
     public async Task<PreviewLinkResponse?> CreatePostPreviewAsync(Guid id)
@@ -129,7 +194,7 @@ public class ApiClient(HttpClient http, LocalStorageService localStorage)
     {
         await PrepareAuthAsync();
         var resp = await http.PostAsJsonAsync("pages", request);
-        resp.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(resp);
         return await resp.Content.ReadFromJsonAsync<PageDto>();
     }
 
@@ -137,7 +202,7 @@ public class ApiClient(HttpClient http, LocalStorageService localStorage)
     {
         await PrepareAuthAsync();
         var resp = await http.PutAsJsonAsync($"pages/{id}", request);
-        resp.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(resp);
     }
 
     public async Task DeletePageAsync(Guid id)
@@ -151,7 +216,7 @@ public class ApiClient(HttpClient http, LocalStorageService localStorage)
     {
         await PrepareAuthAsync();
         var resp = await http.PutAsJsonAsync($"pages/{id}/schedule", request);
-        resp.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(resp);
     }
 
     public async Task<PreviewLinkResponse?> CreatePagePreviewAsync(Guid id)
@@ -204,7 +269,7 @@ public class ApiClient(HttpClient http, LocalStorageService localStorage)
     {
         await PrepareAuthAsync();
         var resp = await http.PostAsJsonAsync("users", request);
-        resp.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(resp);
         return await resp.Content.ReadFromJsonAsync<AppUserDto>();
     }
 
@@ -227,7 +292,7 @@ public class ApiClient(HttpClient http, LocalStorageService localStorage)
     {
         await PrepareAuthAsync();
         var response = await http.PostAsJsonAsync("redirects", request);
-        response.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(response);
         return await response.Content.ReadFromJsonAsync<UrlRedirectDto>();
     }
 
@@ -237,7 +302,7 @@ public class ApiClient(HttpClient http, LocalStorageService localStorage)
     {
         await PrepareAuthAsync();
         var response = await http.PutAsJsonAsync($"redirects/{id}", request);
-        response.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(response);
         return await response.Content.ReadFromJsonAsync<UrlRedirectDto>();
     }
 
@@ -260,7 +325,7 @@ public class ApiClient(HttpClient http, LocalStorageService localStorage)
     {
         await PrepareAuthAsync();
         var resp = await http.PutAsJsonAsync("settings", settings);
-        resp.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(resp);
     }
 
     public async Task<AiProviderInfoDto?> GetAiProviderInfoAsync()
@@ -295,7 +360,7 @@ public class ApiClient(HttpClient http, LocalStorageService localStorage)
     {
         await PrepareAuthAsync();
         var resp = await http.PostAsJsonAsync($"ai/conversations/{conversationId}/messages", request);
-        resp.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(resp);
         return await resp.Content.ReadFromJsonAsync<AiConversationDetailDto>();
     }
 
@@ -307,7 +372,7 @@ public class ApiClient(HttpClient http, LocalStorageService localStorage)
         var resp = await http.PostAsJsonAsync(
             $"ai/conversations/{conversationId}/export-draft",
             request);
-        resp.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(resp);
         return await resp.Content.ReadFromJsonAsync<ExportAiConversationResponse>();
     }
 

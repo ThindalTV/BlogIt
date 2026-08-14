@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:BlogIt.MauiAdmin.ViewModels.Ai"
+             xmlns:dtos="clr-namespace:BlogIt.Shared.DTOs;assembly=BlogIt.Contracts"
+             x:Class="BlogIt.MauiAdmin.Views.Ai.ConversationListPage"
+             x:DataType="vm:ConversationListViewModel"
+             Title="AI">
+    <Grid RowDefinitions="Auto,*" Padding="16" RowSpacing="10">
+        <Button Grid.Row="0" Text="+ New Conversation" Command="{Binding NewConversationCommand}"
+                HorizontalOptions="Start" IsVisible="{Binding AiAvailable}" />
+
+        <Label Grid.Row="1" Text="AI isn't configured for this site yet. Set it up under Settings → AI."
+               IsVisible="{Binding AiAvailable, Converter={StaticResource InvertedBoolConverter}}"
+               HorizontalOptions="Center" Margin="0,32,0,0" />
+
+        <CollectionView Grid.Row="1" ItemsSource="{Binding Conversations}" IsVisible="{Binding AiAvailable}">
+            <CollectionView.EmptyView>
+                <Label Text="No conversations yet." HorizontalOptions="Center" Margin="0,32,0,0" />
+            </CollectionView.EmptyView>
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="dtos:AiConversationSummaryDto">
+                    <Grid Padding="10" ColumnDefinitions="*,Auto">
+                        <Grid.GestureRecognizers>
+                            <TapGestureRecognizer
+                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:ConversationListViewModel}}, Path=OpenCommand}"
+                                CommandParameter="{Binding .}" />
+                        </Grid.GestureRecognizers>
+                        <VerticalStackLayout Grid.Column="0">
+                            <Label Text="{Binding Title}" FontAttributes="Bold" />
+                            <Label Text="{Binding MessageCount, StringFormat='{0} messages'}" FontSize="12" TextColor="Gray" />
+                        </VerticalStackLayout>
+                        <Button Grid.Column="1" Text="Delete" FontSize="11"
+                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:ConversationListViewModel}}, Path=DeleteCommand}"
+                                CommandParameter="{Binding .}" />
+                    </Grid>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+    </Grid>
+</ContentPage>

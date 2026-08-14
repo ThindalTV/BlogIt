@@ -4,6 +4,14 @@ namespace BlogIt.Shared.Helpers;
 
 public static class MarkdownHelper
 {
+    // INTENTIONAL: raw HTML passthrough is left enabled, and the resulting HTML is not
+    // sanitized before being rendered (see the MarkupString usages in BlogPostPage.razor,
+    // CustomPage.razor, and the feed output in FeedService.cs). This means any BlogIt user —
+    // not just visitors — can embed <script>/<iframe>/etc. in a post or page. That's accepted
+    // by design: BlogIt's trust model treats every authenticated user as fully trusted content
+    // author (equivalent to WordPress's "unfiltered_html" capability for admins), not a
+    // sandboxed contributor. Do not grant an author account to anyone you wouldn't trust with
+    // full site control. See AUDIT_REPORT.md findings #0/#1/#6/#20 for the full reasoning.
     private static readonly MarkdownPipeline Pipeline = new MarkdownPipelineBuilder()
         .UseAdvancedExtensions()
         .UseEmojiAndSmiley()

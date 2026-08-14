@@ -121,6 +121,13 @@ else
     OnInsert="InsertMedia"
     OnClose="() => showMediaPicker = false" />
 
+<ConfirmDialog IsOpen="showUnpublishConfirm"
+    Title="Unpublish this post?"
+    Message="This post is currently live. Save Draft will take it offline immediately."
+    ConfirmLabel="Save Draft & Unpublish"
+    OnConfirm="ConfirmUnpublishAndSave"
+    OnCancel="() => showUnpublishConfirm = false" />
+
 @code {
     [Parameter] public Guid? Id { get; set; }
 
@@ -134,6 +141,7 @@ else
     private ElementReference editorRef;
     private DotNetObjectReference<PostEdit>? dotNetRef;
     private bool editorInitialized;
+    private bool showUnpublishConfirm;
 
     private string title = "";
     private string slug = "";
@@ -195,6 +203,17 @@ else
 
     private async Task SaveDraft()
     {
+        if (!isNew && post?.IsPublished == true)
+        {
+            showUnpublishConfirm = true;
+            return;
+        }
+        await Save(publish: false);
+    }
+
+    private async Task ConfirmUnpublishAndSave()
+    {
+        showUnpublishConfirm = false;
         await Save(publish: false);
     }
 
@@ -218,6 +237,9 @@ else
         successMsg = "";
         try
         {
+            if (string.IsNullOrWhiteSpace(title))
+                throw new InvalidOperationException("Title is required.");
+
             content = await GetEditorContent();
             var tags = GetTags();
             var scheduledPublishAt = ToUtc(scheduledPublishLocal);

@@ -1,272 +1,246 @@
+using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json;
 using BlogIt.MauiAdmin.Models;
 using BlogIt.Shared.DTOs;
 
 namespace BlogIt.MauiAdmin.Services;
 
 /// <summary>
-/// API client that always targets the currently active site profile.
+/// API client that always operates against the currently active site profile (a single
+/// deliberate simplification — this is a one-workspace-at-a-time app, like a chat
+/// client's account switcher, not a client that fans calls out across sites at once).
+/// Every call returns an <see cref="ApiResult"/>/<see cref="ApiResult{T}"/> whose error,
+/// when present, has already been parsed by <see cref="ApiResponseParser"/> from
+/// whatever shape the server actually returned — callers should show
+/// <c>result.Error.Message</c> directly rather than a generic failure string.
 /// </summary>
-public class MauiApiClient(SiteProfileService profileService)
+public class MauiApiClient(IHttpClientFactory httpClientFactory, SiteProfileService profileService)
 {
-    private async Task<HttpClient> CreateClientAsync()
+    /// <summary>
+    /// Resolves the active site and configures BaseAddress/auth on a freshly-created
+    /// client instance before any request is sent on it. This has to happen here,
+    /// not inside <see cref="ActiveSiteHttpMessageHandler"/>: <see cref="HttpClient"/>
+    /// validates/combines a relative RequestUri against BaseAddress itself, inside
+    /// HttpClient.SendAsync, before the request ever reaches a DelegatingHandler's
+    /// SendAsync override — so a handler can never fix up a relative URI in time.
+    /// IHttpClientFactory.CreateClient(name) returns a new HttpClient instance per
+    /// call (only the underlying handler is pooled), so mutating BaseAddress/headers
+    /// on this particular instance is safe and doesn't affect other callers.
+    /// </summary>
+    private async Task<HttpClient> CreateActiveSiteClientAsync()
     {
+        var client = httpClientFactory.CreateClient("BlogIt");
         var profile = await profileService.GetActiveProfileAsync()
             ?? throw new InvalidOperationException("No active site profile. Please add a site first.");
 
-        var client = new HttpClient { BaseAddress = new Uri(profile.ApiBaseUrl.TrimEnd('/') + "/") };
+        client.BaseAddress = new Uri(profile.BaseUri, profile.ApiPath.TrimStart('/') + "/");
 
-        if (profile.IsTokenValid)
-            client.DefaultRequestHeaders.Authorization =
-                new AuthenticationHeaderValue("Bearer", profile.JwtToken);
+        var token = await profileService.GetTokenAsync(profile.Id);
+        if (!string.IsNullOrEmpty(token) && profile.IsTokenValid)
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         return client;
     }
 
     // ── Auth ────────────────────────────────────────────────────────────
-    public async Task<LoginResponse?> LoginAsync(string profileId, string username, string password)
+    // Login precedes "active", so it builds its own request against the given
+    // profile directly rather than going through the active-site handler.
+    public async Task<ApiResult<LoginResponse>> LoginAsync(string profileId, string username, string password)
     {
-        var profile = (await profileService.GetProfilesAsync())
-            .FirstOrDefault(p => p.Id == profileId)
+        var profile = (await profileService.GetProfilesAsync()).FirstOrDefault(p => p.Id == profileId)
             ?? throw new InvalidOperationException("Profile not found.");
 
-        using var client = new HttpClient { BaseAddress = new Uri(profile.ApiBaseUrl.TrimEnd('/') + "/") };
-        var response = await client.PostAsJsonAsync("api/auth/login", new LoginRequest(username, password));
-        if (!response.IsSuccessStatusCode) return null;
+        try
+        {
+            using var client = httpClientFactory.CreateClient();
+            var apiBase = new Uri(profile.BaseUri, profile.ApiPath.TrimStart('/') + "/");
+            var url = new Uri(apiBase, "auth/login");
+            using var response = await client.PostAsJsonAsync(url, new LoginRequest(username, password), BlogItJson.Options);
 
-        var result = await response.Content.ReadFromJsonAsync<LoginResponse>();
-        if (result is not null)
-            await profileService.SaveTokenAsync(profileId, result.Token, result.ExpiresAt,
-                result.Username, result.DisplayName);
+            if (!response.IsSuccessStatusCode)
+                return ApiResult<LoginResponse>.Fail(await ApiResponseParser.ParseErrorAsync(response));
 
-        return result;
+            var result = await response.Content.ReadFromJsonAsync<LoginResponse>(BlogItJson.Options);
+            if (result is null)
+                return ApiResult<LoginResponse>.Fail(new ApiError(response.StatusCode, "The server returned an unexpected response."));
+
+            await profileService.SaveTokenAsync(profileId, result.Token, result.ExpiresAt, result.Username, result.DisplayName);
+            return ApiResult<LoginResponse>.Ok(result);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            return ApiResult<LoginResponse>.Fail(Unreachable());
+        }
     }
 
-    public async Task<bool> ChangePasswordAsync(ChangePasswordRequest request)
-    {
-        using var client = await CreateClientAsync();
-        var response = await client.PostAsJsonAsync("api/auth/change-password", request);
-        return response.IsSuccessStatusCode;
-    }
+    public Task<ApiResult> ChangePasswordAsync(ChangePasswordRequest request) => PostAsync("auth/change-password", request);
 
     // ── Setup ───────────────────────────────────────────────────────────
-    public async Task<SetupStatusResponse?> GetSetupStatusAsync()
-    {
-        using var client = await CreateClientAsync();
-        return await client.GetFromJsonAsync<SetupStatusResponse>("api/setup/status");
-    }
-
-    public async Task<bool> InitializeAsync(SetupInitializeRequest request)
-    {
-        using var client = await CreateClientAsync();
-        var response = await client.PostAsJsonAsync("api/setup/initialize", request);
-        return response.IsSuccessStatusCode;
-    }
+    public Task<ApiResult<SetupStatusResponse>> GetSetupStatusAsync() => GetAsync<SetupStatusResponse>("setup/status");
 
     // ── Posts ───────────────────────────────────────────────────────────
-    public async Task<PagedResult<BlogPostSummaryDto>?> GetPostsAsync(string? q = null, int page = 1, string status = "all")
-    {
-        using var client = await CreateClientAsync();
-        return await client.GetFromJsonAsync<PagedResult<BlogPostSummaryDto>>(
-            $"api/posts?q={Uri.EscapeDataString(q ?? "")}&page={page}&status={status}");
-    }
+    public Task<ApiResult<PagedResult<BlogPostSummaryDto>>> GetPostsAsync(string? q = null, int page = 1, int pageSize = 20, string status = "all") =>
+        GetAsync<PagedResult<BlogPostSummaryDto>>($"posts?q={Uri.EscapeDataString(q ?? "")}&page={page}&pageSize={pageSize}&status={status}");
 
-    public async Task<BlogPostDetailDto?> GetPostAsync(Guid id)
-    {
-        using var client = await CreateClientAsync();
-        return await client.GetFromJsonAsync<BlogPostDetailDto>($"api/posts/{id}");
-    }
+    public Task<ApiResult<BlogPostDetailDto>> GetPostAsync(Guid id) => GetAsync<BlogPostDetailDto>($"posts/{id}");
 
-    public async Task<BlogPostDetailDto?> CreatePostAsync(CreateBlogPostRequest request)
-    {
-        using var client = await CreateClientAsync();
-        var response = await client.PostAsJsonAsync("api/posts", request);
-        return response.IsSuccessStatusCode
-            ? await response.Content.ReadFromJsonAsync<BlogPostDetailDto>()
-            : null;
-    }
+    public Task<ApiResult<BlogPostDetailDto>> CreatePostAsync(CreateBlogPostRequest request) => PostAsync<BlogPostDetailDto>("posts", request);
 
-    public async Task<BlogPostDetailDto?> UpdatePostAsync(Guid id, UpdateBlogPostRequest request)
-    {
-        using var client = await CreateClientAsync();
-        var response = await client.PutAsJsonAsync($"api/posts/{id}", request);
-        return response.IsSuccessStatusCode
-            ? await response.Content.ReadFromJsonAsync<BlogPostDetailDto>()
-            : null;
-    }
+    public Task<ApiResult<BlogPostDetailDto>> UpdatePostAsync(Guid id, UpdateBlogPostRequest request) => PutAsync<BlogPostDetailDto>($"posts/{id}", request);
 
-    public async Task<bool> DeletePostAsync(Guid id)
-    {
-        using var client = await CreateClientAsync();
-        var r = await client.DeleteAsync($"api/posts/{id}");
-        return r.IsSuccessStatusCode;
-    }
+    public Task<ApiResult> DeletePostAsync(Guid id) => DeleteAsync($"posts/{id}");
 
-    public async Task<bool> PublishPostAsync(Guid id)
-    {
-        using var client = await CreateClientAsync();
-        var r = await client.PostAsync($"api/posts/{id}/publish", null);
-        return r.IsSuccessStatusCode;
-    }
+    public Task<ApiResult<BlogPostDetailDto>> PublishPostAsync(Guid id) => PostAsync<BlogPostDetailDto>($"posts/{id}/publish", null);
 
-    public async Task<bool> UnpublishPostAsync(Guid id)
-    {
-        using var client = await CreateClientAsync();
-        var r = await client.PostAsync($"api/posts/{id}/unpublish", null);
-        return r.IsSuccessStatusCode;
-    }
+    public Task<ApiResult<BlogPostDetailDto>> UnpublishPostAsync(Guid id) => PostAsync<BlogPostDetailDto>($"posts/{id}/unpublish", null);
+
+    public Task<ApiResult<BlogPostDetailDto>> UpdatePostScheduleAsync(Guid id, UpdatePublicationScheduleRequest request) =>
+        PutAsync<BlogPostDetailDto>($"posts/{id}/schedule", request);
+
+    public Task<ApiResult<PreviewLinkResponse>> CreatePostPreviewAsync(Guid id) => PostAsync<PreviewLinkResponse>($"previews/posts/{id}", null);
 
     // ── Pages ───────────────────────────────────────────────────────────
-    public async Task<PagedResult<PageDto>?> GetPagesAsync(string? q = null, int page = 1)
-    {
-        using var client = await CreateClientAsync();
-        return await client.GetFromJsonAsync<PagedResult<PageDto>>(
-            $"api/pages?q={Uri.EscapeDataString(q ?? "")}&page={page}");
-    }
+    public Task<ApiResult<PagedResult<PageDto>>> GetPagesAsync(string? q = null, int page = 1, int pageSize = 20) =>
+        GetAsync<PagedResult<PageDto>>($"pages?q={Uri.EscapeDataString(q ?? "")}&page={page}&pageSize={pageSize}");
 
-    public async Task<PageDto?> GetPageAsync(Guid id)
-    {
-        using var client = await CreateClientAsync();
-        return await client.GetFromJsonAsync<PageDto>($"api/pages/{id}");
-    }
+    public Task<ApiResult<PageDto>> GetPageAsync(Guid id) => GetAsync<PageDto>($"pages/{id}");
 
-    public async Task<PageDto?> CreatePageAsync(CreatePageRequest request)
-    {
-        using var client = await CreateClientAsync();
-        var r = await client.PostAsJsonAsync("api/pages", request);
-        return r.IsSuccessStatusCode ? await r.Content.ReadFromJsonAsync<PageDto>() : null;
-    }
+    public Task<ApiResult<PageDto>> CreatePageAsync(CreatePageRequest request) => PostAsync<PageDto>("pages", request);
 
-    public async Task<PageDto?> UpdatePageAsync(Guid id, UpdatePageRequest request)
-    {
-        using var client = await CreateClientAsync();
-        var r = await client.PutAsJsonAsync($"api/pages/{id}", request);
-        return r.IsSuccessStatusCode ? await r.Content.ReadFromJsonAsync<PageDto>() : null;
-    }
+    public Task<ApiResult<PageDto>> UpdatePageAsync(Guid id, UpdatePageRequest request) => PutAsync<PageDto>($"pages/{id}", request);
 
-    public async Task<bool> DeletePageAsync(Guid id)
-    {
-        using var client = await CreateClientAsync();
-        return (await client.DeleteAsync($"api/pages/{id}")).IsSuccessStatusCode;
-    }
+    public Task<ApiResult> DeletePageAsync(Guid id) => DeleteAsync($"pages/{id}");
+
+    public Task<ApiResult<PageDto>> UpdatePageScheduleAsync(Guid id, UpdatePublicationScheduleRequest request) =>
+        PutAsync<PageDto>($"pages/{id}/schedule", request);
+
+    public Task<ApiResult<PreviewLinkResponse>> CreatePagePreviewAsync(Guid id) => PostAsync<PreviewLinkResponse>($"previews/pages/{id}", null);
 
     // ── Media ───────────────────────────────────────────────────────────
-    public async Task<PagedResult<MediaFileDto>?> GetMediaAsync(string? q = null, int page = 1)
+    public Task<ApiResult<PagedResult<MediaFileDto>>> GetMediaAsync(string? q = null, int page = 1, int pageSize = 20) =>
+        GetAsync<PagedResult<MediaFileDto>>($"media?q={Uri.EscapeDataString(q ?? "")}&page={page}&pageSize={pageSize}");
+
+    public async Task<ApiResult<MediaFileDto>> UploadMediaAsync(string title, Stream data, string fileName, string contentType)
     {
-        using var client = await CreateClientAsync();
-        return await client.GetFromJsonAsync<PagedResult<MediaFileDto>>(
-            $"api/media?q={Uri.EscapeDataString(q ?? "")}&page={page}");
+        try
+        {
+            using var client = await CreateActiveSiteClientAsync();
+            using var form = new MultipartFormDataContent();
+            form.Add(new StringContent(title), "title");
+            var fileContent = new StreamContent(data);
+            fileContent.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+            form.Add(fileContent, "file", fileName);
+
+            using var response = await client.PostAsync("media/upload", form);
+            if (!response.IsSuccessStatusCode)
+                return ApiResult<MediaFileDto>.Fail(await ApiResponseParser.ParseErrorAsync(response));
+
+            var value = await response.Content.ReadFromJsonAsync<MediaFileDto>(BlogItJson.Options);
+            return ApiResult<MediaFileDto>.Ok(value!);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            return ApiResult<MediaFileDto>.Fail(Unreachable());
+        }
     }
 
-    public async Task<MediaFileDto?> UploadMediaAsync(string title, Stream data, string fileName, string contentType)
-    {
-        using var client = await CreateClientAsync();
-        using var form = new MultipartFormDataContent();
-        form.Add(new StringContent(title), "title");
-        var fileContent = new StreamContent(data);
-        fileContent.Headers.ContentType = new MediaTypeHeaderValue(contentType);
-        form.Add(fileContent, "file", fileName);
-
-        var r = await client.PostAsync("api/media/upload", form);
-        return r.IsSuccessStatusCode ? await r.Content.ReadFromJsonAsync<MediaFileDto>() : null;
-    }
-
-    public async Task<bool> DeleteMediaAsync(Guid id)
-    {
-        using var client = await CreateClientAsync();
-        return (await client.DeleteAsync($"api/media/{id}")).IsSuccessStatusCode;
-    }
+    public Task<ApiResult> DeleteMediaAsync(Guid id) => DeleteAsync($"media/{id}");
 
     // ── Users ───────────────────────────────────────────────────────────
-    public async Task<List<AppUserDto>?> GetUsersAsync()
-    {
-        using var client = await CreateClientAsync();
-        return await client.GetFromJsonAsync<List<AppUserDto>>("api/users");
-    }
+    public Task<ApiResult<List<AppUserDto>>> GetUsersAsync() => GetAsync<List<AppUserDto>>("users");
 
-    public async Task<AppUserDto?> CreateUserAsync(CreateUserRequest request)
-    {
-        using var client = await CreateClientAsync();
-        var r = await client.PostAsJsonAsync("api/users", request);
-        return r.IsSuccessStatusCode ? await r.Content.ReadFromJsonAsync<AppUserDto>() : null;
-    }
+    public Task<ApiResult<AppUserDto>> CreateUserAsync(CreateUserRequest request) => PostAsync<AppUserDto>("users", request);
 
-    public async Task<bool> DeleteUserAsync(Guid id)
-    {
-        using var client = await CreateClientAsync();
-        return (await client.DeleteAsync($"api/users/{id}")).IsSuccessStatusCode;
-    }
+    public Task<ApiResult> DeleteUserAsync(Guid id) => DeleteAsync($"users/{id}");
 
     // ── Settings ────────────────────────────────────────────────────────
-    public async Task<Dictionary<string, string>?> GetSettingsAsync()
-    {
-        using var client = await CreateClientAsync();
-        return await client.GetFromJsonAsync<Dictionary<string, string>>("api/settings");
-    }
+    public Task<ApiResult<Dictionary<string, string>>> GetSettingsAsync() => GetAsync<Dictionary<string, string>>("settings");
 
-    public async Task<bool> UpdateSettingsAsync(Dictionary<string, string> settings)
-    {
-        using var client = await CreateClientAsync();
-        return (await client.PutAsJsonAsync("api/settings", settings)).IsSuccessStatusCode;
-    }
+    public Task<ApiResult> UpdateSettingsAsync(Dictionary<string, string> settings) => PutAsync("settings", settings);
+
+    public Task<ApiResult<AiProviderInfoDto>> GetAiProviderInfoAsync() => GetAsync<AiProviderInfoDto>("settings/ai-provider");
 
     // ── AI ──────────────────────────────────────────────────────────────
-    public async Task<List<AiConversationSummaryDto>?> GetConversationsAsync()
-    {
-        using var client = await CreateClientAsync();
-        return await client.GetFromJsonAsync<List<AiConversationSummaryDto>>("api/ai/conversations");
-    }
+    public Task<ApiResult<List<AiConversationSummaryDto>>> GetConversationsAsync() => GetAsync<List<AiConversationSummaryDto>>("ai/conversations");
 
-    public async Task<AiConversationDetailDto?> GetConversationAsync(Guid id)
-    {
-        using var client = await CreateClientAsync();
-        return await client.GetFromJsonAsync<AiConversationDetailDto>($"api/ai/conversations/{id}");
-    }
+    public Task<ApiResult<AiConversationDetailDto>> GetConversationAsync(Guid id) => GetAsync<AiConversationDetailDto>($"ai/conversations/{id}");
 
-    public async Task<AiConversationSummaryDto?> CreateConversationAsync(string title)
-    {
-        using var client = await CreateClientAsync();
-        var r = await client.PostAsJsonAsync("api/ai/conversations", new CreateAiConversationRequest(title));
-        return r.IsSuccessStatusCode
-            ? await r.Content.ReadFromJsonAsync<AiConversationSummaryDto>()
-            : null;
-    }
+    public Task<ApiResult<AiConversationDetailDto>> CreateConversationAsync(string title) =>
+        PostAsync<AiConversationDetailDto>("ai/conversations", new CreateAiConversationRequest(title));
 
-    public async Task<AiConversationDetailDto?> SendMessageAsync(Guid conversationId, string content)
-    {
-        using var client = await CreateClientAsync();
-        var r = await client.PostAsJsonAsync(
-            $"api/ai/conversations/{conversationId}/messages",
-            new SendAiMessageRequest(content));
-        return r.IsSuccessStatusCode
-            ? await r.Content.ReadFromJsonAsync<AiConversationDetailDto>()
-            : null;
-    }
+    public Task<ApiResult<AiConversationDetailDto>> SendMessageAsync(Guid conversationId, string content) =>
+        PostAsync<AiConversationDetailDto>($"ai/conversations/{conversationId}/messages", new SendAiMessageRequest(content));
 
-    public async Task<Guid?> ExportDraftAsync(Guid conversationId, string? instructions)
-    {
-        using var client = await CreateClientAsync();
-        var r = await client.PostAsJsonAsync(
-            $"api/ai/conversations/{conversationId}/export-draft",
-            new ExportAiConversationRequest(instructions));
-        if (!r.IsSuccessStatusCode) return null;
-        var obj = await r.Content.ReadFromJsonAsync<ExportAiConversationResponse>();
-        return obj?.PostId;
-    }
+    public Task<ApiResult<ExportAiConversationResponse>> ExportDraftAsync(Guid conversationId, string? instructions) =>
+        PostAsync<ExportAiConversationResponse>($"ai/conversations/{conversationId}/export-draft", new ExportAiConversationRequest(instructions));
 
-    public async Task<bool> DeleteConversationAsync(Guid id)
-    {
-        using var client = await CreateClientAsync();
-        return (await client.DeleteAsync($"api/ai/conversations/{id}")).IsSuccessStatusCode;
-    }
+    public Task<ApiResult> DeleteConversationAsync(Guid id) => DeleteAsync($"ai/conversations/{id}");
 
     // ── Analytics ───────────────────────────────────────────────────────
-    public async Task<AnalyticsSummaryDto?> GetAnalyticsSummaryAsync(string startDate, string endDate)
+    public Task<ApiResult<AnalyticsSummaryDto>> GetAnalyticsSummaryAsync(string startDate, string endDate) =>
+        GetAsync<AnalyticsSummaryDto>($"analytics/summary?startDate={startDate}&endDate={endDate}");
+
+    // ── Redirects ───────────────────────────────────────────────────────
+    public Task<ApiResult<List<UrlRedirectDto>>> GetRedirectsAsync() => GetAsync<List<UrlRedirectDto>>("redirects");
+
+    public Task<ApiResult<UrlRedirectDto>> CreateRedirectAsync(SaveUrlRedirectRequest request) => PostAsync<UrlRedirectDto>("redirects", request);
+
+    public Task<ApiResult<UrlRedirectDto>> UpdateRedirectAsync(Guid id, SaveUrlRedirectRequest request) => PutAsync<UrlRedirectDto>($"redirects/{id}", request);
+
+    public Task<ApiResult> DeleteRedirectAsync(Guid id) => DeleteAsync($"redirects/{id}");
+
+    // ── HTTP plumbing ───────────────────────────────────────────────────
+
+    private static ApiError Unreachable() =>
+        new(HttpStatusCode.ServiceUnavailable, "Couldn't reach the server. Check your connection and try again.");
+
+    private async Task<ApiResult<T>> GetAsync<T>(string requestUri) => await SendAsync<T>(HttpMethod.Get, requestUri, null);
+    private async Task<ApiResult<T>> PostAsync<T>(string requestUri, object? body) => await SendAsync<T>(HttpMethod.Post, requestUri, body);
+    private async Task<ApiResult<T>> PutAsync<T>(string requestUri, object? body) => await SendAsync<T>(HttpMethod.Put, requestUri, body);
+
+    private async Task<ApiResult> PostAsync(string requestUri, object? body)
     {
-        using var client = await CreateClientAsync();
-        return await client.GetFromJsonAsync<AnalyticsSummaryDto>(
-            $"api/analytics/summary?startDate={startDate}&endDate={endDate}");
+        var result = await SendAsync<JsonElement?>(HttpMethod.Post, requestUri, body);
+        return result.Success ? ApiResult.Ok() : ApiResult.Fail(result.Error!);
     }
 
+    private async Task<ApiResult> PutAsync(string requestUri, object? body)
+    {
+        var result = await SendAsync<JsonElement?>(HttpMethod.Put, requestUri, body);
+        return result.Success ? ApiResult.Ok() : ApiResult.Fail(result.Error!);
+    }
+
+    private async Task<ApiResult> DeleteAsync(string requestUri)
+    {
+        var result = await SendAsync<JsonElement?>(HttpMethod.Delete, requestUri, null);
+        return result.Success ? ApiResult.Ok() : ApiResult.Fail(result.Error!);
+    }
+
+    private async Task<ApiResult<T>> SendAsync<T>(HttpMethod method, string requestUri, object? body)
+    {
+        try
+        {
+            using var client = await CreateActiveSiteClientAsync();
+            using var request = new HttpRequestMessage(method, requestUri);
+            if (body is not null)
+                request.Content = JsonContent.Create(body, options: BlogItJson.Options);
+
+            using var response = await client.SendAsync(request);
+            if (!response.IsSuccessStatusCode)
+                return ApiResult<T>.Fail(await ApiResponseParser.ParseErrorAsync(response));
+
+            var text = await response.Content.ReadAsStringAsync();
+            if (string.IsNullOrWhiteSpace(text))
+                return ApiResult<T>.Ok(default!);
+
+            var value = JsonSerializer.Deserialize<T>(text, BlogItJson.Options);
+            return ApiResult<T>.Ok(value!);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            return ApiResult<T>.Fail(Unreachable());
+        }
+    }
 }

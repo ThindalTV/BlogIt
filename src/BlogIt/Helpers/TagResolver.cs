@@ -23,10 +23,24 @@ public static class TagResolver
             .Where(tag => slugs.Contains(tag.Slug))
             .ToDictionaryAsync(tag => tag.Slug, StringComparer.OrdinalIgnoreCase, cancellationToken);
 
-        return requested
-            .Select(tag => existing.TryGetValue(tag.Slug, out var entity)
-                ? entity
-                : new Tag { Name = tag.Name, Slug = tag.Slug })
-            .ToList();
+        var result = new List<Tag>(requested.Count);
+        foreach (var tag in requested)
+        {
+            if (existing.TryGetValue(tag.Slug, out var entity))
+            {
+                result.Add(entity);
+                continue;
+            }
+
+            // Tag.Id is client-generated (Guid.NewGuid()), so EF can't infer "new" from
+            // the key alone when this collection is merged into an already-tracked post's
+            // navigation property (UpdatePost). Track it explicitly or SaveChanges silently
+            // treats it as an existing row and the join-table insert fails its FK constraint.
+            var newTag = new Tag { Name = tag.Name, Slug = tag.Slug };
+            db.Tags.Add(newTag);
+            result.Add(newTag);
+        }
+
+        return result;
     }
 }

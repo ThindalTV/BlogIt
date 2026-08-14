@@ -14,5 +14,13 @@ public class AiConversation
     public Guid? LinkedDraftId { get; set; }
     public BlogPost? LinkedDraft { get; set; }
 
+    /// <summary>
+    /// Rolling LLM-generated summary of older messages that have been compacted out of
+    /// <see cref="Messages"/> (see <c>AiService.HistoryCompactionThreshold</c>). Sent as a
+    /// system message ahead of the remaining raw messages on every subsequent turn; null until
+    /// the conversation is long enough to trigger the first compaction.
+    /// </summary>
+    public string? Summary { get; set; }
+
     public ICollection<AiMessage> Messages { get; set; } = [];
 }

@@ -1,5 +1,6 @@
 using BlogIt.Shared;
 using BlogIt.Shared.DTOs;
+using BlogIt.Shared.Helpers;
 using BlogIt.Services;
 
 namespace BlogIt.Api;
@@ -48,6 +49,14 @@ public static class SettingsApi
     {
         if (body.Keys.Any(ConfigurationOnlyKeys.Contains))
             return Results.BadRequest("Blog storage is configured through application configuration, not site settings.");
+
+        if (body.TryGetValue(SettingKeys.SiteUrl, out var siteUrl) && !UrlValidator.IsValidAbsoluteHttpUrl(siteUrl))
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["siteUrl"] = ["Site URL must be an absolute http:// or https:// URL."]
+            });
+        }
 
         await settings.SetManyAsync(body);
         return Results.NoContent();

@@ -29,6 +29,22 @@ public class UsersApiTests(BlogItSampleFactory factory) : IClassFixture<BlogItSa
         user!.Username.Should().Be("newuser");
     }
 
+    [Theory]
+    [InlineData("short1A")]
+    [InlineData("alllowercase1")]
+    [InlineData("ALLUPPERCASE1")]
+    [InlineData("NoDigitsHere")]
+    public async Task CreateUser_WithWeakPassword_ReturnsBadRequest(string weakPassword)
+    {
+        var userId = await factory.SeedUserAsync($"admin_weak_pw_{Guid.NewGuid():N}");
+        var client = factory.CreateClient().WithAuth(userId);
+
+        var request = new CreateUserRequest("weakpassworduser", "Weak Password User", weakPassword);
+        var response = await client.PostAsJsonAsync("/api/users", request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
     [Fact]
     public async Task DeleteUser_CannotDeleteSelf()
     {

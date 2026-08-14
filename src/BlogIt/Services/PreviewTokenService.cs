@@ -16,12 +16,23 @@ public interface IPreviewTokenService
         Guid? token,
         PreviewContentType contentType,
         Guid contentId);
+
+    /// <summary>
+    /// Removes expired grants that were never looked up again (a redeemed or expired token is
+    /// otherwise only cleaned up the next time something tries to use it — a preview link
+    /// generated and never clicked would sit in memory for the process lifetime without this).
+    /// Called periodically by <see cref="PublicationSchedulingService"/>'s existing timer.
+    /// </summary>
+    void SweepExpired();
 }
 
 public sealed class PreviewTokenService(TimeProvider timeProvider) : IPreviewTokenService
 {
     private static readonly TimeSpan Lifetime = TimeSpan.FromMinutes(15);
     private readonly ConcurrentDictionary<Guid, PreviewGrant> tokens = new();
+
+    /// <summary>Test-only visibility into the backing store's size, to verify SweepExpired.</summary>
+    internal int GrantCount => tokens.Count;
 
     public (Guid Token, DateTimeOffset ExpiresAt) Issue(
         PreviewContentType contentType,
@@ -103,6 +114,16 @@ public sealed class PreviewTokenService(TimeProvider timeProvider) : IPreviewTok
         }
 
         return grant.ContentType == contentType && grant.ContentId == contentId;
+    }
+
+    public void SweepExpired()
+    {
+        var now = timeProvider.GetUtcNow();
+        foreach (var (token, grant) in tokens)
+        {
+            if (grant.ExpiresAt <= now)
+                tokens.TryRemove(token, out _);
+        }
     }
 
     private static string GetCookieName(PreviewContentType contentType, Guid contentId) =>

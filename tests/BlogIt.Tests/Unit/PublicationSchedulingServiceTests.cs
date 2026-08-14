@@ -125,9 +125,11 @@ public sealed class PublicationSchedulingServiceTests
             .UseInMemoryDatabase($"Scheduling_{Guid.NewGuid():N}")
             .Options;
         var factory = new TestDbContextFactory(options);
+        var timeProvider = new FixedTimeProvider(now);
         var service = new PublicationSchedulingService(
             factory,
-            new FixedTimeProvider(now),
+            new PreviewTokenService(timeProvider),
+            timeProvider,
             NullLogger<PublicationSchedulingService>.Instance);
         return (service, factory);
     }

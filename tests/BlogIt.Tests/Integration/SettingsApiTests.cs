@@ -47,4 +47,39 @@ public class SettingsApiTests(BlogItSampleFactory factory) : IClassFixture<BlogI
         var settings = await client.GetFromJsonAsync<Dictionary<string, string>>("/api/settings");
         settings![BlogIt.Shared.SettingKeys.SiteName].Should().Be("Updated Blog Name");
     }
+
+    [Theory]
+    [InlineData("not-a-url")]
+    [InlineData("ftp://example.com")]
+    public async Task UpdateSettings_WithInvalidSiteUrl_ReturnsBadRequest(string invalidSiteUrl)
+    {
+        var userId = await factory.SeedUserAsync($"settings_bad_url_{Guid.NewGuid():N}");
+        var client = factory.CreateClient().WithAuth(userId);
+
+        var update = new Dictionary<string, string>
+        {
+            [BlogIt.Shared.SettingKeys.SiteUrl] = invalidSiteUrl
+        };
+
+        var putResponse = await client.PutAsJsonAsync("/api/settings", update);
+        putResponse.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task UpdateSettings_WithValidSiteUrl_Persists()
+    {
+        var userId = await factory.SeedUserAsync($"settings_good_url_{Guid.NewGuid():N}");
+        var client = factory.CreateClient().WithAuth(userId);
+
+        var update = new Dictionary<string, string>
+        {
+            [BlogIt.Shared.SettingKeys.SiteUrl] = "https://updated.example.com"
+        };
+
+        var putResponse = await client.PutAsJsonAsync("/api/settings", update);
+        putResponse.StatusCode.Should().BeOneOf(HttpStatusCode.OK, HttpStatusCode.NoContent);
+
+        var settings = await client.GetFromJsonAsync<Dictionary<string, string>>("/api/settings");
+        settings![BlogIt.Shared.SettingKeys.SiteUrl].Should().Be("https://updated.example.com");
+    }
 }

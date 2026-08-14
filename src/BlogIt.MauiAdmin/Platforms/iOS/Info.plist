@@ -29,7 +29,9 @@
     <key>XSAppIconAssets</key>
     <string>Assets.xcassets/appicon.appiconset</string>
     <key>NSCameraUsageDescription</key>
-    <string>BlogIt needs camera access to capture photos for your media library.</string>
+    <string>BlogIt needs camera access to capture photos and videos for your media library.</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>BlogIt needs microphone access to record audio when capturing video for your media library.</string>
     <key>NSPhotoLibraryUsageDescription</key>
     <string>BlogIt needs access to your photo library to select images for your media library.</string>
     <key>NSPhotoLibraryAddUsageDescription</key>

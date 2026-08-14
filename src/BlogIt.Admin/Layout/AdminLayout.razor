@@ -1,10 +1,14 @@
 @inherits LayoutComponentBase
+@implements IDisposable
 @inject NavigationManager Nav
 @inject AuthenticationStateProvider AuthProvider
 @inject LocalStorageService LocalStorage
 
 <div class="admin-shell">
     <header class="topbar">
+        <button type="button" class="sidebar-toggle" @onclick="ToggleSidebar" aria-label="Toggle navigation" aria-expanded="@sidebarOpen">
+            <span class="sidebar-toggle-icon">☰</span>
+        </button>
         <div class="topbar-brand">
             <span class="topbar-logo">✦</span>
             <span class="topbar-name">BlogIt Admin</span>
@@ -12,7 +16,11 @@
     </header>
 
     <div class="admin-body">
-        <nav class="sidebar">
+        @if (sidebarOpen)
+        {
+            <div class="sidebar-overlay" @onclick="CloseSidebar"></div>
+        }
+        <nav class="sidebar @(sidebarOpen ? "sidebar-open" : "")">
             <ul class="nav-list">
                 <li><NavLink href="" Match="NavLinkMatch.All" class="nav-link"><span class="nav-icon">⊞</span>Dashboard</NavLink></li>
                 <li><NavLink href="posts" class="nav-link"><span class="nav-icon">✎</span>Posts</NavLink></li>
@@ -45,10 +53,27 @@
 </div>
 
 @code {
+    private bool sidebarOpen;
+
+    protected override void OnInitialized() => Nav.LocationChanged += OnLocationChanged;
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        if (!sidebarOpen) return;
+        sidebarOpen = false;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void ToggleSidebar() => sidebarOpen = !sidebarOpen;
+
+    private void CloseSidebar() => sidebarOpen = false;
+
     private async Task Logout()
     {
         var provider = (AuthStateProvider)AuthProvider;
         await provider.MarkUserAsLoggedOut();
         Nav.NavigateTo("login", forceLoad: false);
     }
+
+    public void Dispose() => Nav.LocationChanged -= OnLocationChanged;
 }

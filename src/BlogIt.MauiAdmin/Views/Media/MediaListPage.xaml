@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:BlogIt.MauiAdmin.ViewModels.Media"
+             x:Class="BlogIt.MauiAdmin.Views.Media.MediaListPage"
+             x:DataType="vm:MediaListViewModel"
+             Title="Media">
+    <Grid RowDefinitions="Auto,Auto,*,Auto,Auto" Padding="16" RowSpacing="10">
+        <SearchBar Grid.Row="0" Placeholder="Search media" Text="{Binding SearchText}" SearchCommand="{Binding SearchCommand}" />
+
+        <FlexLayout Grid.Row="1" Wrap="Wrap" JustifyContent="Start">
+            <Button Text="📷 Take Photo" Margin="0,0,6,6" IsVisible="{Binding IsCaptureSupported}" Command="{Binding TakePhotoCommand}" />
+            <Button Text="🎥 Record Video" Margin="0,0,6,6" IsVisible="{Binding IsCaptureSupported}" Command="{Binding RecordVideoCommand}" />
+            <Button Text="🖼 Choose Photo" Margin="0,0,6,6" Command="{Binding ChoosePhotoCommand}" />
+            <Button Text="📼 Choose Video" Margin="0,0,6,6" Command="{Binding ChooseVideoCommand}" />
+            <Button Text="📄 Choose File" Margin="0,0,6,6" Command="{Binding ChooseFileCommand}" />
+        </FlexLayout>
+
+        <CollectionView Grid.Row="2" ItemsSource="{Binding Items}" SelectionMode="None">
+            <CollectionView.ItemsLayout>
+                <GridItemsLayout Orientation="Vertical" Span="3" />
+            </CollectionView.ItemsLayout>
+            <CollectionView.EmptyView>
+                <Label Text="No media yet." HorizontalOptions="Center" Margin="0,32,0,0" />
+            </CollectionView.EmptyView>
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="vm:MediaItemRow">
+                    <Grid Padding="6">
+                        <Grid.GestureRecognizers>
+                            <TapGestureRecognizer
+                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MediaListViewModel}}, Path=SelectCommand}"
+                                CommandParameter="{Binding .}" />
+                        </Grid.GestureRecognizers>
+                        <VerticalStackLayout Spacing="2">
+                            <Border StrokeShape="RoundRectangle 6" HeightRequest="90">
+                                <Grid>
+                                    <Image Source="{Binding ImageUrl}" Aspect="AspectFill" IsVisible="{Binding IsImage}" />
+                                    <Label Text="📄" FontSize="32" HorizontalOptions="Center" VerticalOptions="Center" IsVisible="{Binding IsImage, Converter={StaticResource InvertedBoolConverter}}" />
+                                </Grid>
+                            </Border>
+                            <Label Text="{Binding Title}" FontSize="11" LineBreakMode="TailTruncation" />
+                        </VerticalStackLayout>
+                    </Grid>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+
+        <Grid Grid.Row="3" ColumnDefinitions="Auto,*,Auto">
+            <Button Grid.Column="0" Text="◀ Prev" Command="{Binding PreviousPageCommand}" />
+            <Label Grid.Column="1" Text="{Binding Page, StringFormat='Page {0}'}" HorizontalOptions="Center" VerticalOptions="Center" />
+            <Button Grid.Column="2" Text="Next ▶" Command="{Binding NextPageCommand}" />
+        </Grid>
+
+        <VerticalStackLayout Grid.Row="4" Spacing="4" IsVisible="{Binding SelectedItem, Converter={StaticResource IsNotNullOrEmptyConverter}}">
+            <Label Text="{Binding SelectedItem.Title}" FontAttributes="Bold" />
+            <Label Text="{Binding SelectedItem.FileName}" FontSize="12" TextColor="Gray" />
+            <HorizontalStackLayout Spacing="8">
+                <Button Text="Copy URL" Command="{Binding CopyUrlCommand}" CommandParameter="{Binding SelectedItem}" />
+                <Button Text="Delete" Command="{Binding DeleteCommand}" CommandParameter="{Binding SelectedItem}" />
+            </HorizontalStackLayout>
+        </VerticalStackLayout>
+
+        <Label Grid.Row="4" Text="{Binding StatusMessage}" TextColor="Green" IsVisible="{Binding StatusMessage, Converter={StaticResource IsNotNullOrEmptyConverter}}" />
+        <Label Grid.Row="4" Text="{Binding ErrorMessage}" TextColor="Red" IsVisible="{Binding ErrorMessage, Converter={StaticResource IsNotNullOrEmptyConverter}}" />
+        <ActivityIndicator Grid.Row="4" IsRunning="{Binding IsBusy}" IsVisible="{Binding IsBusy}" />
+    </Grid>
+</ContentPage>

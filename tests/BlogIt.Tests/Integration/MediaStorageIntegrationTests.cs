@@ -92,6 +92,7 @@ public sealed class MediaStorageIntegrationTests
             var downloadResponse = await client.GetAsync(uploaded.PublicPath);
             downloadResponse.StatusCode.Should().Be(HttpStatusCode.OK);
             downloadResponse.Content.Headers.ContentType!.MediaType.Should().Be("image/png");
+            downloadResponse.Headers.GetValues("X-Content-Type-Options").Should().Equal("nosniff");
             (await downloadResponse.Content.ReadAsByteArrayAsync()).Should().Equal(bytes);
 
             var deleteResponse = await client.DeleteAsync($"/api/media/{uploaded.Id}");

@@ -5,6 +5,7 @@ namespace BlogIt.Services;
 
 public sealed class PublicationSchedulingService(
     IDbContextFactory<BlogItDbContext> dbContextFactory,
+    IPreviewTokenService previewTokens,
     TimeProvider timeProvider,
     ILogger<PublicationSchedulingService> logger) : BackgroundService
 {
@@ -18,6 +19,9 @@ public sealed class PublicationSchedulingService(
             try
             {
                 await ProcessDueSchedulesAsync(stoppingToken);
+                // Piggybacks on this existing timer rather than running its own — see
+                // IPreviewTokenService.SweepExpired for why this is needed at all.
+                previewTokens.SweepExpired();
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {

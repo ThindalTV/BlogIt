@@ -1,11 +1,12 @@
-using System.Text;
 using BlogIt.Services;
-using BlogIt.Shared;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using System.Threading.RateLimiting;
 
 namespace BlogIt;
 
@@ -51,6 +52,7 @@ public static class BlogItServiceCollectionExtensions
         services.TryAddScoped<IAnalyticsService, AnalyticsService>();
         services.TryAddScoped<IAiService, AiService>();
         services.TryAddSingleton<IPreviewTokenService, PreviewTokenService>();
+        services.TryAddSingleton<JwtSigningKeyCache>();
         services.TryAddSingleton<IUrlRedirectService, UrlRedirectService>();
         services.TryAddScoped<IPublicContentService, PublicContentService>();
         services.TryAddSingleton<BlogItAdminAssets>();
@@ -59,28 +61,29 @@ public static class BlogItServiceCollectionExtensions
         services.AddEndpointsApiExplorer();
 
         services.AddAuthentication()
-            .AddJwtBearer(BlogItDefaults.AuthenticationScheme, options =>
+            .AddJwtBearer(BlogItDefaults.AuthenticationScheme, _ => { });
+
+        // Configured via the DI-aware overload (rather than inline in AddJwtBearer above) so
+        // JwtSigningKeyCache — a singleton — can be captured once by reference and read from
+        // IssuerSigningKeyResolver without touching HttpContext.RequestServices, which that
+        // resolver delegate has no access to.
+        services.AddOptions<JwtBearerOptions>(BlogItDefaults.AuthenticationScheme)
+            .Configure<JwtSigningKeyCache>((options, keyCache) =>
             {
                 options.TokenValidationParameters = new TokenValidationParameters
                 {
                     ValidateIssuerSigningKey = true,
                     ValidateIssuer = false,
                     ValidateAudience = false,
-                    ValidateLifetime = true
+                    ValidateLifetime = true,
+                    // Resolves against JwtSigningKeyCache's own atomically-swapped snapshot
+                    // instead of a field on this shared options instance, so validating a
+                    // request never mutates state other concurrent requests are reading.
+                    IssuerSigningKeyResolver = (_, _, _, _) => keyCache.ResolveKeys()
                 };
                 options.Events = new JwtBearerEvents
                 {
-                    OnMessageReceived = async context =>
-                    {
-                        var settings = context.HttpContext.RequestServices
-                            .GetRequiredService<ISettingsService>();
-                        var secret = await settings.GetAsync(SettingKeys.JwtSecret);
-                        if (!string.IsNullOrEmpty(secret))
-                        {
-                            context.Options.TokenValidationParameters.IssuerSigningKey =
-                                new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret));
-                        }
-                    }
+                    OnMessageReceived = async context => await keyCache.RefreshAsync()
                 };
             });
 
@@ -90,6 +93,27 @@ public static class BlogItServiceCollectionExtensions
                 policy.AuthenticationSchemes.Add(BlogItDefaults.AuthenticationScheme);
                 policy.RequireAuthenticatedUser();
             });
+
+        services.AddRateLimiter(options =>
+        {
+            options.OnRejected = (context, cancellationToken) =>
+            {
+                context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+                return ValueTask.CompletedTask;
+            };
+
+            // Partitioned per client IP (falls back to a shared bucket when the IP is
+            // unavailable) so one attacker guessing passwords can't lock out everyone else.
+            options.AddPolicy(BlogItDefaults.LoginRateLimiterPolicy, httpContext =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                    _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = 10,
+                        Window = TimeSpan.FromMinutes(5),
+                        QueueLimit = 0
+                    }));
+        });
 
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IBlogItMiddlewareContributor, AdminAssetMiddlewareContributor>());

@@ -16,6 +16,16 @@ public class AiService(BlogItDbContext db, ISettingsService settings) : IAiServi
     // GitHub Copilot uses a fixed Azure OpenAI-compatible base URL.
     private const string GitHubCopilotBaseUrl = "https://models.inference.ai.azure.com";
 
+    // Once a conversation's non-compacted message count reaches this, the oldest half is folded
+    // into conversation.Summary (via one extra LLM call) and those rows are marked IsCompacted
+    // instead of deleted — they stay visible in the admin's chat UI but are excluded from the LLM
+    // request and from future compaction batches. Sending the summary as a system message going
+    // forward is what keeps this conversation from ever hitting the provider's context-window
+    // limit. Since only half is compacted each time, the non-compacted count sits at
+    // HistoryCompactionThreshold/2 right after — it takes another HistoryCompactionThreshold/2 new
+    // messages to trigger the next round.
+    internal const int HistoryCompactionThreshold = 20;
+
     // Default models per provider.
     private const string DefaultChatModel = "gpt-4o-mini";
     private const string DefaultExportModel = "gpt-4o";
@@ -86,17 +96,34 @@ public class AiService(BlogItDbContext db, ISettingsService settings) : IAiServi
         db.AiMessages.Add(userMessage);
         await db.SaveChangesAsync(cancellationToken);
 
-        // Build full chat history (including the new user message)
-        var allMessages = conversation.Messages
+        var (chatClient, _) = await BuildClientsAsync();
+
+        IReadOnlyList<AiMessage> orderedMessages = conversation.Messages
+            .Where(m => !m.IsCompacted)
             .Append(userMessage)
             .OrderBy(m => m.CreatedAt)
-            .Select<AiMessage, ChatMessage>(m =>
-                m.Role == "user"
-                    ? ChatMessage.CreateUserMessage(m.Content)
-                    : ChatMessage.CreateAssistantMessage(m.Content))
             .ToList();
 
-        var (chatClient, _) = await BuildClientsAsync();
+        var (toCompact, remaining) = SelectCompactionBatch(orderedMessages, HistoryCompactionThreshold);
+        if (toCompact.Count > 0)
+        {
+            conversation.Summary = await SummarizeAsync(chatClient, conversation.Summary, toCompact, cancellationToken);
+            foreach (var message in toCompact)
+                message.IsCompacted = true;
+            orderedMessages = remaining;
+        }
+
+        var allMessages = new List<ChatMessage>();
+        if (!string.IsNullOrWhiteSpace(conversation.Summary))
+        {
+            allMessages.Add(ChatMessage.CreateSystemMessage(
+                $"Summary of earlier messages in this conversation (already removed from history):\n{conversation.Summary}"));
+        }
+        allMessages.AddRange(orderedMessages.Select<AiMessage, ChatMessage>(m =>
+            m.Role == "user"
+                ? ChatMessage.CreateUserMessage(m.Content)
+                : ChatMessage.CreateAssistantMessage(m.Content)));
+
         var assistantContent = await CompleteChatTextAsync(chatClient, allMessages, cancellationToken);
 
         var assistantMessage = new AiMessage
@@ -114,6 +141,48 @@ public class AiService(BlogItDbContext db, ISettingsService settings) : IAiServi
         return MapConversation(conversation);
     }
 
+    /// <summary>
+    /// Pure decision logic for <see cref="HistoryCompactionThreshold"/>: once
+    /// <paramref name="orderedMessages"/> reaches <paramref name="threshold"/>, the oldest half
+    /// is returned as the batch to compact, and the newer half as what remains. Below the
+    /// threshold, nothing is compacted. Kept separate from the LLM call so the "when and how
+    /// much" policy is unit-testable without a real chat provider.
+    /// </summary>
+    internal static (IReadOnlyList<AiMessage> ToCompact, IReadOnlyList<AiMessage> Remaining) SelectCompactionBatch(
+        IReadOnlyList<AiMessage> orderedMessages,
+        int threshold)
+    {
+        if (orderedMessages.Count < threshold)
+            return ([], orderedMessages);
+
+        var compactCount = orderedMessages.Count / 2;
+        return (orderedMessages.Take(compactCount).ToList(), orderedMessages.Skip(compactCount).ToList());
+    }
+
+    private static async Task<string> SummarizeAsync(
+        ChatClient chatClient,
+        string? existingSummary,
+        IReadOnlyList<AiMessage> messagesToCompact,
+        CancellationToken cancellationToken)
+    {
+        var transcript = string.Join(
+            "\n\n",
+            messagesToCompact.Select(m => $"{m.Role}: {m.Content}"));
+
+        var prompt = string.IsNullOrWhiteSpace(existingSummary)
+            ? $"Summarize the following conversation excerpt concisely, preserving key facts, decisions, and any content the user explicitly wants kept (e.g. draft text, titles, structure). This summary will replace these raw messages as context for the rest of the conversation.\n\n{transcript}"
+            : $"Here is the running summary of an earlier part of this conversation:\n{existingSummary}\n\nMerge it with the following additional messages into one updated, still-concise summary, preserving key facts, decisions, and any content the user explicitly wants kept:\n\n{transcript}";
+
+        var summaryMessages = new List<ChatMessage>
+        {
+            ChatMessage.CreateSystemMessage(
+                "You compress conversation history into a concise summary for context continuity. Be factual and terse."),
+            ChatMessage.CreateUserMessage(prompt)
+        };
+
+        return await CompleteChatTextAsync(chatClient, summaryMessages, cancellationToken);
+    }
+
     public async Task<BlogPost> ExportToDraftAsync(
         Guid conversationId,
         Guid authorId,
@@ -125,9 +194,16 @@ public class AiService(BlogItDbContext db, ISettingsService settings) : IAiServi
             .FirstOrDefaultAsync(c => c.Id == conversationId, cancellationToken)
             ?? throw new KeyNotFoundException("Conversation not found.");
 
-        var history = conversation.Messages
+        // Messages folded into conversation.Summary by history compaction stay in the DB (so the
+        // admin's chat UI still shows them) but are excluded here to avoid feeding the LLM the
+        // same content twice — once compacted, once raw.
+        IEnumerable<string> history = conversation.Messages
+            .Where(m => !m.IsCompacted)
             .OrderBy(m => m.CreatedAt)
             .Select(m => $"{m.Role}: {m.Content}");
+
+        if (!string.IsNullOrWhiteSpace(conversation.Summary))
+            history = [$"summary of earlier messages: {conversation.Summary}", .. history];
 
         var systemPrompt = """
             You are an expert blog writer. Based on the following brainstorm conversation,

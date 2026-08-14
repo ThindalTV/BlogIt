@@ -17,7 +17,7 @@
 @if (!string.IsNullOrWhiteSpace(Q))
 {
     <p class="search-results-count">
-        @results.Count result@(results.Count == 1 ? "" : "s") for "<strong>@Q</strong>"
+        Page @Page of @totalPages for "<strong>@Q</strong>"
     </p>
 
     @if (results.Count == 0)
@@ -60,21 +60,41 @@
                 }
             </article>
         }
+
+        <nav class="pagination" aria-label="Pagination">
+            @if (Page > 1)
+            {
+                <a href="/search?q=@Q&page=@(Page - 1)" class="pagination-prev">&larr; Newer</a>
+            }
+            <span class="pagination-info">Page @Page of @totalPages</span>
+            @if (Page < totalPages)
+            {
+                <a href="/search?q=@Q&page=@(Page + 1)" class="pagination-next">Older &rarr;</a>
+            }
+        </nav>
     }
 }
 
 @code {
     [SupplyParameterFromQuery(Name = "q")] public string? Q { get; set; }
+    [SupplyParameterFromQuery] public int Page { get; set; } = 1;
 
+    private const int PageSize = 10;
     private IReadOnlyList<BlogPostSummaryDto> results = [];
+    private int totalPages = 1;
     private string? siteUrl;
 
     protected override async Task OnInitializedAsync()
     {
+        if (Page < 1) Page = 1;
+
         siteUrl = await SettingsService.GetAsync(BlogIt.Shared.SettingKeys.SiteUrl) ?? "";
 
         if (string.IsNullOrWhiteSpace(Q)) return;
 
-        results = await ContentService.SearchPostsAsync(Q);
+        var resultPage = await ContentService.SearchPostsAsync(Q, Page, PageSize);
+        Page = resultPage.Page;
+        totalPages = resultPage.TotalPages;
+        results = resultPage.Posts;
     }
 }

@@ -1,0 +1,43 @@
+@* Standalone document (own <html>/<head>/<body>) rendered directly via HtmlRenderer for public
+   404 responses — NOT part of the app's <Router>. It must not depend on NavigationManager,
+   IHttpContextAccessor, or any other per-request-scoped Blazor service that assumes it's being
+   rendered through the normal RazorComponentEndpointInvoker pipeline; see
+   NotFoundResponseMiddleware for why. *@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <base href="/" />
+    <link rel="stylesheet" href="/css/public.css" />
+    <title>@Title — @SiteName</title>
+</head>
+<body>
+    <header class="site-header">
+        <div class="container">
+            <a class="site-title" href="/">@SiteName</a>
+            <nav class="site-nav">
+                <a href="/">Home</a>
+                <a href="/archive">Archive</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container">
+        <h1>404 — @Title</h1>
+        <p><a href="/">Go home</a></p>
+    </main>
+
+    <footer class="site-footer">
+        <div class="container">
+            <p>&copy; @Year @SiteName</p>
+        </div>
+    </footer>
+</body>
+</html>
+
+@code {
+    [Parameter] public string Title { get; set; } = "Not found";
+    [Parameter] public string SiteName { get; set; } = "BlogIt";
+    [Parameter] public int Year { get; set; }
+}

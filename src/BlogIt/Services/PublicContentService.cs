@@ -32,8 +32,10 @@ public interface IPublicContentService
         int pageSize,
         CancellationToken cancellationToken = default);
 
-    Task<IReadOnlyList<BlogPostSummaryDto>> SearchPostsAsync(
+    Task<PublicPostPage> SearchPostsAsync(
         string query,
+        int page,
+        int pageSize,
         CancellationToken cancellationToken = default);
 
     Task<PublicTagPostPage> GetPostsByTagAsync(
@@ -95,26 +97,75 @@ public sealed class PublicContentService(IDbContextFactory<BlogItDbContext> dbCo
         return new PublicPostPage(posts.Select(ToSummaryDto).ToList(), page, totalPages);
     }
 
-    public async Task<IReadOnlyList<BlogPostSummaryDto>> SearchPostsAsync(
+    public async Task<PublicPostPage> SearchPostsAsync(
         string query,
+        int page,
+        int pageSize,
         CancellationToken cancellationToken = default)
     {
+        page = Math.Max(1, page);
+        pageSize = Math.Max(1, pageSize);
+
         var searchTerm = query.Trim();
         if (searchTerm.Length == 0)
-            return [];
+            return new PublicPostPage([], 1, 1);
 
         await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
-        var posts = await PublishedPosts(db)
+        var query2 = PublishedPosts(db)
             .Where(post =>
                 post.Title.Contains(searchTerm)
                 || post.Summary.Contains(searchTerm)
-                || (post.Content != null && post.Content.Contains(searchTerm)))
+                || (post.Content != null && post.Content.Contains(searchTerm)));
+
+        var total = await query2.CountAsync(cancellationToken);
+        var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
+        page = Math.Min(page, totalPages);
+
+        // Projects explicitly (rather than loading full BlogPost entities) so the potentially
+        // large Content column never comes back over the wire — search results only ever show
+        // the summary, matching every other public listing's DTO shape.
+        var rows = await query2
             .OrderByDescending(post => post.PublishedAt)
-            .Include(post => post.Tags)
-            .Include(post => post.Author)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(post => new
+            {
+                post.Id,
+                post.Title,
+                post.Slug,
+                post.Summary,
+                HasContent = post.Content != null,
+                post.IsPublished,
+                post.PublishedAt,
+                post.CreatedAt,
+                post.UpdatedAt,
+                AuthorName = post.Author != null ? post.Author.DisplayName : string.Empty,
+                Tags = post.Tags.Select(tag => new TagDto(tag.Id, tag.Name, tag.Slug)).ToList(),
+                post.ScheduledPublishAt,
+                post.ScheduledUnpublishAt,
+                post.HasBeenPublished
+            })
             .AsNoTracking()
             .ToListAsync(cancellationToken);
-        return posts.Select(ToSummaryDto).ToList();
+
+        var posts = rows.Select(post => new BlogPostSummaryDto(
+            post.Id,
+            post.Title,
+            post.Slug,
+            post.Summary,
+            post.HasContent,
+            post.IsPublished,
+            post.PublishedAt,
+            post.CreatedAt,
+            post.UpdatedAt,
+            post.AuthorName,
+            post.Tags,
+            post.ScheduledPublishAt,
+            post.ScheduledUnpublishAt,
+            PublicationSchedule.GetState(post.IsPublished, post.ScheduledPublishAt, post.ScheduledUnpublishAt),
+            post.HasBeenPublished)).ToList();
+
+        return new PublicPostPage(posts, page, totalPages);
     }
 
     public async Task<PublicTagPostPage> GetPostsByTagAsync(

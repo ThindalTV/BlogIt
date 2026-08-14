@@ -125,7 +125,7 @@ public static class FeedService
         HttpRequest request,
         CancellationToken cancellationToken)
     {
-        var siteUrl = ResolveSiteUrl(
+        var siteUrl = SiteUrlResolver.Resolve(
             await settings.GetAsync(SettingKeys.SiteUrl),
             configuration[SettingKeys.SiteUrl],
             request);
@@ -182,31 +182,6 @@ public static class FeedService
             new Uri(new Uri(siteUrl), "/atom.xml").AbsoluteUri,
             items.Count == 0 ? DateTime.UnixEpoch : items.Max(item => item.UpdatedAt),
             items);
-    }
-
-    private static string ResolveSiteUrl(
-        string? siteSettingUrl,
-        string? configurationUrl,
-        HttpRequest request)
-    {
-        foreach (var candidate in new[] { siteSettingUrl, configurationUrl })
-        {
-            if (!string.IsNullOrWhiteSpace(candidate) &&
-                Uri.TryCreate(candidate.Trim(), UriKind.Absolute, out var configuredUri) &&
-                (configuredUri.Scheme == Uri.UriSchemeHttp || configuredUri.Scheme == Uri.UriSchemeHttps))
-            {
-                return configuredUri.GetLeftPart(UriPartial.Path).TrimEnd('/') + "/";
-            }
-        }
-
-        var origin = $"{request.Scheme}://{request.Host}{request.PathBase}/";
-        if (Uri.TryCreate(origin, UriKind.Absolute, out var requestUri) &&
-            (requestUri.Scheme == Uri.UriSchemeHttp || requestUri.Scheme == Uri.UriSchemeHttps))
-        {
-            return requestUri.AbsoluteUri;
-        }
-
-        throw new InvalidOperationException("A valid HTTP(S) site URL or request origin is required.");
     }
 
     private static void WriteAtomLink(XmlWriter writer, string href, string rel, string type)
