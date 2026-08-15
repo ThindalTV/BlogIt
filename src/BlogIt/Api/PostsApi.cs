@@ -84,6 +84,12 @@ public static class PostsApi
         if (string.IsNullOrWhiteSpace(req.Title))
             return TitleValidationProblem();
 
+        if (SeoMetadataValidator.Validate(req.SeoTitle, req.SeoDescription, req.SeoKeywords, req.OgImageUrl)
+            is { Count: > 0 } seoErrors)
+        {
+            return Results.ValidationProblem(seoErrors);
+        }
+
         var authorId = Guid.Parse(user.FindFirstValue("sub") ?? user.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
         var baseSlug = SlugHelper.Slugify(
@@ -131,6 +137,11 @@ public static class PostsApi
 
         if (post is null) return Results.NotFound();
 
+        // Before anything is mutated: refuse an edit built on a version of the post that has since
+        // been replaced, rather than overwriting the newer one.
+        if (ConcurrencyGuard.CheckStamp(post, req.ConcurrencyStamp) is IResult stale)
+            return stale;
+
         var requestedSlug = string.IsNullOrWhiteSpace(req.Slug)
             ? post.Slug
             : SlugHelper.Slugify(req.Slug);
@@ -150,6 +161,12 @@ public static class PostsApi
         if (string.IsNullOrWhiteSpace(req.Title))
             return TitleValidationProblem();
 
+        if (SeoMetadataValidator.Validate(req.SeoTitle, req.SeoDescription, req.SeoKeywords, req.OgImageUrl)
+            is { Count: > 0 } seoErrors)
+        {
+            return Results.ValidationProblem(seoErrors);
+        }
+
         post.Title = req.Title;
         post.Summary = req.Summary;
         post.Content = req.Content;
@@ -163,7 +180,8 @@ public static class PostsApi
         post.UpdatedAt = DateTime.UtcNow;
         post.Tags = await TagResolver.ResolveAsync(db, req.TagNames);
 
-        await db.SaveChangesAsync();
+        if (await db.TrySaveAsync() is IResult conflict)
+            return conflict;
         return Results.Ok(ToDetailDto(post));
     }
 
@@ -194,7 +212,8 @@ public static class PostsApi
         post.HasBeenPublished = true;
         post.ScheduledPublishAt = null;
         post.UpdatedAt = DateTime.UtcNow;
-        await db.SaveChangesAsync();
+        if (await db.TrySaveAsync() is IResult conflict)
+            return conflict;
         return Results.Ok(ToDetailDto(post));
     }
 
@@ -211,7 +230,8 @@ public static class PostsApi
         post.ScheduledPublishAt = null;
         post.ScheduledUnpublishAt = null;
         post.UpdatedAt = DateTime.UtcNow;
-        await db.SaveChangesAsync();
+        if (await db.TrySaveAsync() is IResult conflict)
+            return conflict;
         return Results.Ok(ToDetailDto(post));
     }
 
@@ -234,7 +254,8 @@ public static class PostsApi
         post.ScheduledUnpublishAt =
             post.IsPublished || req.ScheduledPublishAt.HasValue ? req.ScheduledUnpublishAt : null;
         post.UpdatedAt = DateTime.UtcNow;
-        await db.SaveChangesAsync();
+        if (await db.TrySaveAsync() is IResult conflict)
+            return conflict;
         return Results.Ok(ToDetailDto(post));
     }
 
@@ -258,7 +279,8 @@ public static class PostsApi
         p.Tags.Select(t => new TagDto(t.Id, t.Name, t.Slug)).ToList(),
         p.ScheduledPublishAt, p.ScheduledUnpublishAt,
         PublicationSchedule.GetState(p.IsPublished, p.ScheduledPublishAt, p.ScheduledUnpublishAt),
-        p.HasBeenPublished
+        p.HasBeenPublished,
+        p.ConcurrencyStamp
     );
 
     private static IResult ScheduleValidationProblem(string error) =>

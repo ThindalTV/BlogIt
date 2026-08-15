@@ -55,4 +55,39 @@ public class UsersApiTests(BlogItSampleFactory factory) : IClassFixture<BlogItSa
         // Should be forbidden — cannot delete own account
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
+
+    [Fact]
+    public async Task DeleteUser_WhoAuthoredAPost_ReturnsConflictExplainingWhatBlocksIt()
+    {
+        // BlogPost.AuthorId is DeleteBehavior.Restrict, so the database refuses this. Without a
+        // pre-check it surfaced as an unhandled DbUpdateException — a bare 500 that told the
+        // operator nothing about why, or what to do next.
+        var adminName = $"admin_del_{Guid.NewGuid():N}";
+        var authorName = $"author_del_{Guid.NewGuid():N}";
+        var adminId = await factory.SeedUserAsync(adminName);
+        var authorId = await factory.SeedUserAsync(authorName);
+        await factory.SeedPostAsync(authorId);
+
+        var client = factory.CreateClient().WithAuth(adminId, adminName);
+        var response = await client.DeleteAsync($"/api/users/{authorId}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        var body = await response.Content.ReadAsStringAsync();
+        body.Should().Contain("1 post");
+        body.Should().Contain("Reassign");
+    }
+
+    [Fact]
+    public async Task DeleteUser_WithNoContent_Succeeds()
+    {
+        var adminName = $"admin_ok_{Guid.NewGuid():N}";
+        var idleName = $"idle_{Guid.NewGuid():N}";
+        var adminId = await factory.SeedUserAsync(adminName);
+        var idleId = await factory.SeedUserAsync(idleName);
+
+        var client = factory.CreateClient().WithAuth(adminId, adminName);
+        var response = await client.DeleteAsync($"/api/users/{idleId}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+    }
 }

@@ -1,8 +1,11 @@
 namespace BlogIt.Shared.Entities;
 
-public class Page
+public class Page : IConcurrencyStamped, ISeoMetadata
 {
     public Guid Id { get; set; } = Guid.NewGuid();
+
+    /// <inheritdoc cref="IConcurrencyStamped.ConcurrencyStamp"/>
+    public Guid ConcurrencyStamp { get; set; } = Guid.NewGuid();
     public string Title { get; set; } = string.Empty;
 
     /// <summary>URL slug — becomes the absolute path e.g. /about</summary>

@@ -82,6 +82,26 @@ public static class UsersApi
         var entity = await db.Users.FindAsync(id);
         if (entity is null) return Results.NotFound();
 
+        // BlogPost.AuthorId, MediaFile.UploadedByUserId and AiConversation.CreatedByUserId are all
+        // DeleteBehavior.Restrict, so the database refuses this and EF throws. Checking first turns
+        // an unhandled DbUpdateException — a bare 500 — into a 409 that says what is in the way and
+        // what to do about it. The counts are deliberately in the message: "reassign their posts"
+        // is not actionable without knowing there are eleven of them.
+        var authoredPosts = await db.BlogPosts.CountAsync(post => post.AuthorId == id);
+        var uploadedMedia = await db.MediaFiles.CountAsync(media => media.UploadedByUserId == id);
+        var conversations = await db.AiConversations.CountAsync(item => item.CreatedByUserId == id);
+
+        if (authoredPosts + uploadedMedia + conversations > 0)
+        {
+            var owned = new List<string>();
+            if (authoredPosts > 0) owned.Add($"{authoredPosts} post{(authoredPosts == 1 ? "" : "s")}");
+            if (uploadedMedia > 0) owned.Add($"{uploadedMedia} media file{(uploadedMedia == 1 ? "" : "s")}");
+            if (conversations > 0) owned.Add($"{conversations} AI conversation{(conversations == 1 ? "" : "s")}");
+
+            return Results.Conflict(
+                $"This user still owns {string.Join(", ", owned)}. Reassign or delete that content first.");
+        }
+
         db.Users.Remove(entity);
         await db.SaveChangesAsync();
         return Results.NoContent();

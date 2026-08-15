@@ -136,6 +136,57 @@ or authorization middleware specifically for BlogIt.
 application begins serving requests and use a database identity with schema
 change permission during deployment.
 
+## The data model is part of the public API — on purpose
+
+`BlogItDbContext` and the entity types in `BlogIt.Shared.Entities` are public,
+with ordinary settable properties. This is deliberate, not an oversight.
+
+A host can supply its own database provider by registering a
+`IBlogItDatabaseProviderRegistration` that calls
+`AddDbContextFactory<BlogItDbContext>(...)` — which is exactly what
+`options.UseSqlServer(...)` does internally, and what the reference sample does
+for its in-memory testing provider. That extension point only works if the
+context and the model it maps are visible to the host, so both stay public.
+
+The trade-off that buys: the schema is part of this package's compatibility
+surface, and host code holding an entity can write to it directly, bypassing the
+rules the API layer enforces. Two consequences worth knowing:
+
+- **Treat the entities as read-mostly.** Go through the API or the services for
+  anything that has rules attached — slug generation and locking, publication
+  scheduling, password hashing, tag resolution. Setting `IsPublished = true`
+  without a `PublishedAt` produces a post no public query will return, because
+  "published" means both.
+- **A schema change is a breaking change.** Column widths in particular are load
+  bearing: `UrlRedirect.SourcePath` is capped at 450 characters
+  (`RedirectLimits.SourcePathLength`) because it carries a unique index and SQL
+  Server limits a nonclustered key to 1700 bytes. The SEO columns are capped by
+  `SeoLimits`, matched by server-side validation.
+
+If you want the blog's tables isolated from the rest of your schema, give BlogIt
+its own database or schema rather than reaching for the entities.
+
+## Editing content: concurrency tokens
+
+`BlogPostDetailDto` and `PageDto` carry a `ConcurrencyStamp`. `PUT /posts/{id}`
+and `PUT /pages/{id}` require it, and **fail closed**: an omitted or stale value
+is rejected with `409 Conflict` rather than overwriting whatever the record now
+contains.
+
+The flow is read, edit, send the stamp back:
+
+```csharp
+var post = await GetPostAsync(id);                 // carries ConcurrencyStamp
+var request = new UpdateBlogPostRequest(
+    title, summary, content, seoTitle, seoDescription, seoKeywords, ogImageUrl,
+    tagNames, scheduledPublishAt, scheduledUnpublishAt, slug,
+    post.ConcurrencyStamp);                        // <- prove it is current
+```
+
+Every mutating response returns the new stamp, so a client that keeps the latest
+one can save repeatedly without reloading. On a `409`, re-read the record and let
+the user decide what to keep — do not retry with the same stamp.
+
 ## Build a public site
 
 Inject `BlogIt.Services.IPublicContentService` into a Razor component, page,

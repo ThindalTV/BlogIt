@@ -1,8 +1,11 @@
 namespace BlogIt.Shared.Entities;
 
-public class BlogPost
+public class BlogPost : IConcurrencyStamped, ISeoMetadata
 {
     public Guid Id { get; set; } = Guid.NewGuid();
+
+    /// <inheritdoc cref="IConcurrencyStamped.ConcurrencyStamp"/>
+    public Guid ConcurrencyStamp { get; set; } = Guid.NewGuid();
     public string Title { get; set; } = string.Empty;
     public string Slug { get; set; } = string.Empty;
 

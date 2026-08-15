@@ -10,6 +10,11 @@ public partial class PostEditViewModel(MauiApiClient apiClient, SiteProfileServi
 {
     private Guid? _id;
 
+    // The concurrency token from the load this edit is based on. Sent back on update so the server
+    // can reject an edit that would overwrite someone else's newer save, and refreshed from every
+    // response that carries a newer one.
+    private Guid _concurrencyStamp;
+
     [ObservableProperty] private string pageTitle = "New Post";
     [ObservableProperty] private string title = string.Empty;
     [ObservableProperty] private string? slug;
@@ -59,6 +64,7 @@ public partial class PostEditViewModel(MauiApiClient apiClient, SiteProfileServi
 
             var post = result.Value!;
             _id = post.Id;
+            _concurrencyStamp = post.ConcurrencyStamp;
             PageTitle = "Edit Post";
             Title = post.Title;
             Slug = post.Slug;
@@ -130,6 +136,9 @@ public partial class PostEditViewModel(MauiApiClient apiClient, SiteProfileServi
     private void ApplyServerState(BlogPostDetailDto post)
     {
         _id = post.Id;
+        // Every mutating response carries the post's new token; picking it up here is what lets a
+        // user save twice in a row without a spurious conflict on the second save.
+        _concurrencyStamp = post.ConcurrencyStamp;
         Slug = post.Slug;
         SlugLocked = post.HasBeenPublished;
         IsPublished = post.IsPublished;
@@ -154,7 +163,7 @@ public partial class PostEditViewModel(MauiApiClient apiClient, SiteProfileServi
         }
         else
         {
-            var request = new UpdateBlogPostRequest(Title, Summary, Content, SeoTitle, SeoDescription, SeoKeywords, OgImageUrl, tags, publishAt, unpublishAt, Slug);
+            var request = new UpdateBlogPostRequest(Title, Summary, Content, SeoTitle, SeoDescription, SeoKeywords, OgImageUrl, tags, publishAt, unpublishAt, Slug, _concurrencyStamp);
             var result = await apiClient.UpdatePostAsync(_id.Value, request);
             if (!result.Success) { ErrorMessage = result.Error!.Message; return false; }
             ApplyServerState(result.Value!);

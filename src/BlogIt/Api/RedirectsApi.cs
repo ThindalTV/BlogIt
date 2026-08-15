@@ -1,3 +1,4 @@
+using BlogIt.Shared;
 using BlogIt.Shared.DTOs;
 using BlogIt.Services;
 
@@ -98,8 +99,10 @@ internal static class RedirectPathValidator
         targetUrl = target.Trim();
         error = string.Empty;
 
+        // Cap tied to RedirectLimits.SourcePathLength, which is set by SQL Server's index key limit
+        // rather than by anything about URLs — see that constant before changing this.
         if (sourcePath.Length == 0
-            || sourcePath.Length > 1000
+            || sourcePath.Length > RedirectLimits.SourcePathLength
             || sourcePath.StartsWith("//", StringComparison.Ordinal)
             || sourcePath.Any(char.IsWhiteSpace)
             || sourcePath.Contains('?')
@@ -131,7 +134,7 @@ internal static class RedirectPathValidator
             }
         }
 
-        if (targetUrl.Length > 2000)
+        if (targetUrl.Length > RedirectLimits.TargetUrlLength)
         {
             error = "The target URL cannot exceed 2,000 characters.";
             return false;

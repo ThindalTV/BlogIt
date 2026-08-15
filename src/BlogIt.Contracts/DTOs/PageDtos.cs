@@ -15,7 +15,13 @@ public record PageDto(
     DateTime? ScheduledPublishAt = null,
     DateTime? ScheduledUnpublishAt = null,
     PublicationScheduleState ScheduleState = PublicationScheduleState.Draft,
-    bool HasBeenPublished = false
+    bool HasBeenPublished = false,
+    /// <summary>
+    /// The page's optimistic-concurrency token as of this read. Send it back in
+    /// <see cref="UpdatePageRequest.ConcurrencyStamp"/>; the server rejects the update with
+    /// <c>409 Conflict</c> if the page has changed since.
+    /// </summary>
+    Guid ConcurrencyStamp = default
 );
 
 public record CreatePageRequest(
@@ -31,6 +37,10 @@ public record CreatePageRequest(
     DateTime? ScheduledUnpublishAt = null
 );
 
+/// <param name="ConcurrencyStamp">
+/// The <see cref="PageDto.ConcurrencyStamp"/> from the read this edit is based on. Required, and
+/// fails closed — see <see cref="UpdateBlogPostRequest.ConcurrencyStamp"/> for the reasoning.
+/// </param>
 public record UpdatePageRequest(
     string Title,
     string Slug,
@@ -41,5 +51,6 @@ public record UpdatePageRequest(
     string? OgImageUrl,
     bool IsPublished,
     DateTime? ScheduledPublishAt = null,
-    DateTime? ScheduledUnpublishAt = null
+    DateTime? ScheduledUnpublishAt = null,
+    Guid ConcurrencyStamp = default
 );

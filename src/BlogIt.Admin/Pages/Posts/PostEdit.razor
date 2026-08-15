@@ -262,9 +262,12 @@ else
             }
             else if (Id.HasValue)
             {
+                // The token from the load this edit is based on. The server rejects the update with
+                // a 409 if someone else saved the post in the meantime, rather than clobbering it.
                 var req = new UpdateBlogPostRequest(
                     title, summary, content, seoTitle, seoDescription, seoKeywords, ogImageUrl, tags,
-                    scheduledPublishAt, scheduledUnpublishAt, slug);
+                    scheduledPublishAt, scheduledUnpublishAt, slug,
+                    post?.ConcurrencyStamp ?? default);
                 await Api.UpdatePostAsync(Id.Value, req);
                 if (publish && post?.IsPublished != true)
                     await Api.PublishPostAsync(Id.Value);

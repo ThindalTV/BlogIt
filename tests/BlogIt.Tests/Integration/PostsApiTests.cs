@@ -97,7 +97,8 @@ public class PostsApiTests(BlogItSampleFactory factory) : IClassFixture<BlogItSa
             Summary: "A summary",
             Content: null,
             SeoTitle: null, SeoDescription: null, SeoKeywords: null, OgImageUrl: null,
-            TagNames: [], ScheduledPublishAt: null, ScheduledUnpublishAt: null, Slug: created!.Slug);
+            TagNames: [], ScheduledPublishAt: null, ScheduledUnpublishAt: null, Slug: created!.Slug,
+            ConcurrencyStamp: created.ConcurrencyStamp);
 
         var response = await client.PutAsJsonAsync($"/api/posts/{created.Id}", update);
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
@@ -308,12 +309,20 @@ public class PostsApiTests(BlogItSampleFactory factory) : IClassFixture<BlogItSa
         var post = await createdResponse.Content.ReadFromJsonAsync<BlogPostDetailDto>();
         var draftUpdate = new UpdateBlogPostRequest(
             post!.Title, post.Summary, post.Content, null, null, null, null, [],
-            Slug: "edited-draft-path");
+            Slug: "edited-draft-path",
+            ConcurrencyStamp: post.ConcurrencyStamp);
 
         var draftResponse = await client.PutAsJsonAsync($"/api/posts/{post.Id}", draftUpdate);
         await client.PostAsync($"/api/posts/{post.Id}/publish", null);
-        await client.PostAsync($"/api/posts/{post.Id}/unpublish", null);
-        var lockedUpdate = draftUpdate with { Slug = "forbidden-path" };
+        var afterUnpublish = await (await client.PostAsync($"/api/posts/{post.Id}/unpublish", null))
+            .Content.ReadFromJsonAsync<BlogPostDetailDto>();
+        // Publish and unpublish both move the token, so the locked-slug attempt has to carry the
+        // current one — otherwise it would be rejected as a conflict before the slug rule is reached.
+        var lockedUpdate = draftUpdate with
+        {
+            Slug = "forbidden-path",
+            ConcurrencyStamp = afterUnpublish!.ConcurrencyStamp
+        };
         var lockedResponse = await client.PutAsJsonAsync($"/api/posts/{post.Id}", lockedUpdate);
         var unchanged = await client.GetFromJsonAsync<BlogPostDetailDto>($"/api/posts/{post.Id}");
 

@@ -63,6 +63,12 @@ public static class PagesApi
         if (string.IsNullOrWhiteSpace(req.Title))
             return TitleValidationProblem();
 
+        if (SeoMetadataValidator.Validate(req.SeoTitle, req.SeoDescription, req.SeoKeywords, req.OgImageUrl)
+            is { Count: > 0 } seoErrors)
+        {
+            return Results.ValidationProblem(seoErrors);
+        }
+
         // Unlike PostsApi, this had no fallback to the title when Slug was left blank, and no
         // check that the result was non-empty — a page saved with a blank Slug field became
         // permanently unreachable (SlugHelper.Slugify("") is "", and there was nothing after
@@ -104,6 +110,11 @@ public static class PagesApi
         var page = await db.Pages.FindAsync(id);
         if (page is null) return Results.NotFound();
 
+        // Before anything is mutated: refuse an edit built on a version of the page that has since
+        // been replaced, rather than overwriting the newer one.
+        if (ConcurrencyGuard.CheckStamp(page, req.ConcurrencyStamp) is IResult stale)
+            return stale;
+
         var requestedSlug = string.IsNullOrWhiteSpace(req.Slug)
             ? page.Slug
             : SlugHelper.Slugify(req.Slug);
@@ -125,6 +136,12 @@ public static class PagesApi
         if (string.IsNullOrWhiteSpace(req.Title))
             return TitleValidationProblem();
 
+        if (SeoMetadataValidator.Validate(req.SeoTitle, req.SeoDescription, req.SeoKeywords, req.OgImageUrl)
+            is { Count: > 0 } seoErrors)
+        {
+            return Results.ValidationProblem(seoErrors);
+        }
+
         page.Title = req.Title;
         page.Content = req.Content;
         page.SeoTitle = req.SeoTitle;
@@ -138,7 +155,8 @@ public static class PagesApi
             req.IsPublished || req.ScheduledPublishAt.HasValue ? req.ScheduledUnpublishAt : null;
         page.UpdatedAt = DateTime.UtcNow;
 
-        await db.SaveChangesAsync();
+        if (await db.TrySaveAsync() is IResult conflict)
+            return conflict;
         return Results.Ok(ToDto(page));
     }
 
@@ -168,7 +186,8 @@ public static class PagesApi
         page.ScheduledUnpublishAt =
             page.IsPublished || req.ScheduledPublishAt.HasValue ? req.ScheduledUnpublishAt : null;
         page.UpdatedAt = DateTime.UtcNow;
-        await db.SaveChangesAsync();
+        if (await db.TrySaveAsync() is IResult conflict)
+            return conflict;
         return Results.Ok(ToDto(page));
     }
 
@@ -178,7 +197,8 @@ public static class PagesApi
         p.SeoTitle, p.SeoDescription, p.SeoKeywords, p.OgImageUrl,
         p.ScheduledPublishAt, p.ScheduledUnpublishAt,
         PublicationSchedule.GetState(p.IsPublished, p.ScheduledPublishAt, p.ScheduledUnpublishAt),
-        p.HasBeenPublished
+        p.HasBeenPublished,
+        p.ConcurrencyStamp
     );
 
     private static IResult ScheduleValidationProblem(string error) =>

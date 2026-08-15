@@ -84,7 +84,8 @@ public class PagesApiTests(BlogItSampleFactory factory) : IClassFixture<BlogItSa
             .Content.ReadFromJsonAsync<PageDto>();
 
         var update = new UpdatePageRequest(
-            created!.Title, "", created.Content, null, null, null, null, false);
+            created!.Title, "", created.Content, null, null, null, null, false,
+            ConcurrencyStamp: created.ConcurrencyStamp);
         var response = await client.PutAsJsonAsync($"/api/pages/{created.Id}", update);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -127,14 +128,23 @@ public class PagesApiTests(BlogItSampleFactory factory) : IClassFixture<BlogItSa
         var createdResponse = await client.PostAsJsonAsync("/api/pages", create);
         var page = await createdResponse.Content.ReadFromJsonAsync<PageDto>();
         var draftUpdate = new UpdatePageRequest(
-            page!.Title, "edited-draft-path", page.Content, null, null, null, null, false);
+            page!.Title, "edited-draft-path", page.Content, null, null, null, null, false,
+            ConcurrencyStamp: page.ConcurrencyStamp);
 
+        // Each save moves the token, so every step carries the one the previous response returned.
         var draftResponse = await client.PutAsJsonAsync($"/api/pages/{page.Id}", draftUpdate);
-        var publish = draftUpdate with { IsPublished = true };
-        await client.PutAsJsonAsync($"/api/pages/{page.Id}", publish);
-        var unpublish = publish with { IsPublished = false };
-        await client.PutAsJsonAsync($"/api/pages/{page.Id}", unpublish);
-        var lockedUpdate = unpublish with { Slug = "forbidden-path" };
+        var afterDraft = await draftResponse.Content.ReadFromJsonAsync<PageDto>();
+        var publish = draftUpdate with { IsPublished = true, ConcurrencyStamp = afterDraft!.ConcurrencyStamp };
+        var afterPublish = await (await client.PutAsJsonAsync($"/api/pages/{page.Id}", publish))
+            .Content.ReadFromJsonAsync<PageDto>();
+        var unpublish = publish with { IsPublished = false, ConcurrencyStamp = afterPublish!.ConcurrencyStamp };
+        var afterUnpublish = await (await client.PutAsJsonAsync($"/api/pages/{page.Id}", unpublish))
+            .Content.ReadFromJsonAsync<PageDto>();
+        var lockedUpdate = unpublish with
+        {
+            Slug = "forbidden-path",
+            ConcurrencyStamp = afterUnpublish!.ConcurrencyStamp
+        };
         var lockedResponse = await client.PutAsJsonAsync($"/api/pages/{page.Id}", lockedUpdate);
         var unchanged = await client.GetFromJsonAsync<PageDto>($"/api/pages/{page.Id}");
 

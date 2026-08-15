@@ -9,6 +9,9 @@ public partial class PageEditViewModel(MauiApiClient apiClient, SiteProfileServi
     : ObservableObject, IQueryAttributable
 {
     private Guid? _id;
+
+    // The concurrency token from the load this edit is based on — see PostEditViewModel.
+    private Guid _concurrencyStamp;
     private bool _wasPublishedOnLoad;
 
     [ObservableProperty] private string pageTitle = "New Page";
@@ -52,6 +55,7 @@ public partial class PageEditViewModel(MauiApiClient apiClient, SiteProfileServi
 
             var page = result.Value!;
             _id = page.Id;
+            _concurrencyStamp = page.ConcurrencyStamp;
             PageTitle = "Edit Page";
             Title = page.Title;
             Slug = page.Slug;
@@ -152,7 +156,7 @@ public partial class PageEditViewModel(MauiApiClient apiClient, SiteProfileServi
             }
             else
             {
-                var request = new UpdatePageRequest(Title, Slug, Content, SeoTitle, SeoDescription, SeoKeywords, OgImageUrl, IsPublished, publishAt, unpublishAt);
+                var request = new UpdatePageRequest(Title, Slug, Content, SeoTitle, SeoDescription, SeoKeywords, OgImageUrl, IsPublished, publishAt, unpublishAt, _concurrencyStamp);
                 var result = await apiClient.UpdatePageAsync(_id.Value, request);
                 if (!result.Success) { ErrorMessage = result.Error!.Message; return; }
                 ApplyServerState(result.Value!);
@@ -169,6 +173,7 @@ public partial class PageEditViewModel(MauiApiClient apiClient, SiteProfileServi
     private void ApplyServerState(PageDto page)
     {
         _id = page.Id;
+        _concurrencyStamp = page.ConcurrencyStamp;
         Slug = page.Slug;
         SlugLocked = page.HasBeenPublished;
         IsPublished = page.IsPublished;

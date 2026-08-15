@@ -201,9 +201,11 @@ else
             }
             else if (Id.HasValue)
             {
+                // See PostEdit.razor: the token proves this edit is based on the current version.
                 var req = new UpdatePageRequest(
                     title, slug, content, seoTitle, seoDescription, seoKeywords, ogImageUrl,
-                    isPublished, scheduledPublishAt, scheduledUnpublishAt);
+                    isPublished, scheduledPublishAt, scheduledUnpublishAt,
+                    page?.ConcurrencyStamp ?? default);
                 await Api.UpdatePageAsync(Id.Value, req);
                 successMsg = "Page saved.";
                 page = await Api.GetPageAsync(Id.Value);
