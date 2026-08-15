@@ -13,26 +13,42 @@ namespace BlogIt.Tests.Helpers;
 public static class TestHelpers
 {
     /// <summary>Creates a valid JWT for the given user, signed with the test secret.</summary>
-    public static string CreateToken(Guid userId, string username = "testuser")
+    /// <param name="securityStamp">
+    /// Defaults to the stamp <see cref="SeedUserAsync"/> writes, so a token minted here matches
+    /// the seeded row. Pass something else — or null, to omit the claim entirely — to build the
+    /// kind of token authentication must reject.
+    /// </param>
+    public static string CreateToken(
+        Guid userId,
+        string username = "testuser",
+        string? securityStamp = BlogItSampleFactory.DefaultTestSecurityStamp)
     {
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(BlogItSampleFactory.TestJwtSecret));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+        List<Claim> claims =
+        [
+            new Claim(JwtRegisteredClaimNames.Sub, userId.ToString()),
+            new Claim(JwtRegisteredClaimNames.UniqueName, username),
+            new Claim("displayName", "Test User"),
+        ];
+        if (securityStamp is not null)
+            claims.Add(new Claim(BlogItClaimTypes.SecurityStamp, securityStamp));
+
         var token = new JwtSecurityToken(
-            claims:
-            [
-                new Claim(JwtRegisteredClaimNames.Sub, userId.ToString()),
-                new Claim(JwtRegisteredClaimNames.UniqueName, username),
-                new Claim("displayName", "Test User"),
-            ],
+            claims: claims,
             expires: DateTime.UtcNow.AddHours(1),
             signingCredentials: creds);
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
     /// <summary>Adds a bearer token to the HttpClient for all requests.</summary>
-    public static HttpClient WithAuth(this HttpClient client, Guid userId, string username = "testuser")
+    public static HttpClient WithAuth(
+        this HttpClient client,
+        Guid userId,
+        string username = "testuser",
+        string? securityStamp = BlogItSampleFactory.DefaultTestSecurityStamp)
     {
-        var token = CreateToken(userId, username);
+        var token = CreateToken(userId, username, securityStamp);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         return client;
     }
@@ -47,7 +63,8 @@ public static class TestHelpers
         {
             Username = username,
             DisplayName = "Test User",
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword(password)
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(password),
+            SecurityStamp = BlogItSampleFactory.DefaultTestSecurityStamp
         };
         db.Users.Add(user);
         await db.SaveChangesAsync();

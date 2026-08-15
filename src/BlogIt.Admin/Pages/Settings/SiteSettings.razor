@@ -163,25 +163,22 @@ else
 
         try
         {
-            var settings = new Dictionary<string, string>
-            {
-                [SettingKeys.SiteName] = siteName,
-                [SettingKeys.SiteUrl] = siteUrl,
-                [SettingKeys.SiteDescription] = siteDescription,
-                [SettingKeys.DefaultOgImage] = defaultOgImage,
-                [SettingKeys.AiProvider] = aiProvider,
-                [SettingKeys.AiBaseUrl] = aiBaseUrl,
-                [SettingKeys.AiModel] = aiModel,
-                [SettingKeys.AiExportModel] = aiExportModel,
-                [SettingKeys.GoogleAnalyticsMeasurementId] = gaMeasurementId,
-                [SettingKeys.GoogleAnalyticsPropertyId] = gaPropertyId,
-                [SettingKeys.JwtExpiryMinutes] = jwtExpiryMinutes.ToString(),
-            };
-            // Only include sensitive fields if user typed something
-            if (!string.IsNullOrWhiteSpace(aiApiKey))
-                settings[SettingKeys.AiApiKey] = aiApiKey;
-            if (!string.IsNullOrWhiteSpace(gaCredentialsJson))
-                settings[SettingKeys.GoogleAnalyticsCredentialsJson] = gaCredentialsJson;
+            // Secrets stay null unless the user actually retyped one this session — null means
+            // "leave unchanged", so a blank field can never blank out a stored credential.
+            var settings = new SiteSettingsUpdateRequest(
+                SiteName: siteName,
+                SiteUrl: siteUrl,
+                SiteDescription: siteDescription,
+                DefaultOgImage: defaultOgImage,
+                AiProvider: aiProvider,
+                AiBaseUrl: aiBaseUrl,
+                AiModel: aiModel,
+                AiExportModel: aiExportModel,
+                AiApiKey: string.IsNullOrWhiteSpace(aiApiKey) ? null : aiApiKey,
+                GoogleAnalyticsMeasurementId: gaMeasurementId,
+                GoogleAnalyticsPropertyId: gaPropertyId,
+                GoogleAnalyticsCredentialsJson: string.IsNullOrWhiteSpace(gaCredentialsJson) ? null : gaCredentialsJson,
+                JwtExpiryMinutes: jwtExpiryMinutes);
 
             await Api.UpdateSettingsAsync(settings);
             successMsg = "Settings saved.";

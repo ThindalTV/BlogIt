@@ -1,7 +1,9 @@
+using BlogIt.MauiAdmin.Messages;
 using BlogIt.MauiAdmin.Services;
 using BlogIt.Shared.DTOs;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
 
 namespace BlogIt.MauiAdmin.ViewModels.Account;
 
@@ -57,7 +59,17 @@ public partial class AccountViewModel(MauiApiClient apiClient, SiteProfileServic
             CurrentPassword = string.Empty;
             NewPassword = string.Empty;
             ConfirmPassword = string.Empty;
-            StatusMessage = "Password changed.";
+            StatusMessage = "Password changed. Sign in again with your new password.";
+
+            // The server moved this account's security stamp, so the token in hand is already
+            // dead. ActiveSiteHttpMessageHandler would catch the 401 on the next request anyway;
+            // clearing here means the user isn't shown a working-looking screen until then.
+            var profile = await profileService.GetActiveProfileAsync();
+            if (profile is not null)
+            {
+                await profileService.ClearTokenAsync(profile.Id);
+                WeakReferenceMessenger.Default.Send(new SiteAuthExpiredMessage(profile.Id));
+            }
         }
         finally
         {

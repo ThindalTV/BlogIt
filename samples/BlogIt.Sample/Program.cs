@@ -90,26 +90,6 @@ app.UseAntiforgery();
 
 app.MapBlogIt();
 
-// TEMPORARY manual-testing scaffolding — lets the setup wizard be re-tested against the dev
-// database without touching `master` (CREATE/DROP DATABASE against this SQL Server is blocked by
-// an environment login trigger). Deletes all app data via the app's own already-open EF Core
-// connection instead of a new ad-hoc one. Remove this endpoint once manual testing is complete.
-app.MapPost("/__reset-for-manual-testing", async (BlogIt.Shared.Data.BlogItDbContext db) =>
-{
-    db.AiMessages.RemoveRange(db.AiMessages);
-    db.AiConversations.RemoveRange(db.AiConversations);
-    db.UrlRedirects.RemoveRange(db.UrlRedirects);
-    db.MediaFiles.RemoveRange(db.MediaFiles);
-    db.BlogPosts.RemoveRange(db.BlogPosts);
-    db.Tags.RemoveRange(db.Tags);
-    db.Pages.RemoveRange(db.Pages);
-    db.SiteSettings.RemoveRange(db.SiteSettings);
-    db.Users.RemoveRange(db.Users);
-    db.SetupLocks.RemoveRange(db.SetupLocks);
-    await db.SaveChangesAsync();
-    return Results.Ok(new { message = "Database reset." });
-}).AllowAnonymous();
-
 app.MapRazorComponents<BlogIt.Sample.Components.App>();
 
 app.MapDefaultEndpoints();

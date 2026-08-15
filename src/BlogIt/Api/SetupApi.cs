@@ -71,7 +71,7 @@ public static class SetupApi
                 [SettingKeys.SiteDescription] = request.SiteDescription,
                 [SettingKeys.AiProvider] = request.AiProvider,
                 [SettingKeys.AiApiKey] = request.AiApiKey,
-                [SettingKeys.JwtSecret] = Guid.NewGuid().ToString("N") + Guid.NewGuid().ToString("N"),
+                [SettingKeys.JwtSecret] = JwtSecretGenerator.Generate(),
                 [SettingKeys.JwtExpiryMinutes] = "1440",
                 [SettingKeys.SetupComplete] = "true"
             };

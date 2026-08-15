@@ -147,8 +147,24 @@ controller, or endpoint. It exposes:
 | `GetPostsAsync(page, pageSize)` | Paginated published archive |
 | `SearchPostsAsync(query)` | Published posts matching title, summary, or content |
 | `GetPostsByTagAsync(slug, page, pageSize)` | Paginated posts for a tag |
-| `GetPostAsync(slug, includeNavigation)` | One post and optional adjacent posts |
-| `GetPageAsync(slug)` | One custom page |
+| `GetPostAsync(slug, includeNavigation)` | One published post and optional adjacent posts |
+| `GetPageAsync(slug)` | One published custom page |
+
+Every method is published-only. "Published" means `IsPublished` is set *and*
+`PublishedAt` has a value, so a post scheduled for a future date is excluded
+too. Drafts return `null` rather than the content.
+
+The single exception is the `includeUnpublished` parameter on `GetPostAsync`
+and `GetPageAsync`, which defaults to `false`. Pass `true` only on a path that
+has already authorized a draft preview through `IPreviewTokenService` — the
+sample's post page does this for `?preview=<token>` and nowhere else:
+
+```csharp
+var content = await Content.GetPostAsync(
+    slug,
+    includeNavigation: !preview.HasValue,
+    includeUnpublished: preview.HasValue);
+```
 
 For example, a host-owned archive component can read posts directly:
 

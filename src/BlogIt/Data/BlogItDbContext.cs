@@ -27,6 +27,7 @@ public class BlogItDbContext(DbContextOptions<BlogItDbContext> options) : DbCont
             e.Property(u => u.Username).HasMaxLength(100).IsRequired();
             e.Property(u => u.DisplayName).HasMaxLength(200).IsRequired();
             e.Property(u => u.PasswordHash).IsRequired();
+            e.Property(u => u.SecurityStamp).HasMaxLength(64).IsRequired();
         });
 
         modelBuilder.Entity<BlogPost>(e =>

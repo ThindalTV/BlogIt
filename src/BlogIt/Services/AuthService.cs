@@ -30,7 +30,13 @@ public class AuthService(BlogItDbContext db, ISettingsService settings) : IAuthS
         var expiry = int.TryParse(expiryStr, out var m) ? m : 60;
 
         var expiresAt = DateTime.UtcNow.AddMinutes(expiry);
-        var token = GenerateToken(user.Id, user.Username, user.DisplayName, secret, expiry);
+        var token = GenerateToken(
+            user.Id,
+            user.Username,
+            user.DisplayName,
+            user.SecurityStamp,
+            secret,
+            expiry);
         return new LoginResponse(token, user.Username, user.DisplayName, expiresAt);
     }
 
@@ -41,11 +47,22 @@ public class AuthService(BlogItDbContext db, ISettingsService settings) : IAuthS
             return false;
 
         user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
+        // Moving the stamp is what makes the change take effect now rather than whenever the
+        // existing tokens happen to expire: every one of them carries the old value and stops
+        // validating on the next request. Includes the session doing the change, which is why
+        // clients re-authenticate after a successful password change.
+        user.SecurityStamp = Guid.NewGuid().ToString("N");
         await db.SaveChangesAsync();
         return true;
     }
 
-    public string GenerateToken(Guid userId, string username, string displayName, string secret, int expiryMinutes)
+    public string GenerateToken(
+        Guid userId,
+        string username,
+        string displayName,
+        string securityStamp,
+        string secret,
+        int expiryMinutes)
     {
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
@@ -55,6 +72,7 @@ public class AuthService(BlogItDbContext db, ISettingsService settings) : IAuthS
             new Claim(JwtRegisteredClaimNames.Sub, userId.ToString()),
             new Claim(JwtRegisteredClaimNames.UniqueName, username),
             new Claim("displayName", displayName),
+            new Claim(BlogItClaimTypes.SecurityStamp, securityStamp),
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
         };
 

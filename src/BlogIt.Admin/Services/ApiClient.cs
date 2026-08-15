@@ -321,10 +321,21 @@ public class ApiClient(HttpClient http, LocalStorageService localStorage)
         return await http.GetFromJsonAsync<Dictionary<string, string>>("settings");
     }
 
-    public async Task UpdateSettingsAsync(Dictionary<string, string> settings)
+    public async Task UpdateSettingsAsync(SiteSettingsUpdateRequest settings)
     {
         await PrepareAuthAsync();
         var resp = await http.PutAsJsonAsync("settings", settings);
+        await EnsureSuccessAsync(resp);
+    }
+
+    /// <summary>
+    /// Replaces the JWT signing secret server-side. Invalidates every existing token including
+    /// this client's own, so the caller must send the user back to the login screen.
+    /// </summary>
+    public async Task RotateJwtSecretAsync()
+    {
+        await PrepareAuthAsync();
+        var resp = await http.PostAsync("settings/jwt-secret/rotate", null);
         await EnsureSuccessAsync(resp);
     }
 

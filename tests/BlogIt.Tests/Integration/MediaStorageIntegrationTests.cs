@@ -53,7 +53,10 @@ public sealed class MediaStorageIntegrationTests
                     Id = userId,
                     Username = "media-user",
                     DisplayName = "Media User",
-                    PasswordHash = "unused"
+                    PasswordHash = "unused",
+                    // Must match the stamp WithAuth signs into the token, or authentication
+                    // rejects it as revoked.
+                    SecurityStamp = BlogItSampleFactory.DefaultTestSecurityStamp
                 });
                 db.SiteSettings.Add(new SiteSetting
                 {

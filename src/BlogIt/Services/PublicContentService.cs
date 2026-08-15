@@ -21,36 +21,73 @@ public record PublicPostContent(
     BlogPostSummaryDto? PreviousPost,
     BlogPostSummaryDto? NextPost);
 
+/// <summary>
+/// Read-only content queries for rendering the public site from a host application.
+/// </summary>
+/// <remarks>
+/// Every method on this interface is published-only unless you explicitly opt out. "Published"
+/// means <c>IsPublished</c> is set <em>and</em> <c>PublishedAt</c> has a value, which is also what
+/// excludes a post that is scheduled but not yet live. The only opt-out is
+/// <c>includeUnpublished</c> on <see cref="GetPostAsync"/> and <see cref="GetPageAsync"/>; pass it
+/// only from a path that has already authorized a draft preview through
+/// <c>IPreviewTokenService</c>.
+/// </remarks>
 public interface IPublicContentService
 {
+    /// <summary>The most recent published posts, newest first.</summary>
     Task<IReadOnlyList<BlogPostSummaryDto>> GetRecentPostsAsync(
         int count,
         CancellationToken cancellationToken = default);
 
+    /// <summary>One page of published posts, newest first. <paramref name="page"/> is 1-based and
+    /// clamped into range.</summary>
     Task<PublicPostPage> GetPostsAsync(
         int page,
         int pageSize,
         CancellationToken cancellationToken = default);
 
+    /// <summary>Published posts whose title, summary or body contains
+    /// <paramref name="query"/>. Returns an empty page for a blank query.</summary>
     Task<PublicPostPage> SearchPostsAsync(
         string query,
         int page,
         int pageSize,
         CancellationToken cancellationToken = default);
 
+    /// <summary>Published posts carrying the given tag, newest first. <c>TagName</c> is null when
+    /// no such tag exists.</summary>
     Task<PublicTagPostPage> GetPostsByTagAsync(
         string tagSlug,
         int page,
         int pageSize,
         CancellationToken cancellationToken = default);
 
+    /// <summary>One post by slug, with the adjacent published posts when
+    /// <paramref name="includeNavigation"/> is set.</summary>
+    /// <param name="includeUnpublished">
+    /// Leave at the default (<c>false</c>) for anything a visitor can reach: a draft, or a post
+    /// scheduled for later, then returns <c>null</c> rather than the post. Pass <c>true</c> only
+    /// after authorizing a preview token — a host that renders whatever this returns will
+    /// otherwise publish unpublished work the moment someone guesses a slug.
+    /// </param>
+    /// <returns>Null when no post matches, or when it matches but is not published and
+    /// <paramref name="includeUnpublished"/> is false.</returns>
     Task<PublicPostContent?> GetPostAsync(
         string slug,
         bool includeNavigation,
+        bool includeUnpublished = false,
         CancellationToken cancellationToken = default);
 
+    /// <summary>One custom page by slug.</summary>
+    /// <param name="includeUnpublished">
+    /// Same contract as <see cref="GetPostAsync"/>: default <c>false</c> hides unpublished pages,
+    /// and <c>true</c> belongs only on an already-authorized preview path.
+    /// </param>
+    /// <returns>Null when no page matches, or when it matches but is not published and
+    /// <paramref name="includeUnpublished"/> is false.</returns>
     Task<PageDto?> GetPageAsync(
         string slug,
+        bool includeUnpublished = false,
         CancellationToken cancellationToken = default);
 }
 
@@ -210,10 +247,11 @@ public sealed class PublicContentService(IDbContextFactory<BlogItDbContext> dbCo
     public async Task<PublicPostContent?> GetPostAsync(
         string slug,
         bool includeNavigation,
+        bool includeUnpublished = false,
         CancellationToken cancellationToken = default)
     {
         await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
-        var post = await db.BlogPosts
+        var post = await (includeUnpublished ? db.BlogPosts : PublishedPosts(db))
             .Where(item => item.Slug == slug)
             .Include(item => item.Tags)
             .Include(item => item.Author)
@@ -246,10 +284,11 @@ public sealed class PublicContentService(IDbContextFactory<BlogItDbContext> dbCo
 
     public async Task<PageDto?> GetPageAsync(
         string slug,
+        bool includeUnpublished = false,
         CancellationToken cancellationToken = default)
     {
         await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
-        var page = await db.Pages
+        var page = await (includeUnpublished ? db.Pages : db.Pages.Where(item => item.IsPublished))
             .AsNoTracking()
             .FirstOrDefaultAsync(item => item.Slug == slug, cancellationToken);
         return page is null ? null : ToPageDto(page);

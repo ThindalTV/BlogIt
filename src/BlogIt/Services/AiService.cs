@@ -98,11 +98,7 @@ public class AiService(BlogItDbContext db, ISettingsService settings) : IAiServi
 
         var (chatClient, _) = await BuildClientsAsync();
 
-        IReadOnlyList<AiMessage> orderedMessages = conversation.Messages
-            .Where(m => !m.IsCompacted)
-            .Append(userMessage)
-            .OrderBy(m => m.CreatedAt)
-            .ToList();
+        IReadOnlyList<AiMessage> orderedMessages = SelectHistoryForRequest(conversation);
 
         var (toCompact, remaining) = SelectCompactionBatch(orderedMessages, HistoryCompactionThreshold);
         if (toCompact.Count > 0)
@@ -113,16 +109,7 @@ public class AiService(BlogItDbContext db, ISettingsService settings) : IAiServi
             orderedMessages = remaining;
         }
 
-        var allMessages = new List<ChatMessage>();
-        if (!string.IsNullOrWhiteSpace(conversation.Summary))
-        {
-            allMessages.Add(ChatMessage.CreateSystemMessage(
-                $"Summary of earlier messages in this conversation (already removed from history):\n{conversation.Summary}"));
-        }
-        allMessages.AddRange(orderedMessages.Select<AiMessage, ChatMessage>(m =>
-            m.Role == "user"
-                ? ChatMessage.CreateUserMessage(m.Content)
-                : ChatMessage.CreateAssistantMessage(m.Content)));
+        var allMessages = BuildRequestMessages(conversation.Summary, orderedMessages);
 
         var assistantContent = await CompleteChatTextAsync(chatClient, allMessages, cancellationToken);
 
@@ -139,6 +126,45 @@ public class AiService(BlogItDbContext db, ISettingsService settings) : IAiServi
         // Reload for accurate mapping
         await db.Entry(conversation).Collection(c => c.Messages).LoadAsync(cancellationToken);
         return MapConversation(conversation);
+    }
+
+    /// <summary>
+    /// The non-compacted history, oldest first, that goes to the model for one chat turn.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately does <em>not</em> append the just-added user message: callers load
+    /// <paramref name="conversation"/> tracked with <c>Include(c =&gt; c.Messages)</c>, so EF
+    /// relationship fixup has already placed that message into the collection by the time this
+    /// runs. Appending it as well sent every user turn to the provider twice — doubling the token
+    /// bill — and left the list one long, firing <see cref="SelectCompactionBatch"/> a message
+    /// early. Pinned by <c>AiRequestMessageTests</c>, which reproduces the fixup against a real
+    /// <see cref="BlogItDbContext"/>.
+    /// </remarks>
+    internal static IReadOnlyList<AiMessage> SelectHistoryForRequest(AiConversation conversation) =>
+        conversation.Messages
+            .Where(m => !m.IsCompacted)
+            .OrderBy(m => m.CreatedAt)
+            .ToList();
+
+    /// <summary>
+    /// Assembles the exact outbound request: the running summary as a leading system message when
+    /// there is one, then the ordered history mapped to user/assistant turns.
+    /// </summary>
+    internal static List<ChatMessage> BuildRequestMessages(
+        string? summary,
+        IReadOnlyList<AiMessage> orderedMessages)
+    {
+        var allMessages = new List<ChatMessage>();
+        if (!string.IsNullOrWhiteSpace(summary))
+        {
+            allMessages.Add(ChatMessage.CreateSystemMessage(
+                $"Summary of earlier messages in this conversation (already removed from history):\n{summary}"));
+        }
+        allMessages.AddRange(orderedMessages.Select<AiMessage, ChatMessage>(m =>
+            m.Role == "user"
+                ? ChatMessage.CreateUserMessage(m.Content)
+                : ChatMessage.CreateAssistantMessage(m.Content)));
+        return allMessages;
     }
 
     /// <summary>

@@ -158,7 +158,7 @@ public class MauiApiClient(IHttpClientFactory httpClientFactory, SiteProfileServ
     // ── Settings ────────────────────────────────────────────────────────
     public Task<ApiResult<Dictionary<string, string>>> GetSettingsAsync() => GetAsync<Dictionary<string, string>>("settings");
 
-    public Task<ApiResult> UpdateSettingsAsync(Dictionary<string, string> settings) => PutAsync("settings", settings);
+    public Task<ApiResult> UpdateSettingsAsync(SiteSettingsUpdateRequest settings) => PutAsync("settings", settings);
 
     public Task<ApiResult<AiProviderInfoDto>> GetAiProviderInfoAsync() => GetAsync<AiProviderInfoDto>("settings/ai-provider");
 

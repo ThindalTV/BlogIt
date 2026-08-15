@@ -122,7 +122,13 @@ public class AuthServiceTests
     {
         var (db, settings) = CreateSubject();
         var service = new AuthService(db, settings);
-        var token = service.GenerateToken(Guid.NewGuid(), "user", "User", "a-secret-that-is-long-enough-for-hs256!!", 60);
+        var token = service.GenerateToken(
+            Guid.NewGuid(),
+            "user",
+            "User",
+            "a-security-stamp",
+            "a-secret-that-is-long-enough-for-hs256!!",
+            60);
         token.Should().NotBeEmpty();
         token.Split('.').Should().HaveCount(3); // JWT = header.payload.signature
     }

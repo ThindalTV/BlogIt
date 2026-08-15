@@ -104,9 +104,13 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // includeUnpublished is opt-in and scoped to the preview path only: a ?preview=<token>
+        // request needs the draft in hand to authorize the token against its id below, and every
+        // other request must not see it at all.
         var content = await ContentService.GetPostAsync(
             Slug,
-            includeNavigation: !Preview.HasValue);
+            includeNavigation: !Preview.HasValue,
+            includeUnpublished: Preview.HasValue);
         post = content?.Post;
         prevPost = content?.PreviousPost;
         nextPost = content?.NextPost;

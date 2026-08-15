@@ -49,7 +49,9 @@
 
     protected override async Task OnInitializedAsync()
     {
-        customPage = await ContentService.GetPageAsync(Slug);
+        // Opt into unpublished pages only for ?preview=<token>, which needs the draft to
+        // authorize the token against its id below. See IPublicContentService's remarks.
+        customPage = await ContentService.GetPageAsync(Slug, includeUnpublished: Preview.HasValue);
 
         if (customPage is null)
         {

@@ -68,38 +68,122 @@ public class PublicContentServiceTests
     }
 
     [Fact]
-    public async Task ContentQueries_ReturnDraftsForPreviewAuthorizationAndNavigationForPublishedPosts()
+    public async Task GetPostAsync_ReturnsPublishedPostWithNavigation()
     {
         var (service, factory) = CreateService();
-        await using (var db = await factory.CreateDbContextAsync())
-        {
-            var author = CreateAuthor();
-            db.BlogPosts.AddRange(
-                CreatePost(author, "Older", "older", new DateTime(2025, 1, 1)),
-                CreatePost(author, "Current", "current", new DateTime(2025, 2, 1)),
-                CreatePost(author, "Newer", "newer", new DateTime(2025, 3, 1)),
-                CreatePost(author, "Draft", "draft", null));
-            db.Pages.Add(new Page
+        await SeedContentAsync(factory);
+
+        var published = await service.GetPostAsync("current", includeNavigation: true);
+
+        published.Should().NotBeNull();
+        published!.PreviousPost!.Slug.Should().Be("older");
+        published.NextPost!.Slug.Should().Be("newer");
+    }
+
+    [Fact]
+    public async Task GetPostAsync_HidesDraftsByDefault()
+    {
+        // The default has to be safe on its own: a host that renders whatever comes back — which
+        // is the obvious way to write a post page — must not publish a draft to anyone who
+        // guesses the slug. Opting in is the caller's explicit decision, not the caller's job to
+        // remember.
+        var (service, factory) = CreateService();
+        await SeedContentAsync(factory);
+
+        var draft = await service.GetPostAsync("draft", includeNavigation: false);
+
+        draft.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetPostAsync_HidesPostsScheduledButNotYetLiveByDefault()
+    {
+        var (service, factory) = CreateService();
+        await SeedContentAsync(factory);
+
+        var scheduled = await service.GetPostAsync("scheduled", includeNavigation: false);
+
+        scheduled.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetPostAsync_ReturnsDraftWhenUnpublishedIsExplicitlyRequested()
+    {
+        // The preview path needs the draft in hand to authorize a token against its id.
+        var (service, factory) = CreateService();
+        await SeedContentAsync(factory);
+
+        var draft = await service.GetPostAsync("draft", includeNavigation: false, includeUnpublished: true);
+
+        draft.Should().NotBeNull();
+        draft!.Post.IsPublished.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task GetPageAsync_HidesUnpublishedPagesByDefault()
+    {
+        var (service, factory) = CreateService();
+        await SeedContentAsync(factory);
+
+        var page = await service.GetPageAsync("draft-page");
+
+        page.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetPageAsync_ReturnsUnpublishedPageWhenExplicitlyRequested()
+    {
+        var (service, factory) = CreateService();
+        await SeedContentAsync(factory);
+
+        var page = await service.GetPageAsync("draft-page", includeUnpublished: true);
+
+        page.Should().NotBeNull();
+        page!.IsPublished.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task GetPageAsync_ReturnsPublishedPage()
+    {
+        var (service, factory) = CreateService();
+        await SeedContentAsync(factory);
+
+        var page = await service.GetPageAsync("live-page");
+
+        page.Should().NotBeNull();
+        page!.IsPublished.Should().BeTrue();
+    }
+
+    private static async Task SeedContentAsync(TestDbContextFactory factory)
+    {
+        await using var db = await factory.CreateDbContextAsync();
+        var author = CreateAuthor();
+        var scheduled = CreatePost(author, "Scheduled", "scheduled", null);
+        scheduled.ScheduledPublishAt = new DateTime(2030, 1, 1);
+
+        db.BlogPosts.AddRange(
+            CreatePost(author, "Older", "older", new DateTime(2025, 1, 1)),
+            CreatePost(author, "Current", "current", new DateTime(2025, 2, 1)),
+            CreatePost(author, "Newer", "newer", new DateTime(2025, 3, 1)),
+            CreatePost(author, "Draft", "draft", null),
+            scheduled);
+        db.Pages.AddRange(
+            new Page
             {
                 Title = "Draft page",
                 Slug = "draft-page",
                 Content = "Private",
                 IsPublished = false
+            },
+            new Page
+            {
+                Title = "Live page",
+                Slug = "live-page",
+                Content = "Public",
+                IsPublished = true,
+                HasBeenPublished = true
             });
-            await db.SaveChangesAsync();
-        }
-
-        var published = await service.GetPostAsync("current", includeNavigation: true);
-        var draft = await service.GetPostAsync("draft", includeNavigation: false);
-        var page = await service.GetPageAsync("draft-page");
-
-        published.Should().NotBeNull();
-        published!.PreviousPost!.Slug.Should().Be("older");
-        published.NextPost!.Slug.Should().Be("newer");
-        draft.Should().NotBeNull();
-        draft!.Post.IsPublished.Should().BeFalse();
-        page.Should().NotBeNull();
-        page!.IsPublished.Should().BeFalse();
+        await db.SaveChangesAsync();
     }
 
     private static (PublicContentService Service, TestDbContextFactory Factory) CreateService()

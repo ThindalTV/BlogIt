@@ -58,7 +58,8 @@ public class SqlServerProviderTests
             "20260805232419_InitialCreate",
             "20260814204048_AddSetupLock",
             "20260814205906_AddAiConversationSummary",
-            "20260814220335_AddAiMessageIsCompacted");
+            "20260814220335_AddAiMessageIsCompacted",
+            "20260815221704_AddAppUserSecurityStamp");
     }
 
     private static ServiceProvider CreateServices(

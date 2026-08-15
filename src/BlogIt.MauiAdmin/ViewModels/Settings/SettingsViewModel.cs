@@ -1,5 +1,6 @@
 using BlogIt.MauiAdmin.Services;
 using BlogIt.Shared;
+using BlogIt.Shared.DTOs;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -83,8 +84,8 @@ public partial class SettingsViewModel(MauiApiClient apiClient) : ObservableObje
         ErrorMessage = null;
         StatusMessage = null;
 
-        // Server performs no validation on this at all — clamp client-side to match
-        // the same bounds the reference admin's UI enforces.
+        // The server validates this too now, and rejects out-of-range values rather than
+        // storing them; clamping here keeps the local field consistent with what it will accept.
         if (!int.TryParse(JwtExpiryMinutesText, out var jwtMinutes))
         {
             ErrorMessage = "JWT expiry must be a whole number of minutes.";
@@ -93,27 +94,22 @@ public partial class SettingsViewModel(MauiApiClient apiClient) : ObservableObje
         jwtMinutes = Math.Clamp(jwtMinutes, MinJwtExpiryMinutes, MaxJwtExpiryMinutes);
         JwtExpiryMinutesText = jwtMinutes.ToString();
 
-        var toSave = new Dictionary<string, string>
-        {
-            [SettingKeys.SiteName] = SiteName,
-            [SettingKeys.SiteUrl] = SiteUrl,
-            [SettingKeys.SiteDescription] = SiteDescription,
-            [SettingKeys.DefaultOgImage] = DefaultOgImage,
-            [SettingKeys.AiProvider] = AiProvider,
-            [SettingKeys.AiBaseUrl] = AiBaseUrl,
-            [SettingKeys.AiModel] = AiModel,
-            [SettingKeys.AiExportModel] = AiExportModel,
-            [SettingKeys.GoogleAnalyticsMeasurementId] = GaMeasurementId,
-            [SettingKeys.GoogleAnalyticsPropertyId] = GaPropertyId,
-            [SettingKeys.JwtExpiryMinutes] = JwtExpiryMinutesText,
-        };
-
-        // Never round-trip a redacted "***" value back to the server — only
-        // include these secrets if the user actually typed something this session.
-        if (!string.IsNullOrWhiteSpace(AiApiKey))
-            toSave[SettingKeys.AiApiKey] = AiApiKey;
-        if (!string.IsNullOrWhiteSpace(GaCredentialsJson))
-            toSave[SettingKeys.GoogleAnalyticsCredentialsJson] = GaCredentialsJson;
+        // Secrets stay null unless retyped this session — null means "leave unchanged", so
+        // neither a blank field nor a redacted "***" can overwrite a stored credential.
+        var toSave = new SiteSettingsUpdateRequest(
+            SiteName: SiteName,
+            SiteUrl: SiteUrl,
+            SiteDescription: SiteDescription,
+            DefaultOgImage: DefaultOgImage,
+            AiProvider: AiProvider,
+            AiBaseUrl: AiBaseUrl,
+            AiModel: AiModel,
+            AiExportModel: AiExportModel,
+            AiApiKey: string.IsNullOrWhiteSpace(AiApiKey) ? null : AiApiKey,
+            GoogleAnalyticsMeasurementId: GaMeasurementId,
+            GoogleAnalyticsPropertyId: GaPropertyId,
+            GoogleAnalyticsCredentialsJson: string.IsNullOrWhiteSpace(GaCredentialsJson) ? null : GaCredentialsJson,
+            JwtExpiryMinutes: jwtMinutes);
 
         IsBusy = true;
         try
