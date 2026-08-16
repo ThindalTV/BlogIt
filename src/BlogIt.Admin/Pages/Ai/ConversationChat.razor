@@ -9,13 +9,20 @@
     <div class="chat-title-wrap">
         @if (editingTitle)
         {
-            <input class="form-input chat-title-input" @bind="titleEdit" @onblur="SaveTitle" @onkeydown="TitleKeyDown" autofocus />
+            <input class="form-input chat-title-input" aria-label="Conversation title"
+                   @bind="titleEdit" @onblur="SaveTitle" @onkeydown="TitleKeyDown" autofocus />
         }
         else
         {
-            <h1 class="page-title chat-title" @onclick="StartEditTitle" title="Click to rename">
-                @(conversation?.Title ?? "AI Chat")
-                <span class="edit-hint">✎</span>
+            @* The heading kept its level; the button lives inside it. Putting @onclick on the <h1>
+               itself made renaming mouse-only, and turning the whole heading into a button would have
+               removed the only h1 on the page from the document outline. *@
+            <h1 class="page-title">
+                <button type="button" class="chat-title" @onclick="StartEditTitle">
+                    @(conversation?.Title ?? "AI Chat")
+                    <span class="edit-hint" aria-hidden="true">✎</span>
+                    <span class="visually-hidden">— rename</span>
+                </button>
             </h1>
         }
     </div>
@@ -62,7 +69,7 @@
            messageText on change, which for a textarea means blur — so the keydown handler read the
            value as of the last blur (usually empty), saw nothing to send, and Enter just inserted a
            newline, contradicting the placeholder below. *@
-        <textarea class="chat-input" @bind="messageText" @bind:event="oninput" @onkeydown="HandleKeyDown"
+        <textarea class="chat-input" aria-label="Message" @bind="messageText" @bind:event="oninput" @onkeydown="HandleKeyDown"
             placeholder="Type a message… (Enter to send, Shift+Enter for newline)"
             rows="3" disabled="@isWaiting"></textarea>
         <button class="btn btn-primary chat-send" @onclick="SendMessage" disabled="@(isWaiting || string.IsNullOrWhiteSpace(messageText))">
@@ -71,30 +78,21 @@
     </div>
 </div>
 
-@if (showExportModal)
-{
-    <div class="modal-overlay" @onclick="() => showExportModal = false">
-        <div class="modal" @onclick:stopPropagation="true">
-            <div class="modal-header">
-                <h2 class="modal-title">Export to Draft</h2>
-                <button class="modal-close" @onclick="() => showExportModal = false">✕</button>
-            </div>
-            <div class="modal-body">
-                <div class="form-group">
-                    <label class="form-label">Additional Instructions <span class="form-hint">(optional)</span></label>
-                    <textarea class="form-textarea" @bind="exportInstructions" rows="4"
-                        placeholder="e.g. Write in a casual tone, include a call to action…"></textarea>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" @onclick="() => showExportModal = false">Cancel</button>
-                <button class="btn btn-primary" @onclick="ExportDraft" disabled="@isExporting">
-                    @if (isExporting) { <span class="spinner-sm"></span> } else { <span>Export</span> }
-                </button>
-            </div>
+<ModalDialog IsOpen="showExportModal" Title="Export to Draft" OnClose="() => showExportModal = false">
+    <div class="modal-body">
+        <div class="form-group">
+            <label class="form-label" for="export-instructions">Additional Instructions <span class="form-hint">(optional)</span></label>
+            <textarea id="export-instructions" class="form-textarea" @bind="exportInstructions" rows="4"
+                placeholder="e.g. Write in a casual tone, include a call to action…"></textarea>
         </div>
     </div>
-}
+    <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" @onclick="() => showExportModal = false">Cancel</button>
+        <button type="button" class="btn btn-primary" @onclick="ExportDraft" disabled="@isExporting">
+            @if (isExporting) { <span class="spinner-sm"></span> } else { <span>Export</span> }
+        </button>
+    </div>
+</ModalDialog>
 
 @code {
     [Parameter] public Guid Id { get; set; }

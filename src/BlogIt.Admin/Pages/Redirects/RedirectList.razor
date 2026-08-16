@@ -24,12 +24,12 @@
         <h2 class="panel-title">@(editingId.HasValue ? "Edit Redirect" : "New Redirect")</h2>
         <div class="form-row">
             <div class="form-group">
-                <label class="form-label">Source path</label>
-                <input class="form-input" @bind="sourcePath" placeholder="/redir/abc123" />
+                <label class="form-label" for="redirect-source-path">Source path</label>
+                <input id="redirect-source-path" class="form-input" @bind="sourcePath" placeholder="/redir/abc123" />
             </div>
             <div class="form-group">
-                <label class="form-label">Target URL or path</label>
-                <input class="form-input" @bind="targetUrl" placeholder="https://www.microsoft.com" />
+                <label class="form-label" for="redirect-target-url">Target URL or path</label>
+                <input id="redirect-target-url" class="form-input" @bind="targetUrl" placeholder="https://www.microsoft.com" />
             </div>
             <div class="form-group">
                 <label class="form-check">

@@ -10,9 +10,13 @@
     <a class="btn btn-primary" href="posts/new">+ New Post</a>
 </div>
 
+@* aria-label rather than a visible <label>: the toolbar is laid out as a single row and a caption
+   above each control would break it. A placeholder is not a substitute — it is not exposed as a name
+   and it disappears as soon as anything is typed. *@
 <div class="toolbar">
-    <input class="form-input toolbar-search" placeholder="Search posts…" value="@searchQuery" @oninput="OnSearchInput" />
-    <select class="form-select toolbar-filter" @bind="statusFilter" @bind:after="() => LoadPosts(1)">
+    <input class="form-input toolbar-search" type="search" aria-label="Search posts"
+           placeholder="Search posts…" value="@searchQuery" @oninput="OnSearchInput" />
+    <select class="form-select toolbar-filter" aria-label="Filter by status" @bind="statusFilter" @bind:after="() => LoadPosts(1)">
         <option value="">All</option>
         <option value="published">Published</option>
         <option value="draft">Draft</option>
