@@ -48,7 +48,7 @@ public class BlogItDbContext(DbContextOptions<BlogItDbContext> options) : DbCont
             e.HasIndex(p => new { p.IsPublished, p.PublishedAt })
              .IsDescending(false, true);
             e.Property(p => p.Title).HasMaxLength(ContentLimits.TitleLength).IsRequired();
-            e.Property(p => p.Slug).HasMaxLength(500).IsRequired();
+            e.Property(p => p.Slug).HasMaxLength(ContentLimits.SlugLength).IsRequired();
             e.Property(p => p.Summary).IsRequired();
             ConfigureSeoColumns(e);
             e.Property(p => p.ConcurrencyStamp).IsConcurrencyToken();
@@ -64,8 +64,8 @@ public class BlogItDbContext(DbContextOptions<BlogItDbContext> options) : DbCont
         {
             e.HasKey(t => t.Id);
             e.HasIndex(t => t.Slug).IsUnique();
-            e.Property(t => t.Name).HasMaxLength(100).IsRequired();
-            e.Property(t => t.Slug).HasMaxLength(100).IsRequired();
+            e.Property(t => t.Name).HasMaxLength(ContentLimits.TagNameLength).IsRequired();
+            e.Property(t => t.Slug).HasMaxLength(ContentLimits.TagNameLength).IsRequired();
         });
 
         modelBuilder.Entity<Page>(e =>
@@ -75,7 +75,7 @@ public class BlogItDbContext(DbContextOptions<BlogItDbContext> options) : DbCont
             e.HasIndex(p => p.ScheduledPublishAt);
             e.HasIndex(p => p.ScheduledUnpublishAt);
             e.Property(p => p.Title).HasMaxLength(ContentLimits.TitleLength).IsRequired();
-            e.Property(p => p.Slug).HasMaxLength(500).IsRequired();
+            e.Property(p => p.Slug).HasMaxLength(ContentLimits.SlugLength).IsRequired();
             e.Property(p => p.Content).IsRequired();
             ConfigureSeoColumns(e);
             e.Property(p => p.ConcurrencyStamp).IsConcurrencyToken();
@@ -85,8 +85,8 @@ public class BlogItDbContext(DbContextOptions<BlogItDbContext> options) : DbCont
         {
             e.HasKey(m => m.Id);
             e.Property(m => m.Title).HasMaxLength(ContentLimits.TitleLength).IsRequired();
-            e.Property(m => m.FileName).HasMaxLength(500).IsRequired();
-            e.Property(m => m.ContentType).HasMaxLength(200).IsRequired();
+            e.Property(m => m.FileName).HasMaxLength(ContentLimits.FileNameLength).IsRequired();
+            e.Property(m => m.ContentType).HasMaxLength(ContentLimits.ContentTypeLength).IsRequired();
             // MediaProxyApi resolves every single media request by matching this column, so it
             // has to be indexable — which nvarchar(max) is not, and which is what it was before a
             // length was given here. Unique because the storage key already is: both providers

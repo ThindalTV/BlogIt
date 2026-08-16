@@ -50,7 +50,7 @@ public static class UsersApi
             return Results.ValidationProblem(errors);
 
         if (await db.Users.AnyAsync(u => u.Username == req.Username))
-            return Results.Conflict("Username already exists.");
+            return Results.Conflict(UsernameTakenMessage);
 
         if (PasswordPolicy.Validate(req.Password) is string passwordError)
         {
@@ -69,11 +69,19 @@ public static class UsersApi
         };
 
         db.Users.Add(user);
-        await db.SaveChangesAsync();
+        // The check above and this write are separate steps, so two concurrent requests for the same
+        // username can both pass it. The unique index on Username settles which one wins; without
+        // this the loser's violation arrived as an unhandled DbUpdateException. Deliberately the same
+        // message the check gives, because the caller cannot tell the two cases apart and gains
+        // nothing from being able to.
+        if (await db.TrySaveAsync(UsernameTakenMessage) is IResult conflict)
+            return conflict;
         return Results.Created(
             BlogItPath.Combine(options.ApiPath, $"users/{user.Id}"),
             ToDto(user));
     }
+
+    private const string UsernameTakenMessage = "Username already exists.";
 
     private static async Task<IResult> DeleteUser(
         Guid id,
