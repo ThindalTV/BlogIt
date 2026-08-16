@@ -1,7 +1,8 @@
 namespace BlogIt.Shared;
 
 /// <summary>
-/// Maximum lengths for the required text columns: titles, and the two fields on an account.
+/// Maximum lengths for the required text columns: titles and slugs, the two fields on an account,
+/// the two the browser reports for an upload, and a tag's name.
 /// </summary>
 /// <remarks>
 /// Same reasoning as <see cref="SeoLimits"/> — one source of truth for a number that is load-bearing
@@ -27,4 +28,23 @@ public static class ContentLimits
 
     /// <summary>Author name shown next to posts and uploads.</summary>
     public const int DisplayNameLength = 200;
+
+    /// <summary>
+    /// URL slug on a post or page. Equal to <see cref="TitleLength"/>, which is exactly why
+    /// <c>SlugHelper.EnsureUnique</c> has to be told the limit: a maximum-length title slugifies to a
+    /// maximum-length slug, leaving no room for the <c>-2</c> a collision appends. The result was a
+    /// 502-character value against a 500-wide column and an unhandled <c>DbUpdateException</c>.
+    /// </summary>
+    public const int SlugLength = 500;
+
+    /// <summary>Original file name recorded for an upload, as the browser reported it.</summary>
+    public const int FileNameLength = 500;
+
+    /// <summary>MIME type recorded for an upload, as the browser reported it.</summary>
+    public const int ContentTypeLength = 200;
+
+    /// <summary>
+    /// Tag display name. Bounds the tag's slug too, since slugifying never lengthens a string.
+    /// </summary>
+    public const int TagNameLength = 100;
 }

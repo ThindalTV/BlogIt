@@ -285,7 +285,11 @@ public class ColumnLimitApiTests(BlogItSampleFactory factory) : IClassFixture<Bl
     [Fact]
     public async Task UploadMedia_WithAnOverLongTitle_ReturnsBadRequestAndStoresNothing()
     {
-        var client = await AuthedClientAsync("limits_media_title");
+        // Its own database, because "nothing was stored" is a statement about the whole media table
+        // and the shared factory's is full of uploads from the tests around this one. It only passed
+        // before because this happened to be the sole successful upload in the class.
+        await using var isolated = new BlogItSampleFactory();
+        var client = await AuthedClientAsync(isolated, "limits_media_title");
 
         var response = await UploadAsync(client, TooLong(ContentLimits.TitleLength));
 
@@ -307,22 +311,137 @@ public class ColumnLimitApiTests(BlogItSampleFactory factory) : IClassFixture<Bl
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    private static async Task<HttpResponseMessage> UploadAsync(HttpClient client, string title)
+    [Fact]
+    public async Task UploadMedia_WithAnOverLongFileName_ReturnsBadRequestAndStoresNothing()
+    {
+        // FileName and ContentType are whatever the browser sent, so neither is bounded by anything
+        // the API validated before this. Both reach columns that are.
+        await using var isolated = new BlogItSampleFactory();
+        var client = await AuthedClientAsync(isolated, "limits_media_filename");
+
+        var response = await UploadAsync(
+            client, "Title", fileName: TooLong(ContentLimits.FileNameLength) + ".png");
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await response.Content.ReadAsStringAsync()).Should().Contain("fileName");
+        var listed = await client.GetFromJsonAsync<PagedResult<MediaFileDto>>("/api/media");
+        listed!.TotalCount.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task UploadMedia_WithAnOverLongContentType_ReturnsBadRequest()
+    {
+        var client = await AuthedClientAsync("limits_media_contenttype");
+
+        // A media type has to stay syntactically valid to survive the header parser, so the length
+        // is made up in the subtype rather than as one run of padding.
+        var response = await UploadAsync(
+            client, "Title", contentType: "image/" + new string('p', ContentLimits.ContentTypeLength));
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await response.Content.ReadAsStringAsync()).Should().Contain("contentType");
+    }
+
+    [Fact]
+    public async Task UploadMedia_WithAFileNameAtTheLimit_Succeeds()
+    {
+        var client = await AuthedClientAsync("limits_media_filename_ok");
+
+        var response = await UploadAsync(
+            client, "Title", fileName: new string('f', ContentLimits.FileNameLength));
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task CreatePost_WithAnOverLongTagName_ReturnsBadRequest()
+    {
+        var client = await AuthedClientAsync("limits_post_tag");
+
+        var response = await client.PostAsJsonAsync("/api/posts", new CreateBlogPostRequest(
+            "Tagged", "Summary", "Body", null, null, null, null,
+            TagNames: ["fine", TooLong(ContentLimits.TagNameLength)]));
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await response.Content.ReadAsStringAsync()).Should().Contain("tagNames");
+    }
+
+    [Fact]
+    public async Task CreatePost_WithATagNameAtTheLimit_Succeeds()
+    {
+        var client = await AuthedClientAsync("limits_post_tag_ok");
+
+        var response = await client.PostAsJsonAsync("/api/posts", new CreateBlogPostRequest(
+            "Tagged well", "Summary", "Body", null, null, null, null,
+            TagNames: [new string('g', ContentLimits.TagNameLength)]));
+
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+    }
+
+    [Fact]
+    public async Task CreatePost_WithAnOverLongExplicitSlug_ReturnsBadRequest()
+    {
+        var client = await AuthedClientAsync("limits_post_slug");
+
+        var response = await client.PostAsJsonAsync("/api/posts", new CreateBlogPostRequest(
+            "Titled", "Summary", "Body", null, null, null, null, [],
+            Slug: TooLong(ContentLimits.SlugLength)));
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await response.Content.ReadAsStringAsync()).Should().Contain("slug");
+    }
+
+    [Fact]
+    public async Task CreatePage_WithAnOverLongExplicitSlug_ReturnsBadRequest()
+    {
+        var client = await AuthedClientAsync("limits_page_slug");
+
+        var response = await client.PostAsJsonAsync("/api/pages", new CreatePageRequest(
+            "Titled", TooLong(ContentLimits.SlugLength), "Body", null, null, null, null, false));
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await response.Content.ReadAsStringAsync()).Should().Contain("slug");
+    }
+
+    [Fact]
+    public async Task UpdatePost_WithAnOverLongExplicitSlug_ReturnsBadRequestAndKeepsTheStoredSlug()
+    {
+        var client = await AuthedClientAsync("limits_post_slug_update");
+        var created = await client.PostAsJsonAsync("/api/posts", new CreateBlogPostRequest(
+            "Keep my address", "Summary", "Body", null, null, null, null, []));
+        var post = (await created.Content.ReadFromJsonAsync<BlogPostDetailDto>())!;
+
+        var response = await client.PutAsJsonAsync($"/api/posts/{post.Id}", new UpdateBlogPostRequest(
+            post.Title, post.Summary, post.Content, null, null, null, null, [],
+            Slug: TooLong(ContentLimits.SlugLength), ConcurrencyStamp: post.ConcurrencyStamp));
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var current = await client.GetFromJsonAsync<BlogPostDetailDto>($"/api/posts/{post.Id}");
+        current!.Slug.Should().Be(post.Slug);
+    }
+
+    private static async Task<HttpResponseMessage> UploadAsync(
+        HttpClient client,
+        string title,
+        string fileName = "hero.png",
+        string contentType = "image/png")
     {
         using var form = new MultipartFormDataContent();
         using var file = new ByteArrayContent("stored bytes"u8.ToArray());
-        file.Headers.ContentType = new MediaTypeHeaderValue("image/png");
-        form.Add(file, "file", "hero.png");
+        file.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+        form.Add(file, "file", fileName);
         form.Add(new StringContent(title), "title");
         return await client.PostAsync("/api/media/upload", form);
     }
 
     private static string TooLong(int limit) => new('x', limit + 1);
 
-    private async Task<HttpClient> AuthedClientAsync(string prefix)
+    private Task<HttpClient> AuthedClientAsync(string prefix) => AuthedClientAsync(factory, prefix);
+
+    private static async Task<HttpClient> AuthedClientAsync(BlogItSampleFactory host, string prefix)
     {
         var username = $"{prefix}_{Guid.NewGuid():N}";
-        var userId = await factory.SeedUserAsync(username);
-        return factory.CreateClient().WithAuth(userId, username);
+        var userId = await host.SeedUserAsync(username);
+        return host.CreateClient().WithAuth(userId, username);
     }
 }

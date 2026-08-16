@@ -85,7 +85,7 @@ public static class PostsApi
             return ScheduleValidationProblem(scheduleError);
 
         if (ValidateFields(
-                req.Title, req.Summary,
+                req.Title, req.Summary, req.Slug, req.TagNames,
                 req.SeoTitle, req.SeoDescription, req.SeoKeywords, req.OgImageUrl)
             is { Count: > 0 } errors)
         {
@@ -94,10 +94,10 @@ public static class PostsApi
 
         var authorId = Guid.Parse(user.FindFirstValue("sub") ?? user.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
-        var baseSlug = SlugHelper.Slugify(
-            string.IsNullOrWhiteSpace(req.Slug) ? req.Title : req.Slug);
-        var existingSlugs = await db.BlogPosts.Select(p => p.Slug).ToListAsync();
-        var slug = SlugHelper.EnsureUnique(baseSlug, existingSlugs);
+        if (ResolveNewSlug(req.Slug, req.Title) is not string baseSlug)
+            return EmptySlugValidationProblem();
+        var slug = await SlugHelper.EnsureUniqueAsync(
+            baseSlug, db.BlogPosts.Select(p => p.Slug), ContentLimits.SlugLength);
 
         var post = new BlogPost
         {
@@ -118,7 +118,11 @@ public static class PostsApi
 
         post.Tags = await TagResolver.ResolveAsync(db, req.TagNames);
         db.BlogPosts.Add(post);
-        await db.SaveChangesAsync();
+        // Both the slug picked above and any tag created by ResolveAsync were checked for
+        // availability and are only now being written, so a concurrent create can still take either
+        // out from under this one. See ConcurrencyGuard.
+        if (await db.TrySaveAsync(ConcurrencyGuard.RaceLostMessage) is IResult conflict)
+            return conflict;
 
         await db.Entry(post).Reference(p => p.Author).LoadAsync();
 
@@ -144,9 +148,28 @@ public static class PostsApi
         if (ConcurrencyGuard.CheckStamp(post, req.ConcurrencyStamp) is IResult stale)
             return stale;
 
+        var scheduleError = PublicationSchedule.Validate(req.ScheduledPublishAt, req.ScheduledUnpublishAt);
+        if (scheduleError is not null)
+            return ScheduleValidationProblem(scheduleError);
+
+        // Ahead of the slug block below, which assigns before it is done checking: every rejection
+        // from here on leaves the tracked post already partly rewritten, and only the absence of a
+        // save keeps that off disk.
+        if (ValidateFields(
+                req.Title, req.Summary, req.Slug, req.TagNames,
+                req.SeoTitle, req.SeoDescription, req.SeoKeywords, req.OgImageUrl)
+            is { Count: > 0 } errors)
+        {
+            return Results.ValidationProblem(errors);
+        }
+
         var requestedSlug = string.IsNullOrWhiteSpace(req.Slug)
             ? post.Slug
             : SlugHelper.Slugify(req.Slug);
+        // No fallback on this path, unlike a create: the caller typed this slug, so telling them it
+        // is unusable beats substituting a token they did not ask for.
+        if (requestedSlug.Length == 0)
+            return EmptySlugValidationProblem();
         if (requestedSlug != post.Slug)
         {
             if (post.PublishedAt.HasValue)
@@ -154,18 +177,6 @@ public static class PostsApi
             if (await db.BlogPosts.AnyAsync(p => p.Id != id && p.Slug == requestedSlug))
                 return SlugValidationProblem("This post slug is already in use.");
             post.Slug = requestedSlug;
-        }
-
-        var scheduleError = PublicationSchedule.Validate(req.ScheduledPublishAt, req.ScheduledUnpublishAt);
-        if (scheduleError is not null)
-            return ScheduleValidationProblem(scheduleError);
-
-        if (ValidateFields(
-                req.Title, req.Summary,
-                req.SeoTitle, req.SeoDescription, req.SeoKeywords, req.OgImageUrl)
-            is { Count: > 0 } errors)
-        {
-            return Results.ValidationProblem(errors);
         }
 
         post.Title = req.Title;
@@ -181,7 +192,9 @@ public static class PostsApi
         post.UpdatedAt = DateTime.UtcNow;
         post.Tags = await TagResolver.ResolveAsync(db, req.TagNames);
 
-        if (await db.TrySaveAsync() is IResult conflict)
+        // ResolveAsync inserts any tag that did not exist yet, so this save carries the same
+        // check-then-act race a create does.
+        if (await db.TrySaveAsync(ConcurrencyGuard.RaceLostMessage) is IResult conflict)
             return conflict;
         return Results.Ok(ToDetailDto(post));
     }
@@ -291,12 +304,16 @@ public static class PostsApi
     /// <remarks>
     /// Title and Summary are checked here rather than left to the database because both columns are
     /// constrained: Title is bounded, Summary is required, and either violation used to arrive as an
-    /// unhandled <c>DbUpdateException</c>. Takes the SEO fields loose rather than the request record
-    /// because the create and update records are separate types with no interface in common.
+    /// unhandled <c>DbUpdateException</c>. Slug and the tag names are here for the same reason and
+    /// were the two that got missed — both are bounded columns nothing validated, reached from a
+    /// request body. Takes the fields loose rather than the request record because the create and
+    /// update records are separate types with no interface in common.
     /// </remarks>
     private static Dictionary<string, string[]> ValidateFields(
         string? title,
         string? summary,
+        string? slug,
+        IReadOnlyList<string>? tagNames,
         string? seoTitle,
         string? seoDescription,
         string? seoKeywords,
@@ -305,12 +322,28 @@ public static class PostsApi
         var errors = SeoMetadataValidator.Validate(seoTitle, seoDescription, seoKeywords, ogImageUrl);
         TextFieldValidator.CheckRequired(errors, "title", "Title", title, ContentLimits.TitleLength);
         TextFieldValidator.CheckPresent(errors, "summary", "Summary", summary);
+        // Length only: a blank or absent slug is the documented way of asking for one to be derived
+        // from the title.
+        TextFieldValidator.CheckLength(errors, "slug", "Slug", slug, ContentLimits.SlugLength);
+        TagResolver.Validate(errors, tagNames);
         return errors;
     }
+
+    /// <summary>
+    /// The base slug for a new post: the caller's if they gave one, otherwise derived from the
+    /// title. Null when the caller gave one that holds nothing a slug can be built from.
+    /// </summary>
+    private static string? ResolveNewSlug(string? requestedSlug, string title) =>
+        string.IsNullOrWhiteSpace(requestedSlug)
+            ? SlugHelper.SlugifyOrFallback(title)
+            : SlugHelper.Slugify(requestedSlug) is { Length: > 0 } explicitSlug ? explicitSlug : null;
 
     private static IResult ScheduleValidationProblem(string error) =>
         Results.ValidationProblem(new Dictionary<string, string[]> { ["schedule"] = [error] });
 
     private static IResult SlugValidationProblem(string error) =>
         Results.ValidationProblem(new Dictionary<string, string[]> { ["slug"] = [error] });
+
+    private static IResult EmptySlugValidationProblem() =>
+        SlugValidationProblem("Slug must contain at least one letter or number.");
 }

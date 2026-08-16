@@ -68,10 +68,19 @@ public static class MediaApi
         // that, so rejecting it here would break an upload that works today. Checked before
         // StoreAsync so a 400 cannot leave an unreferenced blob in the storage provider, which is
         // what validating after the write would do on every rejection.
-        var titleErrors = new Dictionary<string, string[]>();
-        TextFieldValidator.CheckLength(titleErrors, "title", "Title", title, ContentLimits.TitleLength);
-        if (titleErrors.Count > 0)
-            return Results.ValidationProblem(titleErrors);
+        //
+        // FileName and ContentType are checked on the same terms and for the same reason as Title,
+        // and were missed because neither is part of a request body anyone validates: both are
+        // whatever the browser put in the multipart headers, and both land in bounded columns. Length
+        // only again, since IFormFile reports an absent value as an empty string, which stores fine.
+        var errors = new Dictionary<string, string[]>();
+        TextFieldValidator.CheckLength(errors, "title", "Title", title, ContentLimits.TitleLength);
+        TextFieldValidator.CheckLength(
+            errors, "fileName", "File name", file.FileName, ContentLimits.FileNameLength);
+        TextFieldValidator.CheckLength(
+            errors, "contentType", "Content type", file.ContentType, ContentLimits.ContentTypeLength);
+        if (errors.Count > 0)
+            return Results.ValidationProblem(errors);
 
         // INTENTIONAL: the client-supplied Content-Type is trusted as-is, with no server-side
         // magic-byte validation or allow-list — this endpoint requires authentication, so

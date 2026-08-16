@@ -322,9 +322,7 @@ internal sealed class OpenAiService(BlogItDbContext db, ISettingsService setting
             ? string.Join(", ", tags)
             : seoKeywords;
 
-        var slug = SlugHelper.Slugify(title);
-        var existingSlugs = await db.BlogPosts.Select(p => p.Slug).ToListAsync(cancellationToken);
-        slug = SlugHelper.EnsureUnique(slug, existingSlugs);
+        var slug = await NextDraftSlugAsync(db, title, cancellationToken);
 
         var post = new BlogPost
         {
@@ -347,6 +345,25 @@ internal sealed class OpenAiService(BlogItDbContext db, ISettingsService setting
 
         return post;
     }
+
+    /// <summary>
+    /// Picks the slug for a new draft from the title the model wrote.
+    /// </summary>
+    /// <remarks>
+    /// A named seam rather than three lines inline, because the rest of
+    /// <see cref="ExportToDraftAsync"/> needs a live provider to reach and this is the part with
+    /// consequences: a title the model wrote is as likely to be Cyrillic or CJK as any other, and a
+    /// draft that slugified to nothing became a post nothing could address.
+    /// </remarks>
+    internal static Task<string> NextDraftSlugAsync(
+        BlogItDbContext db,
+        string title,
+        CancellationToken cancellationToken = default) =>
+        SlugHelper.EnsureUniqueAsync(
+            SlugHelper.SlugifyOrFallback(title),
+            db.BlogPosts.Select(post => post.Slug),
+            ContentLimits.SlugLength,
+            cancellationToken);
 
     private static async Task<string> CompleteChatTextAsync(
         ChatClient client,

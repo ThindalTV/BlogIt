@@ -64,23 +64,23 @@ public static class PagesApi
             return ScheduleValidationProblem(scheduleError);
 
         if (ValidateFields(
-                req.Title, req.Content,
+                req.Title, req.Content, req.Slug,
                 req.SeoTitle, req.SeoDescription, req.SeoKeywords, req.OgImageUrl)
             is { Count: > 0 } errors)
         {
             return Results.ValidationProblem(errors);
         }
 
-        // Unlike PostsApi, this had no fallback to the title when Slug was left blank, and no
-        // check that the result was non-empty — a page saved with a blank Slug field became
-        // permanently unreachable (SlugHelper.Slugify("") is "", and there was nothing after
-        // creation that could ever change it, since a page's slug locks on first publish).
-        var baseSlug = SlugHelper.Slugify(
-            string.IsNullOrWhiteSpace(req.Slug) ? req.Title : req.Slug);
-        if (baseSlug.Length == 0)
-            return SlugValidationProblem("Slug must contain at least one letter or number.");
-        var existingSlugs = await db.Pages.Select(p => p.Slug).ToListAsync();
-        var slug = SlugHelper.EnsureUnique(baseSlug, existingSlugs);
+        // Unlike PostsApi, this had no fallback to the title when Slug was left blank — a page saved
+        // with a blank Slug field became permanently unreachable, since a page's slug locks on first
+        // publish and nothing after creation could change it. The non-empty guard that closed that
+        // now lives in SlugHelper, which is also where the title-derived case gained its fallback:
+        // rejecting was right for a slug someone typed and a dead end for a site whose titles are
+        // simply not Latin.
+        if (ResolveNewSlug(req.Slug, req.Title) is not string baseSlug)
+            return EmptySlugValidationProblem();
+        var slug = await SlugHelper.EnsureUniqueAsync(
+            baseSlug, db.Pages.Select(p => p.Slug), ContentLimits.SlugLength);
 
         var page = new Page
         {
@@ -101,7 +101,10 @@ public static class PagesApi
         };
 
         db.Pages.Add(page);
-        await db.SaveChangesAsync();
+        // The slug above was checked for availability and is only now being written, so a concurrent
+        // create can still take it. See ConcurrencyGuard.
+        if (await db.TrySaveAsync(ConcurrencyGuard.RaceLostMessage) is IResult conflict)
+            return conflict;
         return Results.Created(
             BlogItPath.Combine(options.ApiPath, $"pages/{page.Id}"),
             ToDto(page));
@@ -117,11 +120,26 @@ public static class PagesApi
         if (ConcurrencyGuard.CheckStamp(page, req.ConcurrencyStamp) is IResult stale)
             return stale;
 
+        var scheduleError = PublicationSchedule.Validate(req.ScheduledPublishAt, req.ScheduledUnpublishAt);
+        if (scheduleError is not null)
+            return ScheduleValidationProblem(scheduleError);
+
+        // Ahead of the slug block below, which assigns before it is done checking: every rejection
+        // from here on leaves the tracked page already partly rewritten, and only the absence of a
+        // save keeps that off disk.
+        if (ValidateFields(
+                req.Title, req.Content, req.Slug,
+                req.SeoTitle, req.SeoDescription, req.SeoKeywords, req.OgImageUrl)
+            is { Count: > 0 } errors)
+        {
+            return Results.ValidationProblem(errors);
+        }
+
         var requestedSlug = string.IsNullOrWhiteSpace(req.Slug)
             ? page.Slug
             : SlugHelper.Slugify(req.Slug);
         if (requestedSlug.Length == 0)
-            return SlugValidationProblem("Slug must contain at least one letter or number.");
+            return EmptySlugValidationProblem();
         if (requestedSlug != page.Slug)
         {
             if (page.HasBeenPublished)
@@ -129,18 +147,6 @@ public static class PagesApi
             if (await db.Pages.AnyAsync(p => p.Id != id && p.Slug == requestedSlug))
                 return SlugValidationProblem("This page slug is already in use.");
             page.Slug = requestedSlug;
-        }
-
-        var scheduleError = PublicationSchedule.Validate(req.ScheduledPublishAt, req.ScheduledUnpublishAt);
-        if (scheduleError is not null)
-            return ScheduleValidationProblem(scheduleError);
-
-        if (ValidateFields(
-                req.Title, req.Content,
-                req.SeoTitle, req.SeoDescription, req.SeoKeywords, req.OgImageUrl)
-            is { Count: > 0 } errors)
-        {
-            return Results.ValidationProblem(errors);
         }
 
         page.Title = req.Title;
@@ -210,6 +216,7 @@ public static class PagesApi
     private static Dictionary<string, string[]> ValidateFields(
         string? title,
         string? content,
+        string? slug,
         string? seoTitle,
         string? seoDescription,
         string? seoKeywords,
@@ -218,12 +225,27 @@ public static class PagesApi
         var errors = SeoMetadataValidator.Validate(seoTitle, seoDescription, seoKeywords, ogImageUrl);
         TextFieldValidator.CheckRequired(errors, "title", "Title", title, ContentLimits.TitleLength);
         TextFieldValidator.CheckPresent(errors, "content", "Content", content);
+        // Length only: a blank or absent slug is the documented way of asking for one to be derived
+        // from the title.
+        TextFieldValidator.CheckLength(errors, "slug", "Slug", slug, ContentLimits.SlugLength);
         return errors;
     }
+
+    /// <summary>
+    /// The base slug for a new page. The page equivalent of <c>PostsApi.ResolveNewSlug</c>; null when
+    /// the caller supplied one that holds nothing a slug can be built from.
+    /// </summary>
+    private static string? ResolveNewSlug(string? requestedSlug, string title) =>
+        string.IsNullOrWhiteSpace(requestedSlug)
+            ? SlugHelper.SlugifyOrFallback(title)
+            : SlugHelper.Slugify(requestedSlug) is { Length: > 0 } explicitSlug ? explicitSlug : null;
 
     private static IResult ScheduleValidationProblem(string error) =>
         Results.ValidationProblem(new Dictionary<string, string[]> { ["schedule"] = [error] });
 
     private static IResult SlugValidationProblem(string error) =>
         Results.ValidationProblem(new Dictionary<string, string[]> { ["slug"] = [error] });
+
+    private static IResult EmptySlugValidationProblem() =>
+        SlugValidationProblem("Slug must contain at least one letter or number.");
 }
