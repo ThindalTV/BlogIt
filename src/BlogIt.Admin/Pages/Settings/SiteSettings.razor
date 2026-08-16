@@ -30,49 +30,49 @@ else
         <div class="settings-section">
             <h2 class="settings-section-title">Site</h2>
             <div class="form-group">
-                <label class="form-label">Site Name</label>
-                <input class="form-input" @bind="siteName" />
+                <label class="form-label" for="settings-site-name">Site Name</label>
+                <input id="settings-site-name" class="form-input" @bind="siteName" />
             </div>
             <div class="form-group">
-                <label class="form-label">Site URL</label>
-                <input class="form-input" @bind="siteUrl" />
+                <label class="form-label" for="settings-site-url">Site URL</label>
+                <input id="settings-site-url" class="form-input" @bind="siteUrl" />
             </div>
             <div class="form-group">
-                <label class="form-label">Description</label>
-                <textarea class="form-textarea" @bind="siteDescription" rows="3"></textarea>
+                <label class="form-label" for="settings-site-description">Description</label>
+                <textarea id="settings-site-description" class="form-textarea" @bind="siteDescription" rows="3"></textarea>
             </div>
             <div class="form-group">
-                <label class="form-label">Default OG Image URL</label>
-                <input class="form-input" @bind="defaultOgImage" />
+                <label class="form-label" for="settings-og-image">Default OG Image URL</label>
+                <input id="settings-og-image" class="form-input" @bind="defaultOgImage" />
             </div>
         </div>
 
         <div class="settings-section">
             <h2 class="settings-section-title">AI</h2>
             <div class="form-group">
-                <label class="form-label">Provider</label>
-                <select class="form-select" @bind="aiProvider">
+                <label class="form-label" for="settings-ai-provider">Provider</label>
+                <select id="settings-ai-provider" class="form-select" @bind="aiProvider">
                     <option value="github-copilot">GitHub Copilot</option>
                     <option value="openai-compatible">OpenAI-Compatible</option>
                 </select>
             </div>
             <div class="form-group">
-                <label class="form-label">API Key <span class="form-hint">(leave blank to keep existing)</span></label>
-                <input class="form-input" type="password" @bind="aiApiKey" placeholder="****" autocomplete="off" />
+                <label class="form-label" for="settings-ai-key">API Key <span class="form-hint">(leave blank to keep existing)</span></label>
+                <input id="settings-ai-key" class="form-input" type="password" @bind="aiApiKey" placeholder="****" autocomplete="off" />
             </div>
             @if (aiProvider == "openai-compatible")
             {
                 <div class="form-group">
-                    <label class="form-label">Base URL</label>
-                    <input class="form-input" @bind="aiBaseUrl" placeholder="https://api.openai.com/v1" />
+                    <label class="form-label" for="settings-ai-base-url">Base URL</label>
+                    <input id="settings-ai-base-url" class="form-input" @bind="aiBaseUrl" placeholder="https://api.openai.com/v1" />
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Model</label>
-                    <input class="form-input" @bind="aiModel" placeholder="gpt-4o" />
+                    <label class="form-label" for="settings-ai-model">Model</label>
+                    <input id="settings-ai-model" class="form-input" @bind="aiModel" placeholder="gpt-4o" />
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Export Model</label>
-                    <input class="form-input" @bind="aiExportModel" />
+                    <label class="form-label" for="settings-ai-export-model">Export Model</label>
+                    <input id="settings-ai-export-model" class="form-input" @bind="aiExportModel" />
                 </div>
             }
         </div>
@@ -80,24 +80,24 @@ else
         <div class="settings-section">
             <h2 class="settings-section-title">Analytics</h2>
             <div class="form-group">
-                <label class="form-label">Measurement ID</label>
-                <input class="form-input" @bind="gaMeasurementId" placeholder="G-XXXXXXXXXX" />
+                <label class="form-label" for="settings-ga-measurement-id">Measurement ID</label>
+                <input id="settings-ga-measurement-id" class="form-input" @bind="gaMeasurementId" placeholder="G-XXXXXXXXXX" />
             </div>
             <div class="form-group">
-                <label class="form-label">Property ID</label>
-                <input class="form-input" @bind="gaPropertyId" placeholder="123456789" />
+                <label class="form-label" for="settings-ga-property-id">Property ID</label>
+                <input id="settings-ga-property-id" class="form-input" @bind="gaPropertyId" placeholder="123456789" />
             </div>
             <div class="form-group">
-                <label class="form-label">Service Account Credentials JSON <span class="form-hint">(leave blank to keep existing)</span></label>
-                <textarea class="form-textarea" @bind="gaCredentialsJson" rows="5" placeholder="****"></textarea>
+                <label class="form-label" for="settings-ga-credentials">Service Account Credentials JSON <span class="form-hint">(leave blank to keep existing)</span></label>
+                <textarea id="settings-ga-credentials" class="form-textarea" @bind="gaCredentialsJson" rows="5" placeholder="****"></textarea>
             </div>
         </div>
 
         <div class="settings-section">
             <h2 class="settings-section-title">Auth</h2>
             <div class="form-group">
-                <label class="form-label">JWT Expiry (minutes)</label>
-                <input class="form-input" type="number" @bind="jwtExpiryMinutes" min="5" max="10080" />
+                <label class="form-label" for="settings-jwt-expiry">JWT Expiry (minutes)</label>
+                <input id="settings-jwt-expiry" class="form-input" type="number" @bind="jwtExpiryMinutes" min="5" max="10080" />
             </div>
         </div>
     </div>

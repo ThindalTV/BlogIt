@@ -74,10 +74,15 @@ else
         <div class="dashboard-panel">
             <h2 class="panel-title">
                 Analytics
+                @* Named through aria-label: these two sit inside the panel heading, where a visible
+                   caption has nowhere to go, and the en dash between them is decoration rather than a
+                   description of either end. *@
                 <span class="panel-actions">
-                    <input type="date" class="form-input form-input-sm" @bind="startDate" @bind:event="onchange" @bind:after="LoadAnalytics" />
-                    <span>–</span>
-                    <input type="date" class="form-input form-input-sm" @bind="endDate" @bind:event="onchange" @bind:after="LoadAnalytics" />
+                    <input type="date" class="form-input form-input-sm" aria-label="Analytics range start"
+                           @bind="startDate" @bind:event="onchange" @bind:after="LoadAnalytics" />
+                    <span aria-hidden="true">–</span>
+                    <input type="date" class="form-input form-input-sm" aria-label="Analytics range end"
+                           @bind="endDate" @bind:event="onchange" @bind:after="LoadAnalytics" />
                 </span>
             </h2>
             @if (analyticsLoading)

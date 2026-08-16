@@ -32,20 +32,20 @@
             <div class="wizard-section">
                 <h2>Admin Account</h2>
                 <div class="form-group">
-                    <label class="form-label">Username</label>
-                    <input class="form-input" @bind="model.Username" placeholder="admin" />
+                    <label class="form-label" for="setup-username">Username</label>
+                    <input id="setup-username" class="form-input" @bind="model.Username" placeholder="admin" />
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Display Name</label>
-                    <input class="form-input" @bind="model.DisplayName" placeholder="Admin User" />
+                    <label class="form-label" for="setup-display-name">Display Name</label>
+                    <input id="setup-display-name" class="form-input" @bind="model.DisplayName" placeholder="Admin User" />
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Password</label>
-                    <input class="form-input" type="password" @bind="model.Password" />
+                    <label class="form-label" for="setup-password">Password</label>
+                    <input id="setup-password" class="form-input" type="password" @bind="model.Password" />
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Confirm Password</label>
-                    <input class="form-input" type="password" @bind="confirmPassword" />
+                    <label class="form-label" for="setup-confirm-password">Confirm Password</label>
+                    <input id="setup-confirm-password" class="form-input" type="password" @bind="confirmPassword" />
                 </div>
             </div>
         }
@@ -54,20 +54,20 @@
             <div class="wizard-section">
                 <h2>Site Information</h2>
                 <div class="form-group">
-                    <label class="form-label">Site Name</label>
-                    <input class="form-input" @bind="model.SiteName" placeholder="My Blog" />
+                    <label class="form-label" for="setup-site-name">Site Name</label>
+                    <input id="setup-site-name" class="form-input" @bind="model.SiteName" placeholder="My Blog" />
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Site URL</label>
-                    <input class="form-input" @bind="model.SiteUrl" placeholder="https://example.com" />
+                    <label class="form-label" for="setup-site-url">Site URL</label>
+                    <input id="setup-site-url" class="form-input" @bind="model.SiteUrl" placeholder="https://example.com" />
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Description</label>
-                    <textarea class="form-textarea" @bind="model.SiteDescription" rows="3"></textarea>
+                    <label class="form-label" for="setup-site-description">Description</label>
+                    <textarea id="setup-site-description" class="form-textarea" @bind="model.SiteDescription" rows="3"></textarea>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Default OG Image URL <span class="form-hint">(optional)</span></label>
-                    <input class="form-input" @bind="model.DefaultOgImage" placeholder="https://example.com/og.png" />
+                    <label class="form-label" for="setup-og-image">Default OG Image URL <span class="form-hint">(optional)</span></label>
+                    <input id="setup-og-image" class="form-input" @bind="model.DefaultOgImage" placeholder="https://example.com/og.png" />
                 </div>
             </div>
         }
@@ -76,29 +76,29 @@
             <div class="wizard-section">
                 <h2>AI Provider</h2>
                 <div class="form-group">
-                    <label class="form-label">Provider</label>
-                    <select class="form-select" @bind="model.AiProvider">
+                    <label class="form-label" for="setup-ai-provider">Provider</label>
+                    <select id="setup-ai-provider" class="form-select" @bind="model.AiProvider">
                         <option value="github-copilot">GitHub Copilot</option>
                         <option value="openai-compatible">OpenAI-Compatible</option>
                     </select>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">API Key</label>
-                    <input class="form-input" type="password" @bind="model.AiApiKey" placeholder="sk-…" />
+                    <label class="form-label" for="setup-ai-key">API Key</label>
+                    <input id="setup-ai-key" class="form-input" type="password" @bind="model.AiApiKey" placeholder="sk-…" />
                 </div>
                 @if (model.AiProvider == "openai-compatible")
                 {
                     <div class="form-group">
-                        <label class="form-label">Base URL</label>
-                        <input class="form-input" @bind="model.AiBaseUrl" placeholder="https://api.openai.com/v1" />
+                        <label class="form-label" for="setup-ai-base-url">Base URL</label>
+                        <input id="setup-ai-base-url" class="form-input" @bind="model.AiBaseUrl" placeholder="https://api.openai.com/v1" />
                     </div>
                     <div class="form-group">
-                        <label class="form-label">Model</label>
-                        <input class="form-input" @bind="model.AiModel" placeholder="gpt-4o" />
+                        <label class="form-label" for="setup-ai-model">Model</label>
+                        <input id="setup-ai-model" class="form-input" @bind="model.AiModel" placeholder="gpt-4o" />
                     </div>
                     <div class="form-group">
-                        <label class="form-label">Export Model <span class="form-hint">(optional, for draft export)</span></label>
-                        <input class="form-input" @bind="model.AiExportModel" placeholder="gpt-4o" />
+                        <label class="form-label" for="setup-ai-export-model">Export Model <span class="form-hint">(optional, for draft export)</span></label>
+                        <input id="setup-ai-export-model" class="form-input" @bind="model.AiExportModel" placeholder="gpt-4o" />
                     </div>
                 }
             </div>
@@ -108,16 +108,16 @@
             <div class="wizard-section">
                 <h2>Google Analytics <span class="form-hint">(optional)</span></h2>
                 <div class="form-group">
-                    <label class="form-label">Measurement ID</label>
-                    <input class="form-input" @bind="model.GoogleAnalyticsMeasurementId" placeholder="G-XXXXXXXXXX" />
+                    <label class="form-label" for="setup-ga-measurement-id">Measurement ID</label>
+                    <input id="setup-ga-measurement-id" class="form-input" @bind="model.GoogleAnalyticsMeasurementId" placeholder="G-XXXXXXXXXX" />
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Property ID</label>
-                    <input class="form-input" @bind="model.GoogleAnalyticsPropertyId" placeholder="123456789" />
+                    <label class="form-label" for="setup-ga-property-id">Property ID</label>
+                    <input id="setup-ga-property-id" class="form-input" @bind="model.GoogleAnalyticsPropertyId" placeholder="123456789" />
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Service Account Credentials JSON</label>
-                    <textarea class="form-textarea" @bind="model.GoogleAnalyticsCredentialsJson" rows="6" placeholder='{"type":"service_account",…}'></textarea>
+                    <label class="form-label" for="setup-ga-credentials">Service Account Credentials JSON</label>
+                    <textarea id="setup-ga-credentials" class="form-textarea" @bind="model.GoogleAnalyticsCredentialsJson" rows="6" placeholder='{"type":"service_account",…}'></textarea>
                 </div>
             </div>
         }

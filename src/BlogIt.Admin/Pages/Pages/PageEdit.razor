@@ -39,12 +39,12 @@ else
     <div class="editor-layout">
         <div class="editor-main">
             <div class="form-group">
-                <label class="form-label">Title</label>
-                <input class="form-input form-input-lg" @bind="title" placeholder="Page title…" />
+                <label class="form-label" for="page-title-field">Title</label>
+                <input id="page-title-field" class="form-input form-input-lg" @bind="title" placeholder="Page title…" />
             </div>
             <div class="form-group">
-                <label class="form-label">Slug</label>
-                <input class="form-input" @bind="slug" placeholder="my-page"
+                <label class="form-label" for="page-slug">Slug</label>
+                <input id="page-slug" class="form-input" @bind="slug" placeholder="my-page"
                        disabled="@(page?.HasBeenPublished == true)" />
                 @if (page?.HasBeenPublished == true)
                 {
@@ -56,7 +56,7 @@ else
                 }
             </div>
             <div class="form-group">
-                <label class="form-label">Content (Markdown)</label>
+                <label class="form-label" for="page-content-editor">Content (Markdown)</label>
                 <textarea id="page-content-editor" @ref="editorRef">@content</textarea>
             </div>
         </div>
@@ -76,14 +76,14 @@ else
                     <p class="form-hint">Current state: @ScheduleLabel(page.ScheduleState)</p>
                 }
                 <div class="form-group">
-                    <label class="form-label">Publish at</label>
-                    <input class="form-input" type="datetime-local" value="@scheduledPublishLocal"
+                    <label class="form-label" for="page-scheduled-publish">Publish at</label>
+                    <input id="page-scheduled-publish" class="form-input" type="datetime-local" value="@scheduledPublishLocal"
                            @onchange="e => scheduledPublishLocal = e.Value?.ToString() ?? string.Empty"
                            disabled="@isPublished" />
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Unpublish at</label>
-                    <input class="form-input" type="datetime-local" value="@scheduledUnpublishLocal"
+                    <label class="form-label" for="page-scheduled-unpublish">Unpublish at</label>
+                    <input id="page-scheduled-unpublish" class="form-input" type="datetime-local" value="@scheduledUnpublishLocal"
                            @onchange="e => scheduledUnpublishLocal = e.Value?.ToString() ?? string.Empty"
                            disabled="@(!isPublished && string.IsNullOrWhiteSpace(scheduledPublishLocal))" />
                 </div>
@@ -92,20 +92,20 @@ else
             <div class="sidebar-panel">
                 <h3 class="sidebar-panel-title">SEO</h3>
                 <div class="form-group">
-                    <label class="form-label">SEO Title</label>
-                    <input class="form-input" @bind="seoTitle" />
+                    <label class="form-label" for="page-seo-title">SEO Title</label>
+                    <input id="page-seo-title" class="form-input" @bind="seoTitle" />
                 </div>
                 <div class="form-group">
-                    <label class="form-label">SEO Description</label>
-                    <textarea class="form-textarea" @bind="seoDescription" rows="2"></textarea>
+                    <label class="form-label" for="page-seo-description">SEO Description</label>
+                    <textarea id="page-seo-description" class="form-textarea" @bind="seoDescription" rows="2"></textarea>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">SEO Keywords</label>
-                    <input class="form-input" @bind="seoKeywords" />
+                    <label class="form-label" for="page-seo-keywords">SEO Keywords</label>
+                    <input id="page-seo-keywords" class="form-input" @bind="seoKeywords" />
                 </div>
                 <div class="form-group">
-                    <label class="form-label">OG Image URL</label>
-                    <input class="form-input" @bind="ogImageUrl" />
+                    <label class="form-label" for="page-og-image">OG Image URL</label>
+                    <input id="page-og-image" class="form-input" @bind="ogImageUrl" />
                 </div>
             </div>
         </aside>

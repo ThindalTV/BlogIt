@@ -1,0 +1,100 @@
+@* Dialog shell shared by every modal in the admin: the semantics and the focus handling live here
+   once instead of being repeated — and previously omitted — in ConfirmDialog, MediaPicker and the
+   chat's export dialog. Callers supply the body and footer as child content and keep using the same
+   .modal-* classes. *@
+
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+@if (IsOpen)
+{
+    @* The overlay keeps its click-to-dismiss, which is a mouse convenience only: it duplicates the
+       Cancel/✕ button and Escape, so it is deliberately not a control and adds no tab stop. *@
+    <div class="modal-overlay" @onclick="RequestClose">
+        @* tabindex="-1" is what makes FocusAsync below possible — without it the dialog cannot take
+           programmatic focus and the caret stays on whatever was behind the overlay. Escape is
+           handled here rather than in JS because which callback it raises is the component's
+           business; only the Tab wrap needs the DOM. *@
+        <div class="modal @ExtraClass" role="dialog" aria-modal="true" aria-labelledby="@titleId"
+             tabindex="-1" @ref="dialogRef" @onclick:stopPropagation="true" @onkeydown="HandleKeyDown">
+            <div class="modal-header">
+                <h2 class="modal-title" id="@titleId">@Title</h2>
+                @if (ShowCloseButton)
+                {
+                    <button type="button" class="modal-close" aria-label="Close dialog" @onclick="RequestClose">✕</button>
+                }
+            </div>
+            @ChildContent
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+
+    /// <summary>Announced as the dialog's name through <c>aria-labelledby</c>.</summary>
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+
+    /// <summary>Extra classes for the dialog box, e.g. <c>modal-sm</c>.</summary>
+    [Parameter] public string? ExtraClass { get; set; }
+
+    /// <summary>Whether to render the header's ✕. Off for confirmations, which have their own Cancel.</summary>
+    [Parameter] public bool ShowCloseButton { get; set; } = true;
+
+    /// <summary>Raised by Escape, the overlay and the ✕ alike. The caller decides what dismissal means.</summary>
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    // Per instance rather than a fixed string: two dialogs mounted on the same screen — PostEdit has
+    // a picker and a confirmation — would otherwise both claim the same id, and aria-labelledby
+    // would resolve to whichever the browser saw first.
+    private readonly string titleId = $"modal-title-{Guid.NewGuid():N}";
+
+    private ElementReference dialogRef;
+    private bool focusHeld;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Keyed off focusHeld rather than firstRender: these components stay mounted with IsOpen
+        // false and are re-rendered on open, so firstRender is only ever true for a dialog that
+        // starts open.
+        if (IsOpen && !focusHeld)
+        {
+            focusHeld = true;
+            await JS.InvokeVoidAsync("blogitInterop.modal.open", dialogRef);
+            await dialogRef.FocusAsync();
+        }
+        else if (!IsOpen && focusHeld)
+        {
+            focusHeld = false;
+            await JS.InvokeVoidAsync("blogitInterop.modal.close");
+        }
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+            await RequestClose();
+    }
+
+    private async Task RequestClose() => await OnClose.InvokeAsync();
+
+    public async ValueTask DisposeAsync()
+    {
+        if (!focusHeld)
+            return;
+
+        focusHeld = false;
+        try
+        {
+            // A dialog disposed while open — navigating away from an editor with the picker up —
+            // still owes the page its focus back and has a listener to detach.
+            await JS.InvokeVoidAsync("blogitInterop.modal.close");
+        }
+        catch (JSDisconnectedException)
+        {
+            // The circuit is already gone, so there is no document left to restore focus in.
+        }
+    }
+}

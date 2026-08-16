@@ -67,6 +67,35 @@ a { color: var(--color-primary-text); text-decoration: none; }
 a:hover { text-decoration: underline; }
 code { font-family: var(--font-mono); font-size: .875em; }
 
+/* ── Accessibility utilities ────────────────────────────────── */
+/* Removes an element from view without removing it from the accessibility tree or the tab order,
+   which display:none and visibility:hidden both do. Used for the file input behind the Upload
+   button and for text that names an icon-only control. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* One focus ring for every control, including the grids and headings that became buttons in this
+   pass. :focus-visible rather than :focus so a mouse click does not leave a ring behind. */
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+/* The real input is clipped by .visually-hidden, so its focus ring has to be drawn on the label that
+   stands in for it. */
+.upload-trigger:focus-within {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
 /* ── App Loading ───────────────────────────────────────────── */
 .app-loading {
   display: flex;
@@ -688,7 +717,15 @@ code { font-family: var(--font-mono); font-size: .875em; }
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
 }
 
+/* A <button> since selection is an action; the font/colour/alignment resets undo what the UA button
+   style would otherwise impose on what is still a card. */
 .media-card {
+  display: block;
+  width: 100%;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
   background: var(--color-surface);
   border-radius: var(--radius);
   border: 2px solid var(--color-border);
@@ -762,15 +799,23 @@ code { font-family: var(--font-mono); font-size: .875em; }
 
 /* ── Chat / AI ──────────────────────────────────────────────── */
 .chat-title-wrap { flex: 1; }
+/* A <button> inside the <h1> rather than a clickable heading, so the rename is a real control and the
+   page keeps its heading. The resets make it read as the heading text it replaces. */
 .chat-title {
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  padding: 0;
+  font-family: inherit;
   font-size: 22px;
   font-weight: 700;
+  color: inherit;
+  text-align: left;
+  background: none;
+  border: none;
 }
-.chat-title:hover .edit-hint { opacity: 1; }
+.chat-title:hover .edit-hint, .chat-title:focus-visible .edit-hint { opacity: 1; }
 .edit-hint { font-size: 14px; opacity: 0; color: var(--color-text-muted); transition: opacity var(--transition); }
 .chat-title-input { max-width: 400px; font-size: 18px; font-weight: 600; }
 
@@ -973,8 +1018,14 @@ code { font-family: var(--font-mono); font-size: .875em; }
 }
 .selected-name { font-size: 13px; color: var(--color-text-secondary); }
 
+/* Also a <button> now — see .media-card for why the resets are here. */
 .media-thumb {
   cursor: pointer;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  background: var(--color-surface);
   border-radius: var(--radius);
   border: 2px solid var(--color-border);
   overflow: hidden;

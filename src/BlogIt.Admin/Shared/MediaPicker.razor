@@ -1,98 +1,111 @@
-@if (IsOpen)
-{
-    <div class="modal-overlay" @onclick="HandleOverlayClick">
-        <div class="modal" @onclick:stopPropagation="true">
-            <div class="modal-header">
-                <h2 class="modal-title">Media Library</h2>
-                <button class="modal-close" @onclick="Close">✕</button>
-            </div>
-            <div class="modal-tabs">
-                <button class="tab-btn @(activeTab == "browse" ? "active" : "")" @onclick='() => activeTab = "browse"'>Browse</button>
-                <button class="tab-btn @(activeTab == "upload" ? "active" : "")" @onclick='() => activeTab = "upload"'>Upload</button>
-            </div>
+<ModalDialog IsOpen="IsOpen" Title="Media Library" OnClose="Close">
+    @* role="tablist"/"tab" is deliberately not used: these two buttons swap the dialog body rather
+       than toggling pre-rendered panels, and claiming the tab pattern without aria-selected,
+       aria-controls and arrow-key navigation announces a contract the markup does not keep. As plain
+       buttons they are honest and already operable. *@
+    <div class="modal-tabs">
+        <button type="button" class="tab-btn @(activeTab == "browse" ? "active" : "")" @onclick='() => activeTab = "browse"'>Browse</button>
+        <button type="button" class="tab-btn @(activeTab == "upload" ? "active" : "")" @onclick='() => activeTab = "upload"'>Upload</button>
+    </div>
 
-            @if (activeTab == "browse")
-            {
-                <div class="media-picker-search">
-                    <input class="form-input" placeholder="Search media…" value="@searchQuery" @oninput="OnSearchInput" />
-                </div>
-                @if (isLoading)
+    @if (activeTab == "browse")
+    {
+        <div class="media-picker-search">
+            @* aria-label rather than a visible caption: the search box sits directly under the dialog
+               title, which already says what is being searched. *@
+            <input class="form-input" type="search" aria-label="Search media"
+                   placeholder="Search media…" value="@searchQuery" @oninput="OnSearchInput" />
+        </div>
+        @if (isLoading)
+        {
+            <div class="loading-spinner-wrap"><div class="spinner"></div></div>
+        }
+        else if (!string.IsNullOrEmpty(loadError))
+        {
+            <p class="error-msg">@loadError</p>
+        }
+        else if (result is null || result.Items.Count == 0)
+        {
+            <p class="empty-state">
+                @(string.IsNullOrWhiteSpace(searchQuery)
+                    ? "No media files yet."
+                    : $"No media files match “{searchQuery}”.")
+            </p>
+        }
+        else
+        {
+            <div class="media-grid">
+                @foreach (var file in result.Items)
                 {
-                    <div class="loading-spinner-wrap"><div class="spinner"></div></div>
-                }
-                else if (!string.IsNullOrEmpty(loadError))
-                {
-                    <p class="error-msg">@loadError</p>
-                }
-                else if (result is null || result.Items.Count == 0)
-                {
-                    <p class="empty-state">
-                        @(string.IsNullOrWhiteSpace(searchQuery)
-                            ? "No media files yet."
-                            : $"No media files match “{searchQuery}”.")
-                    </p>
-                }
-                else
-                {
-                    <div class="media-grid">
-                        @foreach (var file in result.Items)
+                    @* A button, not a div: selecting a file is an action, and aria-pressed is what
+                       reports the state the .selected border only paints. *@
+                    <button type="button" class="media-thumb @(selected?.Id == file.Id ? "selected" : "")"
+                            aria-pressed="@((selected?.Id == file.Id).ToString().ToLowerInvariant())"
+                            @onclick="() => SelectFile(file)">
+                        @if (file.ContentType.StartsWith("image/"))
                         {
-                            <div class="media-thumb @(selected?.Id == file.Id ? "selected" : "")" @onclick="() => SelectFile(file)">
-                                @if (file.ContentType.StartsWith("image/"))
-                                {
-                                    <img src="@file.PublicPath" alt="@file.Title" loading="lazy" />
-                                }
-                                else
-                                {
-                                    <div class="media-file-icon">📄</div>
-                                }
-                                <span class="media-thumb-name">@file.Title</span>
-                            </div>
+                            @* alt="" because the adjacent name already carries the title; a repeat
+                               would have the button announce itself twice. *@
+                            <img src="@file.PublicPath" alt="" loading="lazy" />
                         }
-                    </div>
-
-                    <Pager CurrentPage="currentPage"
-                           TotalCount="result.TotalCount"
-                           PageSize="result.PageSize"
-                           OnPageChanged="LoadMedia" />
-                }
-                @if (selected != null)
-                {
-                    <div class="media-picker-footer">
-                        <span class="selected-name">@selected.Title</span>
-                        <button class="btn btn-primary" @onclick="InsertSelected">Insert</button>
-                    </div>
-                }
-            }
-            else
-            {
-                <div class="upload-area">
-                    <label class="upload-label">
-                        <span>Choose file to upload</span>
-                        <InputFile OnChange="HandleFileUpload" accept="image/*,video/*,application/pdf" />
-                    </label>
-                    <div class="form-group">
-                        <label class="form-label">Title</label>
-                        <input class="form-input" @bind="uploadTitle" placeholder="File title" />
-                    </div>
-                    <button class="btn btn-primary" @onclick="UploadFile" disabled="@isUploading">
-                        @if (isUploading) { <span class="spinner-sm"></span> } else { <span>Upload</span> }
+                        else
+                        {
+                            <span class="media-file-icon" aria-hidden="true">📄</span>
+                        }
+                        <span class="media-thumb-name">@file.Title</span>
                     </button>
-                    @if (!string.IsNullOrEmpty(uploadError))
-                    {
-                        <p class="error-msg">@uploadError</p>
-                    }
-                </div>
+                }
+            </div>
+
+            <Pager CurrentPage="currentPage"
+                   TotalCount="result.TotalCount"
+                   PageSize="result.PageSize"
+                   OnPageChanged="LoadMedia" />
+        }
+        @if (selected != null)
+        {
+            <div class="media-picker-footer">
+                <span class="selected-name">@selected.Title</span>
+                <button type="button" class="btn btn-primary" @onclick="InsertSelected">Insert</button>
+            </div>
+        }
+    }
+    else
+    {
+        <div class="upload-area">
+            @* The input stays inside the label — .upload-label is the dashed drop zone and pulling it
+               out would leave the input sitting below the box. The explicit for/id is added on top of
+               that implicit association so both upload controls in the admin read the same way. *@
+            <label class="upload-label" for="@fileId">
+                <span>Choose file to upload</span>
+                <InputFile id="@fileId" OnChange="HandleFileUpload" accept="image/*,video/*,application/pdf" />
+            </label>
+            <div class="form-group">
+                <label class="form-label" for="@titleId">Title</label>
+                <input id="@titleId" class="form-input" @bind="uploadTitle" placeholder="File title" />
+            </div>
+            <button type="button" class="btn btn-primary" @onclick="UploadFile" disabled="@isUploading">
+                @if (isUploading) { <span class="spinner-sm"></span> } else { <span>Upload</span> }
+            </button>
+            @if (!string.IsNullOrEmpty(uploadError))
+            {
+                <p class="error-msg">@uploadError</p>
             }
         </div>
-    </div>
-}
+    }
+</ModalDialog>
 
 @code {
     [Parameter] public bool IsOpen { get; set; }
     [Parameter] public EventCallback<MediaFileDto> OnInsert { get; set; }
     [Parameter] public EventCallback OnClose { get; set; }
     [Inject] private ApiClient Api { get; set; } = default!;
+
+    // Per instance, for the same reason ModalDialog generates its title id: an editor can hold more
+    // than one component that renders a "Title" field, and duplicate ids make label association
+    // resolve to whichever the browser saw first.
+    private readonly string fileId = $"picker-file-{Guid.NewGuid():N}";
+    private readonly string titleId = $"picker-title-{Guid.NewGuid():N}";
 
     private string activeTab = "browse";
     private string searchQuery = "";
@@ -184,6 +197,4 @@
         selected = null;
         await OnClose.InvokeAsync();
     }
-
-    private async Task HandleOverlayClick() => await Close();
 }

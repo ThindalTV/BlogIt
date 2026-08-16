@@ -40,12 +40,12 @@ else
     <div class="editor-layout">
         <div class="editor-main">
             <div class="form-group">
-                <label class="form-label">Title</label>
-                <input class="form-input form-input-lg" @bind="title" placeholder="Post title…" />
+                <label class="form-label" for="post-title">Title</label>
+                <input id="post-title" class="form-input form-input-lg" @bind="title" placeholder="Post title…" />
             </div>
             <div class="form-group">
-                <label class="form-label">Slug</label>
-                <input class="form-input" @bind="slug" placeholder="Generated from the title"
+                <label class="form-label" for="post-slug">Slug</label>
+                <input id="post-slug" class="form-input" @bind="slug" placeholder="Generated from the title"
                        disabled="@(post?.PublishedAt is not null)" />
                 @if (post?.PublishedAt is not null)
                 {
@@ -57,12 +57,12 @@ else
                 }
             </div>
             <div class="form-group">
-                <label class="form-label">Summary</label>
-                <textarea class="form-textarea" @bind="summary" rows="3" placeholder="Brief summary…"></textarea>
+                <label class="form-label" for="post-summary">Summary</label>
+                <textarea id="post-summary" class="form-textarea" @bind="summary" rows="3" placeholder="Brief summary…"></textarea>
             </div>
             <div class="form-group">
                 <div class="editor-label-row">
-                    <label class="form-label">Content (Markdown)</label>
+                    <label class="form-label" for="post-content-editor">Content (Markdown)</label>
                     <button class="btn btn-sm btn-secondary" @onclick="() => showMediaPicker = true">Insert Media</button>
                 </div>
                 <textarea id="post-content-editor" @ref="editorRef">@content</textarea>
@@ -77,40 +77,46 @@ else
                     <p class="form-hint">Current state: @ScheduleLabel(post.ScheduleState)</p>
                 }
                 <div class="form-group">
-                    <label class="form-label">Publish at</label>
-                    <input class="form-input" type="datetime-local" value="@scheduledPublishLocal"
+                    <label class="form-label" for="post-scheduled-publish">Publish at</label>
+                    <input id="post-scheduled-publish" class="form-input" type="datetime-local" value="@scheduledPublishLocal"
                            @onchange="e => scheduledPublishLocal = e.Value?.ToString() ?? string.Empty"
                            disabled="@(post?.IsPublished == true)" />
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Unpublish at</label>
-                    <input class="form-input" type="datetime-local" value="@scheduledUnpublishLocal"
+                    <label class="form-label" for="post-scheduled-unpublish">Unpublish at</label>
+                    <input id="post-scheduled-unpublish" class="form-input" type="datetime-local" value="@scheduledUnpublishLocal"
                            @onchange="e => scheduledUnpublishLocal = e.Value?.ToString() ?? string.Empty" />
                 </div>
                 <p class="form-hint">Times are shown in your local time and saved as UTC. Leave blank for no schedule.</p>
             </div>
             <div class="sidebar-panel">
-                <h3 class="sidebar-panel-title">Tags</h3>
-                <input class="form-input" @bind="tagsInput" placeholder="tag1, tag2, tag3" />
-                <p class="form-hint">Comma-separated</p>
+                @* This is the one field with no label of its own — the panel heading is its caption.
+                   aria-labelledby borrows that heading rather than adding a hidden label that would
+                   duplicate text already on screen, and aria-describedby attaches the format hint
+                   without folding it into the name. *@
+                <h3 class="sidebar-panel-title" id="post-tags-label">Tags</h3>
+                <input id="post-tags" class="form-input"
+                       aria-labelledby="post-tags-label" aria-describedby="post-tags-hint"
+                       @bind="tagsInput" placeholder="tag1, tag2, tag3" />
+                <p class="form-hint" id="post-tags-hint">Comma-separated</p>
             </div>
             <div class="sidebar-panel">
                 <h3 class="sidebar-panel-title">SEO</h3>
                 <div class="form-group">
-                    <label class="form-label">SEO Title</label>
-                    <input class="form-input" @bind="seoTitle" />
+                    <label class="form-label" for="post-seo-title">SEO Title</label>
+                    <input id="post-seo-title" class="form-input" @bind="seoTitle" />
                 </div>
                 <div class="form-group">
-                    <label class="form-label">SEO Description</label>
-                    <textarea class="form-textarea" @bind="seoDescription" rows="2"></textarea>
+                    <label class="form-label" for="post-seo-description">SEO Description</label>
+                    <textarea id="post-seo-description" class="form-textarea" @bind="seoDescription" rows="2"></textarea>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">SEO Keywords</label>
-                    <input class="form-input" @bind="seoKeywords" />
+                    <label class="form-label" for="post-seo-keywords">SEO Keywords</label>
+                    <input id="post-seo-keywords" class="form-input" @bind="seoKeywords" />
                 </div>
                 <div class="form-group">
-                    <label class="form-label">OG Image URL</label>
-                    <input class="form-input" @bind="ogImageUrl" />
+                    <label class="form-label" for="post-og-image">OG Image URL</label>
+                    <input id="post-og-image" class="form-input" @bind="ogImageUrl" />
                 </div>
             </div>
         </aside>

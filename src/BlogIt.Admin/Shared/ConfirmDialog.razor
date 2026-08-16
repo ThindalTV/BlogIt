@@ -1,20 +1,14 @@
-@if (IsOpen)
-{
-    <div class="modal-overlay" @onclick="HandleCancel">
-        <div class="modal modal-sm" @onclick:stopPropagation="true">
-            <div class="modal-header">
-                <h2 class="modal-title">@Title</h2>
-            </div>
-            <div class="modal-body">
-                <p>@Message</p>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" @onclick="HandleCancel">Cancel</button>
-                <button class="btn btn-danger" @onclick="HandleConfirm">@ConfirmLabel</button>
-            </div>
-        </div>
+@* No ✕ in the header: this dialog already has a labelled Cancel, and a second dismissal glyph beside
+   it only adds a tab stop that says the same thing. *@
+<ModalDialog IsOpen="IsOpen" Title="@Title" ExtraClass="modal-sm" ShowCloseButton="false" OnClose="HandleCancel">
+    <div class="modal-body">
+        <p>@Message</p>
     </div>
-}
+    <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" @onclick="HandleCancel">Cancel</button>
+        <button type="button" class="btn btn-danger" @onclick="HandleConfirm">@ConfirmLabel</button>
+    </div>
+</ModalDialog>
 
 @code {
     [Parameter] public bool IsOpen { get; set; }
@@ -25,5 +19,8 @@
     [Parameter] public EventCallback OnCancel { get; set; }
 
     private async Task HandleConfirm() => await OnConfirm.InvokeAsync();
+
+    // Escape and the overlay both land here, not on OnConfirm: dismissing a "this cannot be undone"
+    // prompt has to mean no.
     private async Task HandleCancel() => await OnCancel.InvokeAsync();
 }

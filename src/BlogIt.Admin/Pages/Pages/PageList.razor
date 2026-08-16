@@ -11,7 +11,8 @@
 </div>
 
 <div class="toolbar">
-    <input class="form-input toolbar-search" placeholder="Search pages…" value="@searchQuery" @oninput="OnSearchInput" />
+    <input class="form-input toolbar-search" type="search" aria-label="Search pages"
+           placeholder="Search pages…" value="@searchQuery" @oninput="OnSearchInput" />
 </div>
 
 @if (isLoading)

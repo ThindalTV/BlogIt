@@ -6,14 +6,19 @@
 
 <div class="page-header">
     <h1 class="page-title">Media</h1>
-    <label class="btn btn-primary upload-trigger">
-        + Upload
-        <InputFile OnChange="HandleUpload" accept="image/*,video/*,application/pdf" style="display:none" />
-    </label>
+    @* The input used to be hidden with display:none inside this label, which took it out of the tab
+       order entirely — and since a <label> is not focusable either, there was no way to start an
+       upload from the keyboard at all. .visually-hidden clips it instead of removing it, so it keeps
+       its tab stop, takes the label as its name, and .upload-trigger:focus-within draws the ring on
+       the button-shaped label the user actually sees. *@
+    <label class="btn btn-primary upload-trigger" for="media-upload">+ Upload</label>
+    <InputFile id="media-upload" class="visually-hidden" OnChange="HandleUpload"
+               accept="image/*,video/*,application/pdf" />
 </div>
 
 <div class="toolbar">
-    <input class="form-input toolbar-search" placeholder="Search media…" value="@searchQuery" @oninput="OnSearchInput" />
+    <input class="form-input toolbar-search" type="search" aria-label="Search media"
+           placeholder="Search media…" value="@searchQuery" @oninput="OnSearchInput" />
 </div>
 
 @if (!string.IsNullOrEmpty(errorMsg))
@@ -44,24 +49,30 @@ else
     <div class="media-grid media-grid-page">
         @foreach (var file in result.Items)
         {
-            <div class="media-card @(selectedFile?.Id == file.Id ? "selected" : "")" @onclick="() => SelectFile(file)">
+            @* A button rather than a div with @onclick: selecting a file reveals the detail bar with
+               Copy URL and Delete, so it is the entry point to both and cannot be mouse-only.
+               aria-pressed carries the state that the .selected outline shows visually. *@
+            <button type="button" class="media-card @(selectedFile?.Id == file.Id ? "selected" : "")"
+                    aria-pressed="@((selectedFile?.Id == file.Id).ToString().ToLowerInvariant())"
+                    @onclick="() => SelectFile(file)">
                 @if (file.ContentType.StartsWith("image/"))
                 {
                     <div class="media-card-thumb">
-                        <img src="@file.PublicPath" alt="@file.Title" loading="lazy" />
+                        @* alt="" so the name below is the button's only announced text. *@
+                        <img src="@file.PublicPath" alt="" loading="lazy" />
                     </div>
                 }
                 else
                 {
                     <div class="media-card-thumb media-card-icon">
-                        <span>📄</span>
+                        <span aria-hidden="true">📄</span>
                     </div>
                 }
                 <div class="media-card-info">
                     <span class="media-card-name" title="@file.Title">@file.Title</span>
                     <span class="media-card-size">@FormatSize(file.SizeBytes)</span>
                 </div>
-            </div>
+            </button>
         }
     </div>
 
