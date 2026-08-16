@@ -79,6 +79,7 @@ public static class BlogItServiceCollectionExtensions
         services.TryAddSingleton<JwtSigningKeyCache>();
         services.TryAddSingleton<IUrlRedirectService, UrlRedirectService>();
         services.TryAddScoped<IPublicContentService, PublicContentService>();
+        services.TryAddScoped<ISiteMetadataService, SiteMetadataService>();
         services.TryAddSingleton<BlogItAdminAssets>();
         services.AddHostedService<PublicationSchedulingService>();
         services.AddHttpContextAccessor();

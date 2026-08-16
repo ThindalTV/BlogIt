@@ -13,17 +13,32 @@ public static class FeedsApi
     public const string RssContentType = "application/rss+xml; charset=utf-8";
     public const string AtomContentType = "application/atom+xml; charset=utf-8";
 
-    public static IEndpointRouteBuilder MapFeedsApi(this IEndpointRouteBuilder app)
+    /// <summary>
+    /// Maps <c>/rss.xml</c> and <c>/atom.xml</c>, each only when the corresponding
+    /// <see cref="BlogItOptions"/> switch is on. See <see cref="SitemapApi.MapSitemapApi"/> for why
+    /// a disabled feed is left unmapped rather than mapped to a 404.
+    /// </summary>
+    public static IEndpointRouteBuilder MapFeedsApi(
+        this IEndpointRouteBuilder app,
+        BlogItOptions options)
     {
-        app.MapGet("/rss.xml", GetRssAsync)
-            .AllowAnonymous()
-            .WithName("RssFeed")
-            .Produces(StatusCodes.Status200OK, contentType: RssContentType);
+        ArgumentNullException.ThrowIfNull(options);
 
-        app.MapGet("/atom.xml", GetAtomAsync)
-            .AllowAnonymous()
-            .WithName("AtomFeed")
-            .Produces(StatusCodes.Status200OK, contentType: AtomContentType);
+        if (options.ServeRssFeed)
+        {
+            app.MapGet("/rss.xml", GetRssAsync)
+                .AllowAnonymous()
+                .WithName(BlogItEndpointNames.RssFeed)
+                .Produces(StatusCodes.Status200OK, contentType: RssContentType);
+        }
+
+        if (options.ServeAtomFeed)
+        {
+            app.MapGet("/atom.xml", GetAtomAsync)
+                .AllowAnonymous()
+                .WithName(BlogItEndpointNames.AtomFeed)
+                .Produces(StatusCodes.Status200OK, contentType: AtomContentType);
+        }
 
         return app;
     }

@@ -22,7 +22,9 @@ internal sealed class EngineEndpointContributor(BlogItOptions options)
         api.MapRedirectsApi();
 
         endpoints.MapMediaProxyApi(options.MediaPath);
-        endpoints.MapSitemapApi();
-        endpoints.MapFeedsApi();
+        // Root-level documents: each is opt-out, so these two decide per route whether to map
+        // anything at all rather than always claiming the URL.
+        endpoints.MapSitemapApi(options);
+        endpoints.MapFeedsApi(options);
     }
 }

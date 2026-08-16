@@ -77,6 +77,14 @@ and `/media` for public media. Set `AdminPath`, `ApiPath`, or `MediaPath` in the
 single `AddBlogIt` callback to change them. Relative filesystem roots resolve
 against the host content root.
 
+BlogIt also serves `/rss.xml`, `/atom.xml`, `/sitemap.xml`, and `/robots.txt` at
+the site root. These are fixed URLs rather than configurable paths, so each has
+an on/off switch instead — `ServeRssFeed`, `ServeAtomFeed`, `ServeSitemap`,
+`ServeRobotsTxt`, all on by default. Turning one off unmaps the route so the
+host owns the URL; `BlogIt.Services.ISiteMetadataService` then supplies the feed
+items, sitemap entries, and robots directives as data for the host's own
+document.
+
 `AddBlogIt` registers the package-owned `BlogIt.Jwt` scheme and `BlogIt.Admin`
 policy. Do not separately add authentication or authorization middleware for
 BlogIt. Put forwarding, errors, HTTPS, and static files before `UseBlogIt`;

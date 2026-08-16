@@ -165,7 +165,12 @@ builder.Services.AddBlogIt(options =>
 });
 ```
 
-The three paths must be distinct. Place forwarding, exception handling, HTTPS,
+The three paths must be distinct. BlogIt also claims four fixed root URLs —
+`/rss.xml`, `/atom.xml`, `/sitemap.xml`, `/robots.txt` — which are switched off
+individually rather than moved; see
+[Feeds, sitemap, and robots.txt](#feeds-sitemap-and-robotstxt).
+
+Place forwarding, exception handling, HTTPS,
 and static files before `UseBlogIt`. Place host antiforgery after it, then call
 `MapBlogIt`. BlogIt registers and invokes its own `BlogIt.Jwt` authentication
 scheme and `BlogIt.Admin` policy; the host must not add duplicate authentication
@@ -305,12 +310,87 @@ Compose them into host pages for metadata, structured data, canonical URLs, and
 Google Analytics. `GaScript` emits markup only after a measurement ID is saved
 in admin settings.
 
-BlogIt maps `/rss.xml`, `/atom.xml`, `/sitemap.xml`, and `/robots.txt`
-automatically. Set the site URL and description in the admin portal so generated
-absolute URLs and metadata are correct.
-
 See `samples/BlogIt.Sample` for archive, post, page, search, tag, preview, SEO,
 and analytics examples.
+
+## Feeds, sitemap, and robots.txt
+
+BlogIt maps four documents at the site root. Set the site URL and description in
+the admin portal so their absolute URLs and metadata are correct.
+
+| Route | Endpoint name | Switch |
+| --- | --- | --- |
+| `GET /rss.xml` | `BlogIt.RssFeed` | `ServeRssFeed` |
+| `GET /atom.xml` | `BlogIt.AtomFeed` | `ServeAtomFeed` |
+| `GET /sitemap.xml` | `BlogIt.Sitemap` | `ServeSitemap` |
+| `GET /robots.txt` | `BlogIt.RobotsTxt` | `ServeRobotsTxt` |
+
+Unlike `AdminPath`/`ApiPath`/`MediaPath` these are not configurable paths —
+they are conventional URLs a site either owns or does not. Each one is instead
+an on/off switch, defaulting to on:
+
+```csharp
+builder.Services.AddBlogIt(options =>
+{
+    // This site already ships its own robots.txt and a combined sitemap.
+    options.ServeRobotsTxt = false;
+    options.ServeSitemap = false;
+    options.UseSqlServer(connectionString);
+    options.UseFileSystemStorage(storage => storage.RootPath = mediaRoot);
+});
+```
+
+Switching one off unmaps the route entirely. That matters because leaving it
+mapped is not neutral: a host static file at the same path is silently shadowed
+by BlogIt's endpoint, and a host *endpoint* at the same path fails at request
+time with `AmbiguousMatchException`. Turning the switch off makes the path the
+host's again.
+
+Turning `ServeSitemap` off also drops the `Sitemap:` line from BlogIt's
+`robots.txt`, since there is then no such document to point crawlers at.
+
+### Getting the entries as data
+
+Turning a document off must not lose its contents, so
+`BlogIt.Services.ISiteMetadataService` exposes all of it as structured data,
+alongside `IPublicContentService`:
+
+| Method | Result |
+| --- | --- |
+| `GetFeedAsync(maxItems)` | `BlogFeed` — channel title, description, site URL, and `BlogFeedItem` entries |
+| `GetSitemapEntriesAsync()` | `SitemapEntry` per crawlable URL: site-relative `Path`, absolute `Location`, `LastModified` |
+| `GetRobotsDirectivesAsync()` | `RobotsDirectives` — `User-agent` groups and `Sitemap:` URLs |
+
+Everything is published-only, with no `includeUnpublished` escape hatch: these
+documents are crawler-facing by definition.
+
+Merging BlogIt's URLs into a host-owned sitemap:
+
+```csharp
+app.MapGet("/sitemap.xml", async (BlogIt.Services.ISiteMetadataService metadata) =>
+{
+    var urls = ownUrls.Concat(
+        (await metadata.GetSitemapEntriesAsync())
+            .Select(entry => (entry.Location, entry.LastModified)));
+    return Results.Content(RenderCombinedSitemap(urls), "application/xml");
+});
+```
+
+`SitemapEntry.Location` is the site URL and the entry path concatenated, so it
+keeps the prefix of a blog mounted at `https://example.com/blog/`. Feed items
+deliberately carry only the site-relative `Path`, with the resolved base URL on
+`BlogFeed.SiteUrl`; combine them as `feed.SiteUrl.TrimEnd('/') + item.Path`.
+
+If you want BlogIt's exact rendering as well as its data — for example to serve
+the same feed from a different route — the renderers are public and take the
+data types directly: `FeedService.CreateRss(feed)`, `FeedService.CreateAtom(feed)`,
+`SitemapApi.RenderSitemap(entries)`, and `SitemapApi.RenderRobots(directives)`.
+The built-in endpoints are these same two steps, so a host-rebuilt document is
+byte-for-byte the one BlogIt would have served.
+
+Endpoint names are prefixed (`BlogIt.RssFeed`, not `RssFeed`) — see
+`BlogItEndpointNames`. Endpoint names are a flat namespace shared with the host
+and a duplicate throws at startup, so the unqualified names stay yours.
 
 ## Run and test this repository
 
