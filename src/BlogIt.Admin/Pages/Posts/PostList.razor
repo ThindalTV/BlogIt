@@ -79,16 +79,12 @@ else
         </tbody>
     </table>
 
-    @if (result.TotalCount > result.PageSize)
-    {
-        <div class="pagination">
-            @for (int p = 1; p <= (int)Math.Ceiling((double)result.TotalCount / result.PageSize); p++)
-            {
-                var pg = p;
-                <button class="page-btn @(pg == currentPage ? "active" : "")" @onclick="() => LoadPosts(pg)">@pg</button>
-            }
-        </div>
-    }
+    @* Shared with Pages and Media; replaced a one-button-per-page strip that was unusable past a
+       few dozen pages. *@
+    <Pager CurrentPage="currentPage"
+           TotalCount="result.TotalCount"
+           PageSize="result.PageSize"
+           OnPageChanged="LoadPosts" />
 }
 
 @if (!string.IsNullOrEmpty(errorMsg))

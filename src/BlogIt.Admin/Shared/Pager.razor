@@ -1,0 +1,72 @@
+@* Page-number strip shared by every admin list screen. Renders nothing for a single page, so a
+   caller can drop it in unconditionally. Page arithmetic lives in AdminPageWindow so it can be
+   unit tested; this file is only markup. *@
+
+@if (totalPages > 1)
+{
+    <nav class="pagination" aria-label="Pagination">
+        <button type="button" class="page-btn" title="Previous page" aria-label="Previous page"
+                disabled="@(CurrentPage <= 1)" @onclick="() => GoTo(CurrentPage - 1)">‹</button>
+
+        @if (window[0] > 1)
+        {
+            <button type="button" class="page-btn" @onclick="() => GoTo(1)">1</button>
+            @if (window[0] > 2)
+            {
+                <span class="page-gap" aria-hidden="true">…</span>
+            }
+        }
+
+        @foreach (var page in window)
+        {
+            var target = page;
+            <button type="button" class="page-btn @(target == CurrentPage ? "active" : "")"
+                    aria-current="@(target == CurrentPage ? "page" : null)"
+                    @onclick="() => GoTo(target)">@target</button>
+        }
+
+        @if (window[^1] < totalPages)
+        {
+            @if (window[^1] < totalPages - 1)
+            {
+                <span class="page-gap" aria-hidden="true">…</span>
+            }
+            <button type="button" class="page-btn" @onclick="() => GoTo(totalPages)">@totalPages</button>
+        }
+
+        <button type="button" class="page-btn" title="Next page" aria-label="Next page"
+                disabled="@(CurrentPage >= totalPages)" @onclick="() => GoTo(CurrentPage + 1)">›</button>
+    </nav>
+}
+
+@code {
+    /// <summary>Page currently on screen, 1-based.</summary>
+    [Parameter, EditorRequired] public int CurrentPage { get; set; } = 1;
+
+    /// <summary>Total rows the server reports, i.e. <c>PagedResult.TotalCount</c>.</summary>
+    [Parameter, EditorRequired] public int TotalCount { get; set; }
+
+    /// <summary>Rows per page the caller asked the server for.</summary>
+    [Parameter] public int PageSize { get; set; } = ApiClient.DefaultPageSize;
+
+    /// <summary>Raised with the requested page. Repeat clicks on the current page are swallowed.</summary>
+    [Parameter] public EventCallback<int> OnPageChanged { get; set; }
+
+    private int totalPages;
+    private IReadOnlyList<int> window = [];
+
+    // Derived here rather than in properties the markup reads: the strip is referenced several
+    // times per render and rebuilding the list each time would be wasted work.
+    protected override void OnParametersSet()
+    {
+        totalPages = AdminPageWindow.TotalPages(TotalCount, PageSize);
+        window = AdminPageWindow.Build(CurrentPage, totalPages);
+    }
+
+    private async Task GoTo(int page)
+    {
+        var target = AdminPageWindow.Clamp(page, totalPages);
+        if (target == CurrentPage) return;
+        await OnPageChanged.InvokeAsync(target);
+    }
+}

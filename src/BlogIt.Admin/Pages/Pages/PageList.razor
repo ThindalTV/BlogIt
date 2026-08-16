@@ -10,19 +10,32 @@
     <a class="btn btn-primary" href="pages/new">+ New Page</a>
 </div>
 
+<div class="toolbar">
+    <input class="form-input toolbar-search" placeholder="Search pages…" value="@searchQuery" @oninput="OnSearchInput" />
+</div>
+
 @if (isLoading)
 {
     <div class="loading-spinner-wrap"><div class="spinner"></div></div>
 }
-else if (pages == null || pages.Count == 0)
+else if (result == null || result.Items.Count == 0)
 {
     <div class="empty-state-box">
-        <p>No pages yet.</p>
-        <a class="btn btn-primary" href="pages/new">Create your first page</a>
+        @if (string.IsNullOrWhiteSpace(searchQuery))
+        {
+            <p>No pages yet.</p>
+            <a class="btn btn-primary" href="pages/new">Create your first page</a>
+        }
+        else
+        {
+            <p>No pages match “@searchQuery”.</p>
+        }
     </div>
 }
 else
 {
+    <p class="list-summary">@RangeSummary()</p>
+
     <table class="data-table">
         <thead>
             <tr>
@@ -34,7 +47,7 @@ else
             </tr>
         </thead>
         <tbody>
-            @foreach (var pg in pages)
+            @foreach (var pg in result.Items)
             {
                 <tr>
                     <td><a href="pages/@pg.Id">@pg.Title</a></td>
@@ -60,6 +73,11 @@ else
             }
         </tbody>
     </table>
+
+    <Pager CurrentPage="currentPage"
+           TotalCount="result.TotalCount"
+           PageSize="result.PageSize"
+           OnPageChanged="LoadPages" />
 }
 
 @if (!string.IsNullOrEmpty(errorMsg))
@@ -74,17 +92,48 @@ else
     OnCancel="() => showConfirm = false" />
 
 @code {
-    private IReadOnlyList<PageDto>? pages;
+    private PagedResult<PageDto>? result;
     private bool isLoading = true;
+    private int currentPage = 1;
+    private string searchQuery = "";
     private string errorMsg = "";
     private bool showConfirm;
     private PageDto? pageToDelete;
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnInitializedAsync() => await LoadPages(1);
+
+    private async Task OnSearchInput(ChangeEventArgs e)
     {
-        try { pages = (await Api.GetPagesAsync())?.Items; }
+        searchQuery = e.Value?.ToString() ?? "";
+        // Back to page 1: the old page number means nothing against a different result set, and
+        // the search runs server-side so it is not limited to the rows already on screen.
+        await LoadPages(1);
+    }
+
+    private async Task LoadPages(int page)
+    {
+        isLoading = true;
+        currentPage = page;
+        errorMsg = "";
+        try { result = await Api.GetPagesAsync(searchQuery, page); }
         catch (Exception ex) { errorMsg = ex.Message; }
         finally { isLoading = false; }
+    }
+
+    /// <summary>Reloads the current page, dropping back a page when deleting emptied the last one.</summary>
+    private async Task ReloadAfterMutation()
+    {
+        var page = currentPage;
+        if (result is not null && result.Items.Count == 1 && page > 1)
+            page--;
+        await LoadPages(page);
+    }
+
+    private string RangeSummary()
+    {
+        if (result is null || result.Items.Count == 0) return "";
+        var from = ((currentPage - 1) * result.PageSize) + 1;
+        return $"{from}–{from + result.Items.Count - 1} of {result.TotalCount}";
     }
 
     private void ConfirmDelete(PageDto page) { pageToDelete = page; showConfirm = true; }
@@ -105,7 +154,7 @@ else
         try
         {
             await Api.UpdatePageScheduleAsync(page.Id, new(null, null));
-            pages = (await Api.GetPagesAsync())?.Items;
+            await LoadPages(currentPage);
         }
         catch (Exception ex) { errorMsg = ex.Message; }
     }
@@ -130,7 +179,7 @@ else
     {
         showConfirm = false;
         if (pageToDelete == null) return;
-        try { await Api.DeletePageAsync(pageToDelete.Id); pages = (await Api.GetPagesAsync())?.Items; }
+        try { await Api.DeletePageAsync(pageToDelete.Id); await ReloadAfterMutation(); }
         catch (Exception ex) { errorMsg = ex.Message; }
     }
 }

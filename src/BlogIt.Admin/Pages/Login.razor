@@ -38,6 +38,15 @@
     private bool isLoading;
     private string errorMsg = "";
 
+    /// <summary>
+    /// Page the user was on when a rejected token bounced them here, set by
+    /// <see cref="AdminAuthMessageHandler"/>. Sanitised through
+    /// <see cref="AdminLoginRedirect.ResolveReturnPath"/> before it is navigated to — it arrives via
+    /// the address bar and so is attacker-controlled.
+    /// </summary>
+    [SupplyParameterFromQuery(Name = AdminLoginRedirect.ReturnUrlKey)]
+    public string? ReturnUrl { get; set; }
+
     protected override async Task OnInitializedAsync()
     {
         var setupStatus = await Api.GetSetupStatusAsync();
@@ -49,7 +58,7 @@
 
         var state = await AuthProvider.GetAuthenticationStateAsync();
         if (state.User.Identity?.IsAuthenticated == true)
-            Nav.NavigateTo("", replace: true);
+            Nav.NavigateTo(AdminLoginRedirect.ResolveReturnPath(ReturnUrl), replace: true);
     }
 
     private async Task HandleLogin()
@@ -66,7 +75,7 @@
             else
             {
                 await AuthProvider.MarkUserAsLoggedIn(resp.Token);
-                Nav.NavigateTo("", replace: true);
+                Nav.NavigateTo(AdminLoginRedirect.ResolveReturnPath(ReturnUrl), replace: true);
             }
         }
         catch

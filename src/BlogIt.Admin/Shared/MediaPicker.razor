@@ -20,14 +20,22 @@
                 {
                     <div class="loading-spinner-wrap"><div class="spinner"></div></div>
                 }
-                else if (filtered is { Count: 0 })
+                else if (!string.IsNullOrEmpty(loadError))
                 {
-                    <p class="empty-state">No media files found.</p>
+                    <p class="error-msg">@loadError</p>
+                }
+                else if (result is null || result.Items.Count == 0)
+                {
+                    <p class="empty-state">
+                        @(string.IsNullOrWhiteSpace(searchQuery)
+                            ? "No media files yet."
+                            : $"No media files match “{searchQuery}”.")
+                    </p>
                 }
                 else
                 {
                     <div class="media-grid">
-                        @foreach (var file in filtered ?? [])
+                        @foreach (var file in result.Items)
                         {
                             <div class="media-thumb @(selected?.Id == file.Id ? "selected" : "")" @onclick="() => SelectFile(file)">
                                 @if (file.ContentType.StartsWith("image/"))
@@ -42,6 +50,11 @@
                             </div>
                         }
                     </div>
+
+                    <Pager CurrentPage="currentPage"
+                           TotalCount="result.TotalCount"
+                           PageSize="result.PageSize"
+                           OnPageChanged="LoadMedia" />
                 }
                 @if (selected != null)
                 {
@@ -83,41 +96,43 @@
 
     private string activeTab = "browse";
     private string searchQuery = "";
-    private IReadOnlyList<MediaFileDto>? allMedia;
-    private List<MediaFileDto>? filtered;
+    private PagedResult<MediaFileDto>? result;
     private MediaFileDto? selected;
     private bool isLoading;
     private bool isUploading;
+    private int currentPage = 1;
     private string uploadTitle = "";
     private string uploadError = "";
+    private string loadError = "";
     private IBrowserFile? uploadFile;
 
-    private void OnSearchInput(ChangeEventArgs e)
+    private async Task OnSearchInput(ChangeEventArgs e)
     {
         searchQuery = e.Value?.ToString() ?? "";
-        FilterMedia();
+        // Searched server-side, so a file outside the loaded page is still findable — the whole
+        // point of the finding: the picker used to filter its own 20-row window.
+        await LoadMedia(1);
     }
 
     protected override async Task OnParametersSetAsync()
     {
-        if (IsOpen && allMedia == null)
-            await LoadMedia();
+        if (IsOpen && result == null)
+            await LoadMedia(1);
     }
 
-    private async Task LoadMedia()
+    private async Task LoadMedia(int page)
     {
         isLoading = true;
-        allMedia = (await Api.GetMediaAsync())?.Items;
-        FilterMedia();
-        isLoading = false;
-    }
-
-    private void FilterMedia()
-    {
-        if (allMedia == null) { filtered = null; return; }
-        filtered = string.IsNullOrWhiteSpace(searchQuery)
-            ? [.. allMedia]
-            : [.. allMedia.Where(m => m.Title.Contains(searchQuery, StringComparison.OrdinalIgnoreCase))];
+        currentPage = page;
+        loadError = "";
+        // Selecting on one page and then paging away would leave the footer offering to insert a
+        // file the user can no longer see.
+        selected = null;
+        // Caught rather than left to propagate: this is a modal over an editor that may hold
+        // unsaved content, so an unhandled throw here would take the whole circuit down with it.
+        try { result = await Api.GetMediaAsync(searchQuery, page); }
+        catch (Exception ex) { loadError = ex.Message; }
+        finally { isLoading = false; }
     }
 
     private void SelectFile(MediaFileDto file) => selected = file;
@@ -146,13 +161,15 @@
         try
         {
             await using var stream = uploadFile.OpenReadStream(maxAllowedSize: 50 * 1024 * 1024);
-            var result = await Api.UploadMediaAsync(uploadTitle, stream, uploadFile.Name, uploadFile.ContentType);
-            if (result != null)
+            var uploaded = await Api.UploadMediaAsync(uploadTitle, stream, uploadFile.Name, uploadFile.ContentType);
+            if (uploaded != null)
             {
-                allMedia = null;
-                await LoadMedia();
+                // Clear the search too, otherwise the fresh upload can land outside the filter the
+                // user happened to have typed and the browse tab looks empty.
+                searchQuery = "";
+                await LoadMedia(1);
                 activeTab = "browse";
-                selected = result;
+                selected = uploaded;
             }
         }
         catch (Exception ex)
