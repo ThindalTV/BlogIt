@@ -99,6 +99,8 @@ else
     OnCancel="() => showConfirm = false" />
 
 @code {
+    [Inject] private IJSRuntime JS { get; set; } = default!;
+
     private PagedResult<MediaFileDto>? result;
     private MediaFileDto? selectedFile;
     private bool isLoading = true;
@@ -160,11 +162,30 @@ else
         finally { isUploading = false; }
     }
 
+    /// <summary>
+    /// Puts the file's URL on the clipboard. Used to only print it into a banner and call that
+    /// done, while <c>blogitInterop.copyToClipboard</c> sat unused in interop.js.
+    /// </summary>
+    /// <remarks>
+    /// Copies <c>PublicPath</c> as stored — server-relative, the same form the editor writes into
+    /// a post (see PostEdit's media insert), so the pasted value works wherever the site is hosted.
+    /// </remarks>
     private async Task CopyUrl()
     {
         if (selectedFile == null) return;
-        // Use clipboard API via JS is not straightforward — show URL in success message
-        successMsg = $"URL: {selectedFile.PublicPath}";
+        errorMsg = "";
+        try
+        {
+            await JS.InvokeVoidAsync("blogitInterop.copyToClipboard", selectedFile.PublicPath);
+            successMsg = $"URL copied: {selectedFile.PublicPath}";
+        }
+        catch (JSException)
+        {
+            // navigator.clipboard is absent outside a secure context and the execCommand fallback
+            // can be refused as well. Printing the URL is what this button did unconditionally
+            // before; as a fallback it still leaves the operator something to select by hand.
+            successMsg = $"Copy this URL manually: {selectedFile.PublicPath}";
+        }
     }
 
     private async Task DeleteSelected()

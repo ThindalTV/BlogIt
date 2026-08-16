@@ -20,6 +20,7 @@ public static class AiApi
         group.MapGet("/conversations", GetConversations);
         group.MapGet("/conversations/{id:guid}", GetConversation);
         group.MapPost("/conversations", CreateConversation);
+        group.MapPut("/conversations/{id:guid}/title", RenameConversation);
         group.MapPost("/conversations/{id:guid}/messages", SendMessage);
         group.MapPost("/conversations/{id:guid}/export-draft", ExportDraft);
         group.MapDelete("/conversations/{id:guid}", DeleteConversation);
@@ -79,6 +80,46 @@ public static class AiApi
         return Results.Created(
             BlogItPath.Combine(options.ApiPath, $"ai/conversations/{conv.Id}"),
             ToDetailDto(conv));
+    }
+
+    /// <summary>
+    /// Retitles a conversation. Purely a database update — no provider is involved, so this stays
+    /// in the host package alongside the rest of the conversation CRUD rather than moving out with
+    /// the AI satellite packages.
+    /// </summary>
+    /// <remarks>
+    /// A narrow endpoint rather than a general conversation update: the title is the only field a
+    /// person edits, and the admin's chat header offered "Click to rename" with nothing behind it
+    /// while every conversation was created under the fixed name "New Conversation".
+    /// <para>
+    /// UpdatedAt is deliberately left alone. It orders the conversation list by when the
+    /// conversation was last worked on, and renaming an old thread should not jump it above ones
+    /// with newer messages.
+    /// </para>
+    /// </remarks>
+    private static async Task<IResult> RenameConversation(
+        Guid id,
+        RenameAiConversationRequest req,
+        BlogItDbContext db,
+        ClaimsPrincipal user,
+        CancellationToken ct)
+    {
+        var errors = new Dictionary<string, string[]>();
+        TextFieldValidator.CheckRequired(errors, "title", "Title", req.Title, ContentLimits.TitleLength);
+        if (errors.Count > 0)
+            return Results.ValidationProblem(errors);
+
+        var userId = Guid.Parse(user.FindFirstValue("sub") ?? user.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
+        var conv = await db.AiConversations
+            .Include(c => c.Messages.OrderBy(m => m.CreatedAt))
+            .FirstOrDefaultAsync(c => c.Id == id && c.CreatedByUserId == userId, ct);
+
+        if (conv is null) return Results.NotFound();
+
+        conv.Title = req.Title;
+        await db.SaveChangesAsync(ct);
+        return Results.Ok(ToDetailDto(conv));
     }
 
     private static async Task<IResult> SendMessage(

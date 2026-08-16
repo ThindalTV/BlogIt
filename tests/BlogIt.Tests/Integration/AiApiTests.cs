@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Http.Json;
 using BlogIt.Services;
+using BlogIt.Shared;
+using BlogIt.Shared.Data;
 using BlogIt.Shared.DTOs;
 using BlogIt.Shared.Entities;
 using BlogIt.Tests.Helpers;
@@ -65,6 +67,166 @@ public sealed class AiApiTests(AiApiTests.AiFactory factory)
         delete.StatusCode.Should().Be(HttpStatusCode.NoContent);
         (await owner.GetAsync($"/api/ai/conversations/{conversation.Id}"))
             .StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    // ── Rename ───────────────────────────────────────────────────────────────
+    // The admin creates every conversation under the hardcoded title "New Conversation" and its
+    // chat header offers "Click to rename", but there was no endpoint behind it, so the typed
+    // title was silently dropped and the list was a column of identical rows.
+
+    [Fact]
+    public async Task RenameConversation_PersistsTheNewTitle()
+    {
+        var userId = await factory.SeedUserAsync($"ai-rename-{Guid.NewGuid():N}");
+        var client = factory.CreateClient().WithAuth(userId);
+        var create = await client.PostAsJsonAsync(
+            "/api/ai/conversations", new CreateAiConversationRequest("New Conversation"));
+        var conversation = (await create.Content.ReadFromJsonAsync<AiConversationDetailDto>())!;
+
+        var rename = await client.PutAsJsonAsync(
+            $"/api/ai/conversations/{conversation.Id}/title",
+            new RenameAiConversationRequest("Q3 launch announcement"));
+
+        rename.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await rename.Content.ReadFromJsonAsync<AiConversationDetailDto>())!
+            .Title.Should().Be("Q3 launch announcement");
+        var reloaded = await client.GetFromJsonAsync<AiConversationDetailDto>(
+            $"/api/ai/conversations/{conversation.Id}");
+        reloaded!.Title.Should().Be("Q3 launch announcement");
+    }
+
+    [Fact]
+    public async Task RenameConversation_ShowsTheNewTitleInTheList()
+    {
+        var userId = await factory.SeedUserAsync($"ai-rename-list-{Guid.NewGuid():N}");
+        var client = factory.CreateClient().WithAuth(userId);
+        var create = await client.PostAsJsonAsync(
+            "/api/ai/conversations", new CreateAiConversationRequest("New Conversation"));
+        var conversation = (await create.Content.ReadFromJsonAsync<AiConversationDetailDto>())!;
+
+        await client.PutAsJsonAsync(
+            $"/api/ai/conversations/{conversation.Id}/title",
+            new RenameAiConversationRequest("Renamed in the list"));
+
+        var summaries = await client.GetFromJsonAsync<List<AiConversationSummaryDto>>(
+            "/api/ai/conversations");
+        summaries.Should().ContainSingle().Which.Title.Should().Be("Renamed in the list");
+    }
+
+    [Fact]
+    public async Task RenameConversation_IsScopedToItsOwner()
+    {
+        var ownerId = await factory.SeedUserAsync($"ai-rename-owner-{Guid.NewGuid():N}");
+        var otherId = await factory.SeedUserAsync($"ai-rename-other-{Guid.NewGuid():N}");
+        var owner = factory.CreateClient().WithAuth(ownerId);
+        var other = factory.CreateClient().WithAuth(otherId);
+        var create = await owner.PostAsJsonAsync(
+            "/api/ai/conversations", new CreateAiConversationRequest("Owned"));
+        var conversation = (await create.Content.ReadFromJsonAsync<AiConversationDetailDto>())!;
+
+        var rename = await other.PutAsJsonAsync(
+            $"/api/ai/conversations/{conversation.Id}/title",
+            new RenameAiConversationRequest("Stolen"));
+
+        rename.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await owner.GetFromJsonAsync<AiConversationDetailDto>(
+            $"/api/ai/conversations/{conversation.Id}"))!.Title.Should().Be("Owned");
+    }
+
+    [Fact]
+    public async Task RenameConversation_RequiresAuthentication()
+    {
+        var response = await factory.CreateClient().PutAsJsonAsync(
+            $"/api/ai/conversations/{Guid.NewGuid()}/title",
+            new RenameAiConversationRequest("Anything"));
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task RenameConversation_RejectsABlankTitle(string title)
+    {
+        var userId = await factory.SeedUserAsync($"ai-rename-blank-{Guid.NewGuid():N}");
+        var client = factory.CreateClient().WithAuth(userId);
+        var create = await client.PostAsJsonAsync(
+            "/api/ai/conversations", new CreateAiConversationRequest("Keeps its name"));
+        var conversation = (await create.Content.ReadFromJsonAsync<AiConversationDetailDto>())!;
+
+        var rename = await client.PutAsJsonAsync(
+            $"/api/ai/conversations/{conversation.Id}/title",
+            new RenameAiConversationRequest(title));
+
+        rename.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await rename.Content.ReadAsStringAsync()).Should().Contain("Title is required.");
+        (await client.GetFromJsonAsync<AiConversationDetailDto>(
+            $"/api/ai/conversations/{conversation.Id}"))!.Title.Should().Be("Keeps its name");
+    }
+
+    [Fact]
+    public async Task RenameConversation_RejectsATitleTooLongForTheColumn()
+    {
+        // Same bound CreateConversation checks. Without it the over-long value reaches SaveChanges
+        // and comes back as a 500 that names nothing.
+        var userId = await factory.SeedUserAsync($"ai-rename-long-{Guid.NewGuid():N}");
+        var client = factory.CreateClient().WithAuth(userId);
+        var create = await client.PostAsJsonAsync(
+            "/api/ai/conversations", new CreateAiConversationRequest("Short"));
+        var conversation = (await create.Content.ReadFromJsonAsync<AiConversationDetailDto>())!;
+
+        var rename = await client.PutAsJsonAsync(
+            $"/api/ai/conversations/{conversation.Id}/title",
+            new RenameAiConversationRequest(new string('x', ContentLimits.TitleLength + 1)));
+
+        rename.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task RenameConversation_ForAnUnknownId_ReturnsNotFound()
+    {
+        var userId = await factory.SeedUserAsync($"ai-rename-missing-{Guid.NewGuid():N}");
+        var client = factory.CreateClient().WithAuth(userId);
+
+        var rename = await client.PutAsJsonAsync(
+            $"/api/ai/conversations/{Guid.NewGuid()}/title",
+            new RenameAiConversationRequest("Nothing to rename"));
+
+        rename.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task RenameConversation_LeavesTheMessagesAlone()
+    {
+        // Seeded straight into the store rather than sent through /messages: FakeAiService returns
+        // a DTO without ever persisting a row, so a conversation driven through the endpoint has
+        // nothing on disk for the rename to preserve.
+        var userId = await factory.SeedUserAsync($"ai-rename-msgs-{Guid.NewGuid():N}");
+        var client = factory.CreateClient().WithAuth(userId);
+        var create = await client.PostAsJsonAsync(
+            "/api/ai/conversations", new CreateAiConversationRequest("Before"));
+        var conversation = (await create.Content.ReadFromJsonAsync<AiConversationDetailDto>())!;
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<BlogItDbContext>();
+            db.AiMessages.Add(new AiMessage
+            {
+                ConversationId = conversation.Id,
+                Role = "user",
+                Content = "Write an outline",
+                CreatedAt = DateTime.UtcNow,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var rename = await client.PutAsJsonAsync(
+            $"/api/ai/conversations/{conversation.Id}/title",
+            new RenameAiConversationRequest("After"));
+
+        var renamed = await rename.Content.ReadFromJsonAsync<AiConversationDetailDto>();
+        renamed!.Title.Should().Be("After");
+        renamed.Messages.Should().ContainSingle().Which.Content.Should().Be("Write an outline");
     }
 
     [Fact]

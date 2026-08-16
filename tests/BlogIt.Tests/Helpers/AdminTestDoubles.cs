@@ -22,10 +22,20 @@ public sealed class RecordingHttpMessageHandler : HttpMessageHandler
 
     /// <summary>Queues the next reply. Falls back to 200 with an empty JSON object when empty.</summary>
     public RecordingHttpMessageHandler Respond(HttpStatusCode status, string json = "{}")
+        => Respond(status, json, "application/json");
+
+    /// <summary>
+    /// Queues the next reply with an explicit media type. Needed to reproduce the bodies that are
+    /// not one of the API's own error shapes — a proxy's HTML page, or a reply with no body at all
+    /// (<paramref name="mediaType"/> null) — which the client has to tell apart from real JSON.
+    /// </summary>
+    public RecordingHttpMessageHandler Respond(HttpStatusCode status, string body, string? mediaType)
     {
         _responses.Enqueue(new HttpResponseMessage(status)
         {
-            Content = new StringContent(json, Encoding.UTF8, "application/json")
+            Content = mediaType is null
+                ? new StringContent("")  { Headers = { ContentType = null } }
+                : new StringContent(body, Encoding.UTF8, mediaType)
         });
         return this;
     }

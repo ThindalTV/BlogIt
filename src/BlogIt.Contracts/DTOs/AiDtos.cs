@@ -22,6 +22,12 @@ public record AiMessageDto(Guid Id, string Role, string Content, DateTime Create
 
 public record CreateAiConversationRequest(string Title);
 
+/// <summary>
+/// Retitles an existing conversation. Separate from the create request so the endpoint cannot be
+/// mistaken for one that also replaces the messages.
+/// </summary>
+public record RenameAiConversationRequest(string Title);
+
 public record SendAiMessageRequest(string Content);
 
 public record ExportAiConversationRequest(string? AdditionalInstructions);

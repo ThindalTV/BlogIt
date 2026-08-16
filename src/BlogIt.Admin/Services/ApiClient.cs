@@ -24,13 +24,18 @@ public class ApiClient(HttpClient http)
     // Results.Conflict(string)) or as an RFC7807 ValidationProblem (Results.ValidationProblem)
     // with per-field messages under "errors". Surface the actual reason instead of the default
     // "net_http_message_not_success_statuscode_reason" text EnsureSuccessStatusCode() would throw.
+    //
+    // Every mutating call must route through here. Several of these refusals are the only thing
+    // telling the operator what to do next — a 409 from ConcurrencyGuard says to reload before
+    // reapplying, and a refused user delete names the content still blocking it — and the pages
+    // show ex.Message verbatim, so a raw EnsureSuccessStatusCode() discards exactly the sentence
+    // that mattered.
     private static async Task EnsureSuccessAsync(HttpResponseMessage response)
     {
         if (response.IsSuccessStatusCode)
             return;
 
-        var body = await response.Content.ReadAsStringAsync();
-        var message = ExtractErrorMessage(body);
+        var message = ExtractErrorMessage(await response.Content.ReadAsStringAsync());
 
         throw new HttpRequestException(
             string.IsNullOrWhiteSpace(message) ? $"Request failed ({(int)response.StatusCode})." : message,
@@ -38,6 +43,10 @@ public class ApiClient(HttpClient http)
             response.StatusCode);
     }
 
+    /// <summary>
+    /// The server's own words for this failure, or null when the body is not one of its error
+    /// shapes and the bare status is the better thing to report.
+    /// </summary>
     private static string? ExtractErrorMessage(string body)
     {
         if (string.IsNullOrWhiteSpace(body))
@@ -51,8 +60,13 @@ public class ApiClient(HttpClient http)
             if (root.ValueKind == JsonValueKind.String)
                 return root.GetString();
 
-            if (root.ValueKind == JsonValueKind.Object
-                && root.TryGetProperty("errors", out var errors)
+            if (root.ValueKind != JsonValueKind.Object)
+                return null;
+
+            // Before "detail" and "title": on a ValidationProblem both of those hold the same
+            // generic "One or more validation errors occurred.", and the field message under
+            // "errors" is the only part that names what is actually wrong.
+            if (root.TryGetProperty("errors", out var errors)
                 && errors.ValueKind == JsonValueKind.Object)
             {
                 foreach (var field in errors.EnumerateObject())
@@ -62,15 +76,13 @@ public class ApiClient(HttpClient http)
                 }
             }
 
-            if (root.ValueKind == JsonValueKind.Object
-                && root.TryGetProperty("detail", out var detail)
+            if (root.TryGetProperty("detail", out var detail)
                 && detail.ValueKind == JsonValueKind.String)
             {
                 return detail.GetString();
             }
 
-            if (root.ValueKind == JsonValueKind.Object
-                && root.TryGetProperty("title", out var title)
+            if (root.TryGetProperty("title", out var title)
                 && title.ValueKind == JsonValueKind.String)
             {
                 return title.GetString();
@@ -80,16 +92,30 @@ public class ApiClient(HttpClient http)
         }
         catch (JsonException)
         {
-            return body;
+            // Not JSON at all, so not one of this API's error shapes — something else in the
+            // pipeline answered, a reverse proxy's error page or the developer exception page.
+            // Returning the raw text would paste a whole HTML document into an admin alert, which
+            // is worse than reporting the status alone.
+            return null;
         }
     }
 
     // ── Auth ────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Signs in, returning null only when the server actually rejected the credentials.
+    /// </summary>
+    /// <remarks>
+    /// Any other failure throws, because the login screen renders a null as "Invalid username or
+    /// password." Flattening every non-2xx to null meant a 500 from a missing signing key, or the
+    /// 429 the login rate limiter returns, told the operator to check their typing — the one
+    /// diagnosis that guarantees they will not look at the server.
+    /// </remarks>
     public async Task<LoginResponse?> LoginAsync(LoginRequest request)
     {
         var resp = await http.PostAsJsonAsync("auth/login", request);
-        if (!resp.IsSuccessStatusCode) return null;
+        if (resp.StatusCode == System.Net.HttpStatusCode.Unauthorized) return null;
+        await EnsureSuccessAsync(resp);
         return await resp.Content.ReadFromJsonAsync<LoginResponse>();
     }
 
@@ -147,19 +173,19 @@ public class ApiClient(HttpClient http)
     public async Task DeletePostAsync(Guid id)
     {
         var resp = await http.DeleteAsync($"posts/{id}");
-        resp.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(resp);
     }
 
     public async Task PublishPostAsync(Guid id)
     {
         var resp = await http.PostAsync($"posts/{id}/publish", null);
-        resp.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(resp);
     }
 
     public async Task UnpublishPostAsync(Guid id)
     {
         var resp = await http.PostAsync($"posts/{id}/unpublish", null);
-        resp.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(resp);
     }
 
     public async Task UpdatePostScheduleAsync(Guid id, UpdatePublicationScheduleRequest request)
@@ -171,7 +197,7 @@ public class ApiClient(HttpClient http)
     public async Task<PreviewLinkResponse?> CreatePostPreviewAsync(Guid id)
     {
         var response = await http.PostAsync($"previews/posts/{id}", null);
-        response.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(response);
         return await response.Content.ReadFromJsonAsync<PreviewLinkResponse>();
     }
 
@@ -214,7 +240,7 @@ public class ApiClient(HttpClient http)
     public async Task DeletePageAsync(Guid id)
     {
         var resp = await http.DeleteAsync($"pages/{id}");
-        resp.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(resp);
     }
 
     public async Task UpdatePageScheduleAsync(Guid id, UpdatePublicationScheduleRequest request)
@@ -226,7 +252,7 @@ public class ApiClient(HttpClient http)
     public async Task<PreviewLinkResponse?> CreatePagePreviewAsync(Guid id)
     {
         var response = await http.PostAsync($"previews/pages/{id}", null);
-        response.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(response);
         return await response.Content.ReadFromJsonAsync<PreviewLinkResponse>();
     }
 
@@ -256,14 +282,14 @@ public class ApiClient(HttpClient http)
         streamContent.Headers.ContentType = new MediaTypeHeaderValue(contentType);
         content.Add(streamContent, "file", fileName);
         var resp = await http.PostAsync("media/upload", content);
-        resp.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(resp);
         return await resp.Content.ReadFromJsonAsync<MediaFileDto>();
     }
 
     public async Task DeleteMediaAsync(Guid id)
     {
         var resp = await http.DeleteAsync($"media/{id}");
-        resp.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(resp);
     }
 
     // ── Users ───────────────────────────────────────────────────────────────
@@ -283,7 +309,7 @@ public class ApiClient(HttpClient http)
     public async Task DeleteUserAsync(Guid id)
     {
         var resp = await http.DeleteAsync($"users/{id}");
-        resp.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(resp);
     }
 
     // ── Redirects ───────────────────────────────────────────────────────────
@@ -312,7 +338,7 @@ public class ApiClient(HttpClient http)
     public async Task DeleteRedirectAsync(Guid id)
     {
         var response = await http.DeleteAsync($"redirects/{id}");
-        response.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(response);
     }
 
     // ── Settings ────────────────────────────────────────────────────────────
@@ -358,7 +384,7 @@ public class ApiClient(HttpClient http)
     public async Task<AiConversationDetailDto?> CreateConversationAsync(CreateAiConversationRequest request)
     {
         var resp = await http.PostAsJsonAsync("ai/conversations", request);
-        resp.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(resp);
         return await resp.Content.ReadFromJsonAsync<AiConversationDetailDto>();
     }
 
@@ -380,10 +406,19 @@ public class ApiClient(HttpClient http)
         return await resp.Content.ReadFromJsonAsync<ExportAiConversationResponse>();
     }
 
+    public async Task<AiConversationDetailDto?> RenameConversationAsync(Guid id, string title)
+    {
+        var resp = await http.PutAsJsonAsync(
+            $"ai/conversations/{id}/title",
+            new RenameAiConversationRequest(title));
+        await EnsureSuccessAsync(resp);
+        return await resp.Content.ReadFromJsonAsync<AiConversationDetailDto>();
+    }
+
     public async Task DeleteConversationAsync(Guid id)
     {
         var resp = await http.DeleteAsync($"ai/conversations/{id}");
-        resp.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(resp);
     }
 
     // ── Analytics ───────────────────────────────────────────────────────────
@@ -395,7 +430,7 @@ public class ApiClient(HttpClient http)
         if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
             return null;
 
-        response.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(response);
         return await response.Content.ReadFromJsonAsync<AnalyticsSummaryDto>();
     }
 }

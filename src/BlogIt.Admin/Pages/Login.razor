@@ -78,9 +78,12 @@
                 Nav.NavigateTo(AdminLoginRedirect.ResolveReturnPath(ReturnUrl), replace: true);
             }
         }
-        catch
+        catch (Exception ex)
         {
-            errorMsg = "Login failed. Please try again.";
+            // ApiClient returns null only for a real 401, so anything reaching here is the server
+            // failing rather than the operator mistyping — say which. Its message is already
+            // filtered to the API's own error shapes, so no exception page can land on this screen.
+            errorMsg = ex.Message;
         }
         finally { isLoading = false; }
     }

@@ -41,16 +41,29 @@ window.blogitInterop = {
         }
     },
 
+    // Rejects when the copy did not happen, so the caller can offer the URL to copy by hand
+    // instead of claiming success. navigator.clipboard is undefined outside a secure context,
+    // and even where it exists writeText can be denied by permissions policy.
     copyToClipboard: function (text) {
         if (navigator.clipboard) {
             return navigator.clipboard.writeText(text);
         }
-        // Fallback
+
         const ta = document.createElement('textarea');
         ta.value = text;
+        // Kept off-screen rather than appended as-is: a visible textarea appearing and vanishing
+        // reads as a glitch, and scrolling to a focused element would jump the page.
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'fixed';
+        ta.style.top = '-1000px';
         document.body.appendChild(ta);
         ta.select();
-        document.execCommand('copy');
-        document.body.removeChild(ta);
+        try {
+            if (!document.execCommand('copy')) {
+                throw new Error('Clipboard write was refused.');
+            }
+        } finally {
+            document.body.removeChild(ta);
+        }
     }
 };

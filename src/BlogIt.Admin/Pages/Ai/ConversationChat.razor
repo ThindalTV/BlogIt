@@ -58,7 +58,11 @@
     </div>
 
     <div class="chat-input-area">
-        <textarea class="chat-input" @bind="messageText" @onkeydown="HandleKeyDown"
+        @* @bind:event="oninput" is what makes Enter-to-send work at all. @bind alone updates
+           messageText on change, which for a textarea means blur — so the keydown handler read the
+           value as of the last blur (usually empty), saw nothing to send, and Enter just inserted a
+           newline, contradicting the placeholder below. *@
+        <textarea class="chat-input" @bind="messageText" @bind:event="oninput" @onkeydown="HandleKeyDown"
             placeholder="Type a message… (Enter to send, Shift+Enter for newline)"
             rows="3" disabled="@isWaiting"></textarea>
         <button class="btn btn-primary chat-send" @onclick="SendMessage" disabled="@(isWaiting || string.IsNullOrWhiteSpace(messageText))">
@@ -134,6 +138,12 @@
         finally { isWaiting = false; }
     }
 
+    /// <remarks>
+    /// Enter's own newline still reaches the textarea — <c>@onkeydown:preventDefault</c> is
+    /// evaluated once per render, so it cannot be made conditional on Shift for a single keystroke.
+    /// It does not survive: <see cref="SendMessage"/> blanks <c>messageText</c>, and the re-render
+    /// that follows writes that empty value over whatever the browser inserted.
+    /// </remarks>
     private async Task HandleKeyDown(KeyboardEventArgs e)
     {
         if (e.Key == "Enter" && !e.ShiftKey)
@@ -146,16 +156,41 @@
         editingTitle = true;
     }
 
-    private void TitleKeyDown(KeyboardEventArgs e)
+    private async Task TitleKeyDown(KeyboardEventArgs e)
     {
-        if (e.Key == "Enter") SaveTitle();
+        if (e.Key == "Enter") await SaveTitle();
         else if (e.Key == "Escape") editingTitle = false;
     }
 
-    private async void SaveTitle()
+    /// <summary>
+    /// Persists the edited title through <c>PUT /ai/conversations/{id}/title</c>. Was previously a
+    /// comment saying there was no API, so the header advertised "Click to rename", accepted what
+    /// was typed and dropped it — and since every conversation is created as "New Conversation",
+    /// nothing could ever be named at all.
+    /// </summary>
+    /// <remarks>
+    /// Reached from two events. Enter closes the box, which then raises blur and calls this a
+    /// second time — the <c>editingTitle</c> guard makes that second call a no-op instead of a
+    /// duplicate PUT. <c>async Task</c> rather than the <c>async void</c> this used to be: Blazor
+    /// cannot await an async void handler, so a failed rename would neither re-render nor reach
+    /// <c>errorMsg</c> — it would surface as an unhandled exception instead.
+    /// </remarks>
+    private async Task SaveTitle()
     {
+        if (!editingTitle) return;
         editingTitle = false;
-        // Title update — no dedicated API, ignore for now or extend conversation
+
+        var newTitle = titleEdit.Trim();
+        // A cleared box is a cancel, not a rename the server should reject: the heading snaps back
+        // to the stored title, which is visible feedback that nothing was saved.
+        if (conversation is null || newTitle.Length == 0 || newTitle == conversation.Title) return;
+
+        errorMsg = "";
+        try
+        {
+            conversation = await Api.RenameConversationAsync(Id, newTitle) ?? conversation;
+        }
+        catch (Exception ex) { errorMsg = ex.Message; }
     }
 
     private async Task ExportDraft()
