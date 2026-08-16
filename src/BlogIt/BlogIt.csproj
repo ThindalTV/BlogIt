@@ -40,17 +40,30 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
+  <!--
+    Every version here is an exact pin, never a floating range. A packed nuspec turns these
+    into the consuming application's dependency floor, and a floating range is re-resolved
+    on the consumer's machine at restore time: two people installing the same BlogIt version
+    a week apart would compile against different dependency builds, which contradicts the
+    <Deterministic>true</Deterministic> above. The 10.0.* references were previously
+    "10.0.0-preview.*"; that wildcard also matched the 10.0.0 release once .NET 10 shipped,
+    so it happened to resolve to a stable build - but only by accident, and it still offered
+    every consumer a preview floor. Pinned to 10.0.11, the current .NET 10 servicing patch,
+    so the JwtBearer and EF Core floor includes shipped security fixes rather than 10.0.0.
+    Bump these in lockstep with the servicing band, and update the expected versions in
+    build/package-layout-tests/verify.ps1 in the same commit.
+  -->
   <ItemGroup>
     <PackageReference Include="BCrypt.Net-Next" Version="4.2.0" />
     <PackageReference Include="Google.Analytics.Data.V1Beta" Version="2.0.0-beta10" />
     <PackageReference Include="Markdig" Version="1.3.2" />
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.0-preview.*" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.0-preview.*" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.0-preview.*">
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.11" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.11" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.11">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.0-preview.*" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.11" />
     <PackageReference Include="OpenAI" Version="2.12.0" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.22.0" />
   </ItemGroup>
@@ -69,6 +82,25 @@
           PackagePath="buildTransitive\BlogIt.targets" />
   </ItemGroup>
 
+  <!--
+    CompressionEnabled=false suppresses the Blazor publish pipeline's .br/.gz variants.
+    They were 428 of the 642 published files and 18.4 MB of the 45.7 MB tree, and none of
+    them could ever be served: AdminAssetMiddlewareContributor hands this tree to a plain
+    UseStaticFiles over a private PhysicalFileProvider, which does no Accept-Encoding
+    negotiation, and the admin assets are not registered as ASP.NET Core static web assets
+    (the pipeline that would have negotiated them). So every consuming project was carrying
+    them into bin/ and publish/ for nothing.
+    The alternative - keeping them and writing real negotiation - was rejected: it would
+    keep the whole 45.7 MB on every consumer's disk in order to save transfer that a host
+    already gets from UseResponseCompression or the proxy/CDN in front of it, and it would
+    add a hand-rolled middleware that has to get q-values, identity;q=0, Content-Encoding,
+    Vary, the inner extension's content type and per-variant validators right forever.
+    Suppressing generation rather than filtering at pack time keeps the packaged tree
+    byte-identical to the publish tree (which build/package-layout-tests/verify.ps1 asserts
+    as a set) and drops the brotli pass from every Release build.
+    Note this is a publish-pipeline property, not a BlogIt one: if a future SDK renames it,
+    verify.ps1's precompressed-asset assertion is what will catch the regression.
+  -->
   <Target Name="BuildBlogItAdminAssets"
           BeforeTargets="AssignTargetPaths"
           Condition="'$(DesignTimeBuild)' != 'true'">
@@ -76,7 +108,7 @@
     <MSBuild Projects="$(AdminProject)"
              Targets="Publish"
              BuildInParallel="false"
-             Properties="Configuration=$(Configuration);PublishTrimmed=false;PublishDir=$(AdminPublishDir);BlogItAdminBuildRoot=$(AdminBuildRoot);BlogItBundledAdminBuild=true" />
+             Properties="Configuration=$(Configuration);PublishTrimmed=false;CompressionEnabled=false;PublishDir=$(AdminPublishDir);BlogItAdminBuildRoot=$(AdminBuildRoot);BlogItBundledAdminBuild=true" />
     <Error Condition="!Exists('$(AdminAssetsDir)index.html')"
            Text="BlogIt.Admin did not produce $(AdminAssetsDir)index.html." />
     <ItemGroup>

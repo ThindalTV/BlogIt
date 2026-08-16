@@ -15,10 +15,17 @@
     <IntermediateOutputPath>$(BlogItAdminBuildRoot)obj\$(Configuration)\</IntermediateOutputPath>
   </PropertyGroup>
 
+  <!--
+    Exact pins, kept in lockstep with src/BlogIt/BlogIt.csproj. This project is not packable,
+    but its published output is packed verbatim into BlogIt as staticwebassets, so a floating
+    range here would make the *bytes of the BlogIt package* depend on when it was built - the
+    same determinism problem as a floating dependency, just harder to notice because it never
+    shows up in a nuspec.
+  -->
   <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.Components.Authorization" Version="10.0.0-preview.*" />
-    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.0-preview.*" />
-    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="10.0.0-preview.*" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.Authorization" Version="10.0.11" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.11" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="10.0.11" PrivateAssets="all" />
   </ItemGroup>
 
   <ItemGroup>
