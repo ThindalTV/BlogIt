@@ -132,6 +132,17 @@ and static files before `UseBlogIt`. Place host antiforgery after it, then call
 scheme and `BlogIt.Admin` policy; the host must not add duplicate authentication
 or authorization middleware specifically for BlogIt.
 
+`UseBlogIt` serves the packaged admin portal from the private
+`BlogItAdminAssets` folder next to the host assembly. Those assets ship
+uncompressed: the package deliberately contains no `.br`/`.gz` variants, because
+the admin tree is served through a plain static-file pipeline that performs no
+`Accept-Encoding` negotiation, so precompressed copies would only have inflated
+every consuming project's `bin/` and `publish/`. The admin payload is a Blazor
+WebAssembly application and compresses well, so hosts that care about first-load
+transfer size should add `UseResponseCompression` before `UseBlogIt`, or let the
+reverse proxy or CDN in front of the application compress and cache the
+responses.
+
 `MigrateBlogItAsync` applies the package's EF Core migrations. Run it before the
 application begins serving requests and use a database identity with schema
 change permission during deployment.

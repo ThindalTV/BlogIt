@@ -311,6 +311,31 @@ function Invoke-ConsumerScenario {
     }
 }
 
+# A floating version is re-resolved on every restore, so the same BlogIt source can pack
+# against different dependency builds - which silently contradicts <Deterministic>true</Deterministic>
+# and, for a preview wildcard, drags every consuming application onto preview dependencies.
+# Every project whose output reaches a consumer must pin exact versions: BlogIt and
+# BlogIt.AzureStorage because their nuspecs become the consumer's dependency floor, and
+# BlogIt.Admin and BlogIt.Contracts because their published output is packed verbatim.
+# Test, sample and consumer-fixture projects are deliberately not covered - nothing they
+# restore reaches a consumer. Checked before packing so this fails in seconds, not minutes.
+foreach ($shippedProject in @(
+    (Join-Path $repo "src\BlogIt\BlogIt.csproj"),
+    (Join-Path $repo "src\BlogIt.Admin\BlogIt.Admin.csproj"),
+    (Join-Path $repo "src\BlogIt.Contracts\BlogIt.Contracts.csproj"),
+    (Join-Path $repo "src\BlogIt.AzureStorage\BlogIt.AzureStorage.csproj")
+)) {
+    $floatingVersions = @(
+        [regex]::Matches(
+            (Get-Content $shippedProject -Raw),
+            '<PackageReference\s[^>]*?Version="(?<version>[^"]*\*[^"]*)"') |
+            ForEach-Object { $_.Groups["version"].Value }
+    )
+    if ($floatingVersions.Count -ne 0) {
+        throw "$([IO.Path]::GetFileName($shippedProject)) declares floating package versions [$($floatingVersions -join ', ')]; shipped projects must pin exact versions."
+    }
+}
+
 foreach ($generatedPath in @(
     (Join-Path $testRoot "Consumer\bin"),
     (Join-Path $testRoot "Consumer\obj"),
@@ -382,8 +407,11 @@ foreach ($symbolPackage in $producedSymbolPackages) {
 
 $package = Get-Item (Join-Path $feed $packageName)
 $azurePackage = Get-Item (Join-Path $feed $azurePackageName)
-if ($package.Length -gt 35MB) {
-    throw "BlogIt package size is $([math]::Round($package.Length / 1MB, 2)) MB; expected at most 35 MB."
+# The ceiling is deliberately close to the real size (~11 MB) so that re-introducing the
+# precompressed admin variants - which alone added 18.4 MB of already-compressed, and
+# therefore incompressible, payload - trips this instead of passing unnoticed.
+if ($package.Length -gt 15MB) {
+    throw "BlogIt package size is $([math]::Round($package.Length / 1MB, 2)) MB; expected at most 15 MB."
 }
 if ($azurePackage.Length -gt 1MB) {
     throw "BlogIt.AzureStorage package size is $([math]::Round($azurePackage.Length / 1KB, 2)) KB; expected at most 1 MB."
@@ -467,6 +495,20 @@ if ($adminAssets.Count -lt 100) {
     throw "BlogIt package contains only $($adminAssets.Count) admin assets."
 }
 
+# The admin tree is served from a private PhysicalFileProvider through a plain
+# UseStaticFiles pipeline (AdminAssetMiddlewareContributor), which performs no
+# Accept-Encoding negotiation. Any .br/.gz variant in here is therefore unservable weight
+# that still lands in every consuming project's bin/ and publish/. Serving them properly
+# was considered and rejected: it needs hand-rolled negotiation (q-values, Content-Encoding,
+# Vary, inner-extension content type, per-variant validators) for a saving hosts already
+# get from response compression or the proxy/CDN in front of them.
+$precompressedAdminAssets = @(
+    $adminAssetRelativePaths | Where-Object { $_ -match '\.(br|gz)$' }
+)
+if ($precompressedAdminAssets.Count -ne 0) {
+    throw "BlogIt package contains $($precompressedAdminAssets.Count) unservable precompressed admin assets, for example '$($precompressedAdminAssets[0])'."
+}
+
 $adminWasmEntry = $adminAssets |
     Where-Object { $_ -Match '/_framework/BlogIt\.Admin\.[^/]+\.wasm$' } |
     Select-Object -First 1
@@ -492,13 +534,17 @@ foreach ($dependency in $forbidden) {
     }
 }
 
+# These are the exact versions the nuspec must advertise as the consumer's dependency
+# floor. They are asserted literally, not as a range, so bumping a pin is a deliberate edit
+# here as well as in the csproj - and so a floating version that happens to resolve to a
+# stable build today cannot pass while still being floating tomorrow.
 $mainDependencies = [ordered]@{
     "BCrypt.Net-Next" = "4.2.0"
     "Google.Analytics.Data.V1Beta" = "2.0.0-beta10"
     "Markdig" = "1.3.2"
-    "Microsoft.AspNetCore.Authentication.JwtBearer" = "10.0.0"
-    "Microsoft.EntityFrameworkCore" = "10.0.0"
-    "Microsoft.EntityFrameworkCore.SqlServer" = "10.0.0"
+    "Microsoft.AspNetCore.Authentication.JwtBearer" = "10.0.11"
+    "Microsoft.EntityFrameworkCore" = "10.0.11"
+    "Microsoft.EntityFrameworkCore.SqlServer" = "10.0.11"
     "OpenAI" = "2.12.0"
     "System.IdentityModel.Tokens.Jwt" = "8.22.0"
 }
