@@ -44,6 +44,11 @@ public static class UsersApi
         BlogItDbContext db,
         BlogItOptions options)
     {
+        // Ahead of the duplicate check on purpose: "Username already exists" is a confusing answer
+        // to a blank username, and there is no point querying for a value the schema would refuse.
+        if (AccountFieldValidator.Validate(req.Username, req.DisplayName) is { Count: > 0 } errors)
+            return Results.ValidationProblem(errors);
+
         if (await db.Users.AnyAsync(u => u.Username == req.Username))
             return Results.Conflict("Username already exists.");
 

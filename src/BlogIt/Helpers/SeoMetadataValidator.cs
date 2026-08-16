@@ -18,24 +18,19 @@ public static class SeoMetadataValidator
         string? seoKeywords,
         string? ogImageUrl)
     {
+        // Returns the dictionary rather than an IResult so a caller can add its own field errors —
+        // the required ones in TextFieldValidator — and answer with a single 400 listing all of them.
         var errors = new Dictionary<string, string[]>();
 
-        Check(errors, "seoTitle", "SEO title", seoTitle, SeoLimits.TitleLength);
-        Check(errors, "seoDescription", "SEO description", seoDescription, SeoLimits.DescriptionLength);
-        Check(errors, "seoKeywords", "SEO keywords", seoKeywords, SeoLimits.KeywordsLength);
-        Check(errors, "ogImageUrl", "Open Graph image URL", ogImageUrl, SeoLimits.OgImageUrlLength);
+        TextFieldValidator.CheckLength(
+            errors, "seoTitle", "SEO title", seoTitle, SeoLimits.TitleLength);
+        TextFieldValidator.CheckLength(
+            errors, "seoDescription", "SEO description", seoDescription, SeoLimits.DescriptionLength);
+        TextFieldValidator.CheckLength(
+            errors, "seoKeywords", "SEO keywords", seoKeywords, SeoLimits.KeywordsLength);
+        TextFieldValidator.CheckLength(
+            errors, "ogImageUrl", "Open Graph image URL", ogImageUrl, SeoLimits.OgImageUrlLength);
 
         return errors;
-    }
-
-    private static void Check(
-        Dictionary<string, string[]> errors,
-        string field,
-        string label,
-        string? value,
-        int maxLength)
-    {
-        if (value is not null && value.Length > maxLength)
-            errors[field] = [$"{label} must be {maxLength} characters or fewer."];
     }
 }

@@ -47,6 +47,15 @@ public static class SetupApi
                 });
             }
 
+            // Same two fields UsersApi validates, and it matters more here: this is the account the
+            // site owner is locked out of if it is written wrong, and there is no second admin to
+            // fix it with.
+            if (AccountFieldValidator.Validate(request.Username, request.DisplayName)
+                is { Count: > 0 } accountErrors)
+            {
+                return Results.ValidationProblem(accountErrors);
+            }
+
             // Guards against two concurrent /setup/initialize requests both passing the
             // AnyAsync() check above before either commits: SetupLock.Id is a fixed value (1),
             // so at most one of two racing inserts can win the SaveChangesAsync call below — the

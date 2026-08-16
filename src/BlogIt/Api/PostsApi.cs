@@ -1,3 +1,4 @@
+using BlogIt.Shared;
 using BlogIt.Shared.Data;
 using BlogIt.Shared.DTOs;
 using BlogIt.Shared.Entities;
@@ -34,6 +35,8 @@ public static class PostsApi
         int pageSize = 20,
         string status = "all")
     {
+        (page, pageSize) = Pagination.Clamp(page, pageSize);
+
         var query = db.BlogPosts
             .Include(p => p.Tags)
             .Include(p => p.Author)
@@ -81,13 +84,12 @@ public static class PostsApi
         if (scheduleError is not null)
             return ScheduleValidationProblem(scheduleError);
 
-        if (string.IsNullOrWhiteSpace(req.Title))
-            return TitleValidationProblem();
-
-        if (SeoMetadataValidator.Validate(req.SeoTitle, req.SeoDescription, req.SeoKeywords, req.OgImageUrl)
-            is { Count: > 0 } seoErrors)
+        if (ValidateFields(
+                req.Title, req.Summary,
+                req.SeoTitle, req.SeoDescription, req.SeoKeywords, req.OgImageUrl)
+            is { Count: > 0 } errors)
         {
-            return Results.ValidationProblem(seoErrors);
+            return Results.ValidationProblem(errors);
         }
 
         var authorId = Guid.Parse(user.FindFirstValue("sub") ?? user.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -158,13 +160,12 @@ public static class PostsApi
         if (scheduleError is not null)
             return ScheduleValidationProblem(scheduleError);
 
-        if (string.IsNullOrWhiteSpace(req.Title))
-            return TitleValidationProblem();
-
-        if (SeoMetadataValidator.Validate(req.SeoTitle, req.SeoDescription, req.SeoKeywords, req.OgImageUrl)
-            is { Count: > 0 } seoErrors)
+        if (ValidateFields(
+                req.Title, req.Summary,
+                req.SeoTitle, req.SeoDescription, req.SeoKeywords, req.OgImageUrl)
+            is { Count: > 0 } errors)
         {
-            return Results.ValidationProblem(seoErrors);
+            return Results.ValidationProblem(errors);
         }
 
         post.Title = req.Title;
@@ -283,15 +284,33 @@ public static class PostsApi
         p.ConcurrencyStamp
     );
 
+    /// <summary>
+    /// Collects every field error on a create or update into one dictionary, so a request that is
+    /// wrong in two places is told about both instead of one 400 per round trip.
+    /// </summary>
+    /// <remarks>
+    /// Title and Summary are checked here rather than left to the database because both columns are
+    /// constrained: Title is bounded, Summary is required, and either violation used to arrive as an
+    /// unhandled <c>DbUpdateException</c>. Takes the SEO fields loose rather than the request record
+    /// because the create and update records are separate types with no interface in common.
+    /// </remarks>
+    private static Dictionary<string, string[]> ValidateFields(
+        string? title,
+        string? summary,
+        string? seoTitle,
+        string? seoDescription,
+        string? seoKeywords,
+        string? ogImageUrl)
+    {
+        var errors = SeoMetadataValidator.Validate(seoTitle, seoDescription, seoKeywords, ogImageUrl);
+        TextFieldValidator.CheckRequired(errors, "title", "Title", title, ContentLimits.TitleLength);
+        TextFieldValidator.CheckPresent(errors, "summary", "Summary", summary);
+        return errors;
+    }
+
     private static IResult ScheduleValidationProblem(string error) =>
         Results.ValidationProblem(new Dictionary<string, string[]> { ["schedule"] = [error] });
 
     private static IResult SlugValidationProblem(string error) =>
         Results.ValidationProblem(new Dictionary<string, string[]> { ["slug"] = [error] });
-
-    private static IResult TitleValidationProblem() =>
-        Results.ValidationProblem(new Dictionary<string, string[]>
-        {
-            ["title"] = ["Title is required."]
-        });
 }

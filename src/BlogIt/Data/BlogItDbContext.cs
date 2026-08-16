@@ -25,8 +25,8 @@ public class BlogItDbContext(DbContextOptions<BlogItDbContext> options) : DbCont
         {
             e.HasKey(u => u.Id);
             e.HasIndex(u => u.Username).IsUnique();
-            e.Property(u => u.Username).HasMaxLength(100).IsRequired();
-            e.Property(u => u.DisplayName).HasMaxLength(200).IsRequired();
+            e.Property(u => u.Username).HasMaxLength(ContentLimits.UsernameLength).IsRequired();
+            e.Property(u => u.DisplayName).HasMaxLength(ContentLimits.DisplayNameLength).IsRequired();
             // A BCrypt hash is always 60 characters; 100 leaves room for a different algorithm's
             // prefix without reaching nvarchar(max) and pushing the column off-row.
             e.Property(u => u.PasswordHash).HasMaxLength(100).IsRequired();
@@ -47,7 +47,7 @@ public class BlogItDbContext(DbContextOptions<BlogItDbContext> options) : DbCont
             // read it forwards.
             e.HasIndex(p => new { p.IsPublished, p.PublishedAt })
              .IsDescending(false, true);
-            e.Property(p => p.Title).HasMaxLength(500).IsRequired();
+            e.Property(p => p.Title).HasMaxLength(ContentLimits.TitleLength).IsRequired();
             e.Property(p => p.Slug).HasMaxLength(500).IsRequired();
             e.Property(p => p.Summary).IsRequired();
             ConfigureSeoColumns(e);
@@ -74,7 +74,7 @@ public class BlogItDbContext(DbContextOptions<BlogItDbContext> options) : DbCont
             e.HasIndex(p => p.Slug).IsUnique();
             e.HasIndex(p => p.ScheduledPublishAt);
             e.HasIndex(p => p.ScheduledUnpublishAt);
-            e.Property(p => p.Title).HasMaxLength(500).IsRequired();
+            e.Property(p => p.Title).HasMaxLength(ContentLimits.TitleLength).IsRequired();
             e.Property(p => p.Slug).HasMaxLength(500).IsRequired();
             e.Property(p => p.Content).IsRequired();
             ConfigureSeoColumns(e);
@@ -84,7 +84,7 @@ public class BlogItDbContext(DbContextOptions<BlogItDbContext> options) : DbCont
         modelBuilder.Entity<MediaFile>(e =>
         {
             e.HasKey(m => m.Id);
-            e.Property(m => m.Title).HasMaxLength(500).IsRequired();
+            e.Property(m => m.Title).HasMaxLength(ContentLimits.TitleLength).IsRequired();
             e.Property(m => m.FileName).HasMaxLength(500).IsRequired();
             e.Property(m => m.ContentType).HasMaxLength(200).IsRequired();
             // MediaProxyApi resolves every single media request by matching this column, so it
@@ -111,7 +111,7 @@ public class BlogItDbContext(DbContextOptions<BlogItDbContext> options) : DbCont
         modelBuilder.Entity<AiConversation>(e =>
         {
             e.HasKey(c => c.Id);
-            e.Property(c => c.Title).HasMaxLength(500).IsRequired();
+            e.Property(c => c.Title).HasMaxLength(ContentLimits.TitleLength).IsRequired();
             e.Property(c => c.Summary).IsRequired(false);
             e.HasOne(c => c.CreatedByUser)
              .WithMany(u => u.AiConversations)
