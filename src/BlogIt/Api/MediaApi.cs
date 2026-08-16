@@ -1,6 +1,8 @@
+using BlogIt.Shared;
 using BlogIt.Shared.Data;
 using BlogIt.Shared.DTOs;
 using BlogIt.Shared.Entities;
+using BlogIt.Shared.Helpers;
 using BlogIt.Services;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
@@ -28,6 +30,8 @@ public static class MediaApi
         int page = 1,
         int pageSize = 20)
     {
+        (page, pageSize) = Pagination.Clamp(page, pageSize);
+
         var query = db.MediaFiles
             .Include(m => m.UploadedByUser)
             .AsQueryable();
@@ -58,6 +62,16 @@ public static class MediaApi
         var title = request.Form.TryGetValue("title", out var titleVal) && !string.IsNullOrWhiteSpace(titleVal)
             ? titleVal.ToString()
             : Path.GetFileNameWithoutExtension(file.FileName);
+
+        // Length only, not required: the fallback above already guarantees non-null, and a blank
+        // title is what a file named like ".gitignore" legitimately resolves to — the column accepts
+        // that, so rejecting it here would break an upload that works today. Checked before
+        // StoreAsync so a 400 cannot leave an unreferenced blob in the storage provider, which is
+        // what validating after the write would do on every rejection.
+        var titleErrors = new Dictionary<string, string[]>();
+        TextFieldValidator.CheckLength(titleErrors, "title", "Title", title, ContentLimits.TitleLength);
+        if (titleErrors.Count > 0)
+            return Results.ValidationProblem(titleErrors);
 
         // INTENTIONAL: the client-supplied Content-Type is trusted as-is, with no server-side
         // magic-byte validation or allow-list — this endpoint requires authentication, so

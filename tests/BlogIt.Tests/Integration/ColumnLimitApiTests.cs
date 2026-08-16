@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using BlogIt.Shared;
 using BlogIt.Shared.DTOs;
@@ -13,6 +14,11 @@ namespace BlogIt.Tests.Integration;
 /// enforced at the API, returning a 400 that names the field. A test per field, because the two
 /// numbers have to stay in step.
 /// </summary>
+/// <remarks>
+/// The <c>IsRequired</c> half of the same problem lives here too: a column that refuses null fails
+/// on <c>SaveChanges</c> exactly like an over-long one does, and a JSON <c>null</c> reaches it
+/// straight through the non-nullable parameters of a request record without anything checking.
+/// </remarks>
 public class ColumnLimitApiTests(BlogItSampleFactory factory) : IClassFixture<BlogItSampleFactory>
 {
     [Theory]
@@ -103,6 +109,212 @@ public class ColumnLimitApiTests(BlogItSampleFactory factory) : IClassFixture<Bl
             "/" + new string('b', RedirectLimits.SourcePathLength - 1), "/target", true));
 
         response.StatusCode.Should().Be(HttpStatusCode.Created);
+    }
+
+    [Fact]
+    public async Task CreatePost_WithAnOverLongTitle_ReturnsBadRequest()
+    {
+        var client = await AuthedClientAsync("limits_post_title");
+
+        var response = await client.PostAsJsonAsync("/api/posts", new CreateBlogPostRequest(
+            TooLong(ContentLimits.TitleLength), "Summary", "Body",
+            null, null, null, null, TagNames: []));
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await response.Content.ReadAsStringAsync()).Should().Contain("title");
+    }
+
+    [Fact]
+    public async Task UpdatePost_WithAnOverLongTitle_ReturnsBadRequestAndKeepsTheStoredValue()
+    {
+        var client = await AuthedClientAsync("limits_post_title_update");
+        var created = await client.PostAsJsonAsync("/api/posts", new CreateBlogPostRequest(
+            "Keep me", "Summary", "Body", null, null, null, null, []));
+        var post = (await created.Content.ReadFromJsonAsync<BlogPostDetailDto>())!;
+
+        var response = await client.PutAsJsonAsync($"/api/posts/{post.Id}", new UpdateBlogPostRequest(
+            TooLong(ContentLimits.TitleLength), "Summary", "Body", null, null, null, null, [],
+            ConcurrencyStamp: post.ConcurrencyStamp));
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var current = await client.GetFromJsonAsync<BlogPostDetailDto>($"/api/posts/{post.Id}");
+        current!.Title.Should().Be("Keep me");
+    }
+
+    [Fact]
+    public async Task CreatePost_WithoutASummary_ReturnsBadRequest()
+    {
+        // Posted as an anonymous object rather than CreateBlogPostRequest because the record's
+        // Summary parameter is non-nullable and this is the shape a client that simply omits the
+        // field sends. TagNames is still supplied: null there is a separate unrelated crash.
+        var client = await AuthedClientAsync("limits_post_summary");
+
+        var response = await client.PostAsJsonAsync(
+            "/api/posts",
+            new { title = "Title", tagNames = Array.Empty<string>() });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await response.Content.ReadAsStringAsync()).Should().Contain("summary");
+    }
+
+    [Fact]
+    public async Task CreatePage_WithAnOverLongTitle_ReturnsBadRequest()
+    {
+        var client = await AuthedClientAsync("limits_page_title");
+
+        var response = await client.PostAsJsonAsync("/api/pages", new CreatePageRequest(
+            TooLong(ContentLimits.TitleLength), "", "Body", null, null, null, null, false));
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await response.Content.ReadAsStringAsync()).Should().Contain("title");
+    }
+
+    [Fact]
+    public async Task CreatePage_WithoutContent_ReturnsBadRequest()
+    {
+        var client = await AuthedClientAsync("limits_page_content");
+
+        var response = await client.PostAsJsonAsync(
+            "/api/pages",
+            new { title = $"Page {Guid.NewGuid():N}" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await response.Content.ReadAsStringAsync()).Should().Contain("content");
+    }
+
+    [Theory]
+    [InlineData("username")]
+    [InlineData("displayName")]
+    public async Task CreateUser_WithABlankRequiredField_ReturnsBadRequest(string field)
+    {
+        var client = await AuthedClientAsync($"limits_user_blank_{field}");
+
+        var response = await client.PostAsJsonAsync("/api/users", new CreateUserRequest(
+            Username: field == "username" ? "   " : $"user_{Guid.NewGuid():N}",
+            DisplayName: field == "displayName" ? "   " : "Display Name",
+            Password: "Password1!"));
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await response.Content.ReadAsStringAsync()).Should().Contain(field);
+    }
+
+    [Fact]
+    public async Task CreateUser_WithAnOverLongUsername_ReturnsBadRequest()
+    {
+        var client = await AuthedClientAsync("limits_user_username");
+
+        var response = await client.PostAsJsonAsync("/api/users", new CreateUserRequest(
+            TooLong(ContentLimits.UsernameLength), "Display Name", "Password1!"));
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await response.Content.ReadAsStringAsync()).Should().Contain("username");
+    }
+
+    [Fact]
+    public async Task CreateUser_WithAnOverLongDisplayName_ReturnsBadRequest()
+    {
+        var client = await AuthedClientAsync("limits_user_display");
+
+        var response = await client.PostAsJsonAsync("/api/users", new CreateUserRequest(
+            $"user_{Guid.NewGuid():N}",
+            TooLong(ContentLimits.DisplayNameLength),
+            "Password1!"));
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await response.Content.ReadAsStringAsync()).Should().Contain("displayName");
+    }
+
+    [Theory]
+    [InlineData("username")]
+    [InlineData("displayName")]
+    public async Task Initialize_WithABlankRequiredField_ReturnsBadRequestAndCreatesNoUser(string field)
+    {
+        // A fresh factory because /setup/initialize refuses to run once any user exists, and the
+        // shared one is full of users seeded by the tests above.
+        await using var freshFactory = new BlogItSampleFactory();
+        var client = freshFactory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/api/setup/initialize", new SetupInitializeRequest(
+            Username: field == "username" ? "" : "admin",
+            DisplayName: field == "displayName" ? "" : "Administrator",
+            Password: "AdminPass1!",
+            SiteName: "Test Blog",
+            SiteUrl: "https://test.com",
+            SiteDescription: "A test blog",
+            DefaultOgImage: null,
+            AiProvider: "openai-compatible",
+            AiApiKey: "test-key",
+            AiBaseUrl: null,
+            AiModel: null,
+            AiExportModel: null,
+            GoogleAnalyticsMeasurementId: null,
+            GoogleAnalyticsPropertyId: null,
+            GoogleAnalyticsCredentialsJson: null));
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await response.Content.ReadAsStringAsync()).Should().Contain(field);
+        var status = await client.GetFromJsonAsync<SetupStatusResponse>("/api/setup/status");
+        status!.IsComplete.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task CreateConversation_WithABlankTitle_ReturnsBadRequest()
+    {
+        var client = await AuthedClientAsync("limits_ai_blank");
+
+        var response = await client.PostAsJsonAsync(
+            "/api/ai/conversations", new CreateAiConversationRequest("   "));
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await response.Content.ReadAsStringAsync()).Should().Contain("title");
+    }
+
+    [Fact]
+    public async Task CreateConversation_WithAnOverLongTitle_ReturnsBadRequest()
+    {
+        var client = await AuthedClientAsync("limits_ai_title");
+
+        var response = await client.PostAsJsonAsync(
+            "/api/ai/conversations",
+            new CreateAiConversationRequest(TooLong(ContentLimits.TitleLength)));
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await response.Content.ReadAsStringAsync()).Should().Contain("title");
+    }
+
+    [Fact]
+    public async Task UploadMedia_WithAnOverLongTitle_ReturnsBadRequestAndStoresNothing()
+    {
+        var client = await AuthedClientAsync("limits_media_title");
+
+        var response = await UploadAsync(client, TooLong(ContentLimits.TitleLength));
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await response.Content.ReadAsStringAsync()).Should().Contain("title");
+        // The rejection has to happen before the file reaches the storage provider, or a 400 still
+        // leaves an unreferenced blob behind.
+        var listed = await client.GetFromJsonAsync<PagedResult<MediaFileDto>>("/api/media");
+        listed!.TotalCount.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task UploadMedia_WithATitleAtTheLimit_Succeeds()
+    {
+        var client = await AuthedClientAsync("limits_media_title_ok");
+
+        var response = await UploadAsync(client, new string('m', ContentLimits.TitleLength));
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    private static async Task<HttpResponseMessage> UploadAsync(HttpClient client, string title)
+    {
+        using var form = new MultipartFormDataContent();
+        using var file = new ByteArrayContent("stored bytes"u8.ToArray());
+        file.Headers.ContentType = new MediaTypeHeaderValue("image/png");
+        form.Add(file, "file", "hero.png");
+        form.Add(new StringContent(title), "title");
+        return await client.PostAsync("/api/media/upload", form);
     }
 
     private static string TooLong(int limit) => new('x', limit + 1);

@@ -1,6 +1,8 @@
+using BlogIt.Shared;
 using BlogIt.Shared.Data;
 using BlogIt.Shared.DTOs;
 using BlogIt.Shared.Entities;
+using BlogIt.Shared.Helpers;
 using BlogIt.Services;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
@@ -57,6 +59,11 @@ public static class AiApi
         BlogItOptions options,
         ClaimsPrincipal user)
     {
+        var errors = new Dictionary<string, string[]>();
+        TextFieldValidator.CheckRequired(errors, "title", "Title", req.Title, ContentLimits.TitleLength);
+        if (errors.Count > 0)
+            return Results.ValidationProblem(errors);
+
         var userId = Guid.Parse(user.FindFirstValue("sub") ?? user.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
         var conv = new AiConversation

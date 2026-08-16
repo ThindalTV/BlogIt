@@ -1,3 +1,4 @@
+using BlogIt.Shared;
 using BlogIt.Shared.Data;
 using BlogIt.Shared.DTOs;
 using BlogIt.Shared.Entities;
@@ -30,6 +31,8 @@ public static class PagesApi
         int page = 1,
         int pageSize = 20)
     {
+        (page, pageSize) = Pagination.Clamp(page, pageSize);
+
         var query = db.Pages.AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(q))
@@ -60,13 +63,12 @@ public static class PagesApi
         if (scheduleError is not null)
             return ScheduleValidationProblem(scheduleError);
 
-        if (string.IsNullOrWhiteSpace(req.Title))
-            return TitleValidationProblem();
-
-        if (SeoMetadataValidator.Validate(req.SeoTitle, req.SeoDescription, req.SeoKeywords, req.OgImageUrl)
-            is { Count: > 0 } seoErrors)
+        if (ValidateFields(
+                req.Title, req.Content,
+                req.SeoTitle, req.SeoDescription, req.SeoKeywords, req.OgImageUrl)
+            is { Count: > 0 } errors)
         {
-            return Results.ValidationProblem(seoErrors);
+            return Results.ValidationProblem(errors);
         }
 
         // Unlike PostsApi, this had no fallback to the title when Slug was left blank, and no
@@ -133,13 +135,12 @@ public static class PagesApi
         if (scheduleError is not null)
             return ScheduleValidationProblem(scheduleError);
 
-        if (string.IsNullOrWhiteSpace(req.Title))
-            return TitleValidationProblem();
-
-        if (SeoMetadataValidator.Validate(req.SeoTitle, req.SeoDescription, req.SeoKeywords, req.OgImageUrl)
-            is { Count: > 0 } seoErrors)
+        if (ValidateFields(
+                req.Title, req.Content,
+                req.SeoTitle, req.SeoDescription, req.SeoKeywords, req.OgImageUrl)
+            is { Count: > 0 } errors)
         {
-            return Results.ValidationProblem(seoErrors);
+            return Results.ValidationProblem(errors);
         }
 
         page.Title = req.Title;
@@ -201,15 +202,28 @@ public static class PagesApi
         p.ConcurrencyStamp
     );
 
+    /// <summary>
+    /// Collects every field error on a create or update into one dictionary. The page equivalent of
+    /// <c>PostsApi.ValidateFields</c> — Content takes the place of a post's Summary as the required
+    /// unbounded column.
+    /// </summary>
+    private static Dictionary<string, string[]> ValidateFields(
+        string? title,
+        string? content,
+        string? seoTitle,
+        string? seoDescription,
+        string? seoKeywords,
+        string? ogImageUrl)
+    {
+        var errors = SeoMetadataValidator.Validate(seoTitle, seoDescription, seoKeywords, ogImageUrl);
+        TextFieldValidator.CheckRequired(errors, "title", "Title", title, ContentLimits.TitleLength);
+        TextFieldValidator.CheckPresent(errors, "content", "Content", content);
+        return errors;
+    }
+
     private static IResult ScheduleValidationProblem(string error) =>
         Results.ValidationProblem(new Dictionary<string, string[]> { ["schedule"] = [error] });
 
     private static IResult SlugValidationProblem(string error) =>
         Results.ValidationProblem(new Dictionary<string, string[]> { ["slug"] = [error] });
-
-    private static IResult TitleValidationProblem() =>
-        Results.ValidationProblem(new Dictionary<string, string[]>
-        {
-            ["title"] = ["Title is required."]
-        });
 }
