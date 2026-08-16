@@ -23,6 +23,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Referenced for its assembly only (Admin.Services types under test). Its own
+         ProjectReference in BlogIt.csproj sets ReferenceOutputAssembly="false" because it wants
+         the published wwwroot rather than the dll; here we want the opposite. -->
+    <ProjectReference Include="..\..\src\BlogIt.Admin\BlogIt.Admin.csproj" />
     <ProjectReference Include="..\..\src\BlogIt.AzureStorage\BlogIt.AzureStorage.csproj" />
     <ProjectReference Include="..\..\src\BlogIt\BlogIt.csproj" />
     <ProjectReference Include="..\..\src\BlogIt.Contracts\BlogIt.Contracts.csproj" />

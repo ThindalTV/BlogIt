@@ -29,14 +29,20 @@
 {
     <div class="loading-spinner-wrap"><div class="spinner"></div></div>
 }
-else if (filtered == null || filtered.Count == 0)
+else if (result == null || result.Items.Count == 0)
 {
-    <p class="empty-state">No media files found.</p>
+    <p class="empty-state">
+        @(string.IsNullOrWhiteSpace(searchQuery)
+            ? "No media files yet."
+            : $"No media files match “{searchQuery}”.")
+    </p>
 }
 else
 {
+    <p class="list-summary">@RangeSummary()</p>
+
     <div class="media-grid media-grid-page">
-        @foreach (var file in filtered)
+        @foreach (var file in result.Items)
         {
             <div class="media-card @(selectedFile?.Id == file.Id ? "selected" : "")" @onclick="() => SelectFile(file)">
                 @if (file.ContentType.StartsWith("image/"))
@@ -58,6 +64,11 @@ else
             </div>
         }
     </div>
+
+    <Pager CurrentPage="currentPage"
+           TotalCount="result.TotalCount"
+           PageSize="result.PageSize"
+           OnPageChanged="LoadMedia" />
 }
 
 @if (selectedFile != null)
@@ -88,38 +99,44 @@ else
     OnCancel="() => showConfirm = false" />
 
 @code {
-    private IReadOnlyList<MediaFileDto>? allMedia;
-    private List<MediaFileDto>? filtered;
+    private PagedResult<MediaFileDto>? result;
     private MediaFileDto? selectedFile;
     private bool isLoading = true;
     private bool isUploading;
+    private int currentPage = 1;
     private string searchQuery = "";
     private string errorMsg = "";
     private string successMsg = "";
     private bool showConfirm;
 
-    private void OnSearchInput(ChangeEventArgs e)
+    private async Task OnSearchInput(ChangeEventArgs e)
     {
         searchQuery = e.Value?.ToString() ?? "";
-        FilterMedia();
+        // Searched server-side. The old client-side filter only ever saw the 20 rows already
+        // loaded, so a file that existed but sorted past the first page reported as missing.
+        await LoadMedia(1);
     }
 
-    protected override async Task OnInitializedAsync() => await LoadMedia();
+    protected override async Task OnInitializedAsync() => await LoadMedia(1);
 
-    private async Task LoadMedia()
+    private async Task LoadMedia(int page)
     {
         isLoading = true;
-        try { allMedia = (await Api.GetMediaAsync())?.Items; FilterMedia(); }
+        currentPage = page;
+        errorMsg = "";
+        // The selection belongs to the rows on screen; a different page or search would leave the
+        // detail bar describing a file no longer visible.
+        selectedFile = null;
+        try { result = await Api.GetMediaAsync(searchQuery, page); }
         catch (Exception ex) { errorMsg = ex.Message; }
         finally { isLoading = false; }
     }
 
-    private void FilterMedia()
+    private string RangeSummary()
     {
-        if (allMedia == null) { filtered = null; return; }
-        filtered = string.IsNullOrWhiteSpace(searchQuery)
-            ? [.. allMedia]
-            : [.. allMedia.Where(m => m.Title.Contains(searchQuery, StringComparison.OrdinalIgnoreCase))];
+        if (result is null || result.Items.Count == 0) return "";
+        var from = ((currentPage - 1) * result.PageSize) + 1;
+        return $"{from}–{from + result.Items.Count - 1} of {result.TotalCount}";
     }
 
     private void SelectFile(MediaFileDto file) => selectedFile = selectedFile?.Id == file.Id ? null : file;
@@ -135,7 +152,9 @@ else
             await using var stream = file.OpenReadStream(maxAllowedSize: 50 * 1024 * 1024);
             await Api.UploadMediaAsync(title, stream, file.Name, file.ContentType);
             successMsg = $"'{file.Name}' uploaded successfully.";
-            await LoadMedia();
+            // Page 1: the newest upload sorts to the top of the list, which is where the user
+            // expects to find the file they just added.
+            await LoadMedia(1);
         }
         catch (Exception ex) { errorMsg = $"Upload failed: {ex.Message}"; }
         finally { isUploading = false; }
@@ -155,8 +174,10 @@ else
         try
         {
             await Api.DeleteMediaAsync(selectedFile.Id);
-            selectedFile = null;
-            await LoadMedia();
+            // Drop back a page when that was the only file on the last one, so a delete cannot
+            // leave the user staring at an empty grid.
+            var page = result is { Items.Count: 1 } && currentPage > 1 ? currentPage - 1 : currentPage;
+            await LoadMedia(page);
         }
         catch (Exception ex) { errorMsg = ex.Message; }
     }

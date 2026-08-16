@@ -8,6 +8,11 @@
     <h1 class="page-title">Dashboard</h1>
 </div>
 
+@if (!string.IsNullOrEmpty(errorMsg))
+{
+    <div class="alert alert-error">@errorMsg</div>
+}
+
 @if (isLoading)
 {
     <div class="loading-spinner-wrap"><div class="spinner"></div></div>
@@ -120,6 +125,7 @@ else
 @code {
     private bool isLoading = true;
     private bool analyticsLoading;
+    private string errorMsg = "";
     private int publishedCount, draftCount, pageCount, mediaCount;
     private IReadOnlyList<BlogPostSummaryDto>? recentPosts;
     private AnalyticsSummaryDto? analytics;
@@ -128,20 +134,37 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        var postsTask = Api.GetPostsAsync(page: 1);
-        var pagesTask = Api.GetPagesAsync();
-        var mediaTask = Api.GetMediaAsync();
+        // Guarded because this is the landing page: an unhandled throw here — which a 401 on a
+        // revoked token reliably produced — left isLoading true and the spinner turning forever,
+        // recoverable only by a reload.
+        try
+        {
+            var postsTask = Api.GetPostsAsync(page: 1);
+            // Only TotalCount is wanted from these two, so ask for the smallest window the server
+            // will slice rather than pulling 20 rows to count them.
+            var pagesTask = Api.GetPagesAsync(pageSize: 1);
+            var mediaTask = Api.GetMediaAsync(pageSize: 1);
 
-        await Task.WhenAll(postsTask, pagesTask, mediaTask);
+            await Task.WhenAll(postsTask, pagesTask, mediaTask);
 
-        var posts = await postsTask;
-        publishedCount = posts?.Items.Count(p => p.IsPublished) ?? 0;
-        draftCount = posts?.Items.Count(p => !p.IsPublished) ?? 0;
-        recentPosts = posts?.Items.Take(5).ToList();
-        pageCount = (await pagesTask)?.TotalCount ?? 0;
-        mediaCount = (await mediaTask)?.TotalCount ?? 0;
+            var posts = await postsTask;
+            // Counts describe the first page only, which is what these cards have always shown;
+            // TotalCount would need separate per-status queries the API does not expose.
+            publishedCount = posts?.Items.Count(p => p.IsPublished) ?? 0;
+            draftCount = posts?.Items.Count(p => !p.IsPublished) ?? 0;
+            recentPosts = posts?.Items.Take(5).ToList();
+            pageCount = (await pagesTask)?.TotalCount ?? 0;
+            mediaCount = (await mediaTask)?.TotalCount ?? 0;
+        }
+        catch (Exception ex)
+        {
+            errorMsg = ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
 
-        isLoading = false;
         await LoadAnalytics();
     }
 

@@ -5,15 +5,20 @@ using BlogIt.Shared.DTOs;
 
 namespace BlogIt.Admin.Services;
 
-public class ApiClient(HttpClient http, LocalStorageService localStorage)
+/// <summary>
+/// Typed wrapper over the BlogIt admin API. Authentication is not its concern: the injected
+/// <see cref="HttpClient"/> is built on <see cref="AdminAuthMessageHandler"/>, which attaches the
+/// bearer token and handles a rejected one. The per-method <c>PrepareAuthAsync</c> this class used
+/// to call is gone — a request could not be sent unauthenticated by omission any more.
+/// </summary>
+public class ApiClient(HttpClient http)
 {
-    private async Task PrepareAuthAsync()
-    {
-        var token = await localStorage.GetAsync("blogit_token");
-        http.DefaultRequestHeaders.Authorization = string.IsNullOrWhiteSpace(token)
-            ? null
-            : new AuthenticationHeaderValue("Bearer", token);
-    }
+    /// <summary>
+    /// Rows requested per list call. Matches the server's own default; the server clamps anything
+    /// above 100. Sent explicitly rather than relying on that default so the value the UI pages
+    /// with and the value the server slices by can never drift apart.
+    /// </summary>
+    public const int DefaultPageSize = 20;
 
     // Server endpoints report failures as a plain JSON string (Results.BadRequest(string)/
     // Results.Conflict(string)) or as an RFC7807 ValidationProblem (Results.ValidationProblem)
@@ -90,7 +95,6 @@ public class ApiClient(HttpClient http, LocalStorageService localStorage)
 
     public async Task ChangePasswordAsync(ChangePasswordRequest request)
     {
-        await PrepareAuthAsync();
         var resp = await http.PostAsJsonAsync("auth/change-password", request);
         await EnsureSuccessAsync(resp);
     }
@@ -110,10 +114,13 @@ public class ApiClient(HttpClient http, LocalStorageService localStorage)
 
     // ── Posts ───────────────────────────────────────────────────────────────
 
-    public async Task<PagedResult<BlogPostSummaryDto>?> GetPostsAsync(string? q = null, int page = 1, string? status = null)
+    public async Task<PagedResult<BlogPostSummaryDto>?> GetPostsAsync(
+        string? q = null,
+        int page = 1,
+        string? status = null,
+        int pageSize = DefaultPageSize)
     {
-        await PrepareAuthAsync();
-        var url = $"posts?page={page}&pageSize=20";
+        var url = $"posts?page={page}&pageSize={pageSize}";
         if (!string.IsNullOrWhiteSpace(q)) url += $"&q={Uri.EscapeDataString(q)}";
         if (!string.IsNullOrWhiteSpace(status)) url += $"&status={status}";
         return await http.GetFromJsonAsync<PagedResult<BlogPostSummaryDto>>(url);
@@ -121,13 +128,11 @@ public class ApiClient(HttpClient http, LocalStorageService localStorage)
 
     public async Task<BlogPostDetailDto?> GetPostAsync(Guid id)
     {
-        await PrepareAuthAsync();
         return await http.GetFromJsonAsync<BlogPostDetailDto>($"posts/{id}");
     }
 
     public async Task<BlogPostDetailDto?> CreatePostAsync(CreateBlogPostRequest request)
     {
-        await PrepareAuthAsync();
         var resp = await http.PostAsJsonAsync("posts", request);
         await EnsureSuccessAsync(resp);
         return await resp.Content.ReadFromJsonAsync<BlogPostDetailDto>();
@@ -135,42 +140,36 @@ public class ApiClient(HttpClient http, LocalStorageService localStorage)
 
     public async Task UpdatePostAsync(Guid id, UpdateBlogPostRequest request)
     {
-        await PrepareAuthAsync();
         var resp = await http.PutAsJsonAsync($"posts/{id}", request);
         await EnsureSuccessAsync(resp);
     }
 
     public async Task DeletePostAsync(Guid id)
     {
-        await PrepareAuthAsync();
         var resp = await http.DeleteAsync($"posts/{id}");
         resp.EnsureSuccessStatusCode();
     }
 
     public async Task PublishPostAsync(Guid id)
     {
-        await PrepareAuthAsync();
         var resp = await http.PostAsync($"posts/{id}/publish", null);
         resp.EnsureSuccessStatusCode();
     }
 
     public async Task UnpublishPostAsync(Guid id)
     {
-        await PrepareAuthAsync();
         var resp = await http.PostAsync($"posts/{id}/unpublish", null);
         resp.EnsureSuccessStatusCode();
     }
 
     public async Task UpdatePostScheduleAsync(Guid id, UpdatePublicationScheduleRequest request)
     {
-        await PrepareAuthAsync();
         var resp = await http.PutAsJsonAsync($"posts/{id}/schedule", request);
         await EnsureSuccessAsync(resp);
     }
 
     public async Task<PreviewLinkResponse?> CreatePostPreviewAsync(Guid id)
     {
-        await PrepareAuthAsync();
         var response = await http.PostAsync($"previews/posts/{id}", null);
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<PreviewLinkResponse>();
@@ -178,21 +177,29 @@ public class ApiClient(HttpClient http, LocalStorageService localStorage)
 
     // ── Pages ───────────────────────────────────────────────────────────────
 
-    public async Task<PagedResult<PageDto>?> GetPagesAsync()
+    /// <summary>
+    /// One page of the page list. Used to send no parameters at all, which silently pinned the
+    /// admin to the server's first 20 rows: page 21 onward was invisible and uneditable.
+    /// </summary>
+    /// <param name="q">Server-side title/slug search. Filtering the returned window client-side
+    /// instead would only ever search the rows already on screen.</param>
+    public async Task<PagedResult<PageDto>?> GetPagesAsync(
+        string? q = null,
+        int page = 1,
+        int pageSize = DefaultPageSize)
     {
-        await PrepareAuthAsync();
-        return await http.GetFromJsonAsync<PagedResult<PageDto>>("pages");
+        var url = $"pages?page={page}&pageSize={pageSize}";
+        if (!string.IsNullOrWhiteSpace(q)) url += $"&q={Uri.EscapeDataString(q)}";
+        return await http.GetFromJsonAsync<PagedResult<PageDto>>(url);
     }
 
     public async Task<PageDto?> GetPageAsync(Guid id)
     {
-        await PrepareAuthAsync();
         return await http.GetFromJsonAsync<PageDto>($"pages/{id}");
     }
 
     public async Task<PageDto?> CreatePageAsync(CreatePageRequest request)
     {
-        await PrepareAuthAsync();
         var resp = await http.PostAsJsonAsync("pages", request);
         await EnsureSuccessAsync(resp);
         return await resp.Content.ReadFromJsonAsync<PageDto>();
@@ -200,28 +207,24 @@ public class ApiClient(HttpClient http, LocalStorageService localStorage)
 
     public async Task UpdatePageAsync(Guid id, UpdatePageRequest request)
     {
-        await PrepareAuthAsync();
         var resp = await http.PutAsJsonAsync($"pages/{id}", request);
         await EnsureSuccessAsync(resp);
     }
 
     public async Task DeletePageAsync(Guid id)
     {
-        await PrepareAuthAsync();
         var resp = await http.DeleteAsync($"pages/{id}");
         resp.EnsureSuccessStatusCode();
     }
 
     public async Task UpdatePageScheduleAsync(Guid id, UpdatePublicationScheduleRequest request)
     {
-        await PrepareAuthAsync();
         var resp = await http.PutAsJsonAsync($"pages/{id}/schedule", request);
         await EnsureSuccessAsync(resp);
     }
 
     public async Task<PreviewLinkResponse?> CreatePagePreviewAsync(Guid id)
     {
-        await PrepareAuthAsync();
         var response = await http.PostAsync($"previews/pages/{id}", null);
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<PreviewLinkResponse>();
@@ -229,17 +232,24 @@ public class ApiClient(HttpClient http, LocalStorageService localStorage)
 
     // ── Media ───────────────────────────────────────────────────────────────
 
-    public async Task<PagedResult<MediaFileDto>?> GetMediaAsync(string? q = null, int page = 1)
+    /// <summary>
+    /// One page of the media library.
+    /// </summary>
+    /// <param name="q">Server-side title/filename search, so a file that exists but sorts outside
+    /// the current page is still findable. The media screens used to filter their own window and
+    /// reported "No media files found" for anything past row 20.</param>
+    public async Task<PagedResult<MediaFileDto>?> GetMediaAsync(
+        string? q = null,
+        int page = 1,
+        int pageSize = DefaultPageSize)
     {
-        await PrepareAuthAsync();
-        var url = $"media?page={page}&pageSize=20";
+        var url = $"media?page={page}&pageSize={pageSize}";
         if (!string.IsNullOrWhiteSpace(q)) url += $"&q={Uri.EscapeDataString(q)}";
         return await http.GetFromJsonAsync<PagedResult<MediaFileDto>>(url);
     }
 
     public async Task<MediaFileDto?> UploadMediaAsync(string title, Stream fileStream, string fileName, string contentType)
     {
-        await PrepareAuthAsync();
         using var content = new MultipartFormDataContent();
         content.Add(new StringContent(title), "title");
         var streamContent = new StreamContent(fileStream);
@@ -252,7 +262,6 @@ public class ApiClient(HttpClient http, LocalStorageService localStorage)
 
     public async Task DeleteMediaAsync(Guid id)
     {
-        await PrepareAuthAsync();
         var resp = await http.DeleteAsync($"media/{id}");
         resp.EnsureSuccessStatusCode();
     }
@@ -261,13 +270,11 @@ public class ApiClient(HttpClient http, LocalStorageService localStorage)
 
     public async Task<IReadOnlyList<AppUserDto>?> GetUsersAsync()
     {
-        await PrepareAuthAsync();
         return await http.GetFromJsonAsync<IReadOnlyList<AppUserDto>>("users");
     }
 
     public async Task<AppUserDto?> CreateUserAsync(CreateUserRequest request)
     {
-        await PrepareAuthAsync();
         var resp = await http.PostAsJsonAsync("users", request);
         await EnsureSuccessAsync(resp);
         return await resp.Content.ReadFromJsonAsync<AppUserDto>();
@@ -275,7 +282,6 @@ public class ApiClient(HttpClient http, LocalStorageService localStorage)
 
     public async Task DeleteUserAsync(Guid id)
     {
-        await PrepareAuthAsync();
         var resp = await http.DeleteAsync($"users/{id}");
         resp.EnsureSuccessStatusCode();
     }
@@ -284,13 +290,11 @@ public class ApiClient(HttpClient http, LocalStorageService localStorage)
 
     public async Task<IReadOnlyList<UrlRedirectDto>?> GetRedirectsAsync()
     {
-        await PrepareAuthAsync();
         return await http.GetFromJsonAsync<IReadOnlyList<UrlRedirectDto>>("redirects");
     }
 
     public async Task<UrlRedirectDto?> CreateRedirectAsync(SaveUrlRedirectRequest request)
     {
-        await PrepareAuthAsync();
         var response = await http.PostAsJsonAsync("redirects", request);
         await EnsureSuccessAsync(response);
         return await response.Content.ReadFromJsonAsync<UrlRedirectDto>();
@@ -300,7 +304,6 @@ public class ApiClient(HttpClient http, LocalStorageService localStorage)
         Guid id,
         SaveUrlRedirectRequest request)
     {
-        await PrepareAuthAsync();
         var response = await http.PutAsJsonAsync($"redirects/{id}", request);
         await EnsureSuccessAsync(response);
         return await response.Content.ReadFromJsonAsync<UrlRedirectDto>();
@@ -308,7 +311,6 @@ public class ApiClient(HttpClient http, LocalStorageService localStorage)
 
     public async Task DeleteRedirectAsync(Guid id)
     {
-        await PrepareAuthAsync();
         var response = await http.DeleteAsync($"redirects/{id}");
         response.EnsureSuccessStatusCode();
     }
@@ -317,13 +319,11 @@ public class ApiClient(HttpClient http, LocalStorageService localStorage)
 
     public async Task<Dictionary<string, string>?> GetSettingsAsync()
     {
-        await PrepareAuthAsync();
         return await http.GetFromJsonAsync<Dictionary<string, string>>("settings");
     }
 
     public async Task UpdateSettingsAsync(SiteSettingsUpdateRequest settings)
     {
-        await PrepareAuthAsync();
         var resp = await http.PutAsJsonAsync("settings", settings);
         await EnsureSuccessAsync(resp);
     }
@@ -334,14 +334,12 @@ public class ApiClient(HttpClient http, LocalStorageService localStorage)
     /// </summary>
     public async Task RotateJwtSecretAsync()
     {
-        await PrepareAuthAsync();
         var resp = await http.PostAsync("settings/jwt-secret/rotate", null);
         await EnsureSuccessAsync(resp);
     }
 
     public async Task<AiProviderInfoDto?> GetAiProviderInfoAsync()
     {
-        await PrepareAuthAsync();
         return await http.GetFromJsonAsync<AiProviderInfoDto>("settings/ai-provider");
     }
 
@@ -349,19 +347,16 @@ public class ApiClient(HttpClient http, LocalStorageService localStorage)
 
     public async Task<IReadOnlyList<AiConversationSummaryDto>?> GetConversationsAsync()
     {
-        await PrepareAuthAsync();
         return await http.GetFromJsonAsync<IReadOnlyList<AiConversationSummaryDto>>("ai/conversations");
     }
 
     public async Task<AiConversationDetailDto?> GetConversationAsync(Guid id)
     {
-        await PrepareAuthAsync();
         return await http.GetFromJsonAsync<AiConversationDetailDto>($"ai/conversations/{id}");
     }
 
     public async Task<AiConversationDetailDto?> CreateConversationAsync(CreateAiConversationRequest request)
     {
-        await PrepareAuthAsync();
         var resp = await http.PostAsJsonAsync("ai/conversations", request);
         resp.EnsureSuccessStatusCode();
         return await resp.Content.ReadFromJsonAsync<AiConversationDetailDto>();
@@ -369,7 +364,6 @@ public class ApiClient(HttpClient http, LocalStorageService localStorage)
 
     public async Task<AiConversationDetailDto?> SendMessageAsync(Guid conversationId, SendAiMessageRequest request)
     {
-        await PrepareAuthAsync();
         var resp = await http.PostAsJsonAsync($"ai/conversations/{conversationId}/messages", request);
         await EnsureSuccessAsync(resp);
         return await resp.Content.ReadFromJsonAsync<AiConversationDetailDto>();
@@ -379,7 +373,6 @@ public class ApiClient(HttpClient http, LocalStorageService localStorage)
         Guid conversationId,
         ExportAiConversationRequest request)
     {
-        await PrepareAuthAsync();
         var resp = await http.PostAsJsonAsync(
             $"ai/conversations/{conversationId}/export-draft",
             request);
@@ -389,7 +382,6 @@ public class ApiClient(HttpClient http, LocalStorageService localStorage)
 
     public async Task DeleteConversationAsync(Guid id)
     {
-        await PrepareAuthAsync();
         var resp = await http.DeleteAsync($"ai/conversations/{id}");
         resp.EnsureSuccessStatusCode();
     }
@@ -398,7 +390,6 @@ public class ApiClient(HttpClient http, LocalStorageService localStorage)
 
     public async Task<AnalyticsSummaryDto?> GetAnalyticsSummaryAsync(DateTime startDate, DateTime endDate)
     {
-        await PrepareAuthAsync();
         var url = $"analytics/summary?startDate={startDate:yyyy-MM-dd}&endDate={endDate:yyyy-MM-dd}";
         var response = await http.GetAsync(url);
         if (response.StatusCode == System.Net.HttpStatusCode.NotFound)

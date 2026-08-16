@@ -5,6 +5,17 @@
     protected override async Task OnInitializedAsync()
     {
         var status = await Api.GetSetupStatusAsync();
-        Nav.NavigateTo(status?.IsComplete == true ? "login" : "setup", replace: true);
+        if (status?.IsComplete != true)
+        {
+            Nav.NavigateTo("setup", replace: true);
+            return;
+        }
+
+        // Carries the blocked page across the login round trip, same as AdminAuthMessageHandler
+        // does. This path covers arriving at a deep link while signed out; the handler covers being
+        // signed out while already on one.
+        Nav.NavigateTo(
+            AdminLoginRedirect.BuildLoginUrl(Nav.ToBaseRelativePath(Nav.Uri)),
+            replace: true);
     }
 }

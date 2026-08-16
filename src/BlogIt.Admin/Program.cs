@@ -1,7 +1,6 @@
 using System.Net.Http.Json;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
-using Microsoft.AspNetCore.Components.Authorization;
 using BlogIt.Admin;
 using BlogIt.Admin.Services;
 using BlogIt.Shared;
@@ -21,13 +20,8 @@ var apiBaseAddress = CreateApiBaseAddress(
     new Uri(builder.HostEnvironment.BaseAddress),
     bootstrap.ApiPath);
 
-builder.Services.AddScoped(_ => new HttpClient { BaseAddress = apiBaseAddress });
-builder.Services.AddScoped<LocalStorageService>();
-builder.Services.AddScoped<ApiClient>();
-builder.Services.AddScoped<AuthStateProvider>();
-builder.Services.AddScoped<AuthenticationStateProvider>(
-    sp => sp.GetRequiredService<AuthStateProvider>());
-builder.Services.AddAuthorizationCore();
+// HttpClientHandler is the browser fetch handler under WebAssembly.
+builder.Services.AddBlogItAdminServices(apiBaseAddress, () => new HttpClientHandler());
 
 await builder.Build().RunAsync();
 

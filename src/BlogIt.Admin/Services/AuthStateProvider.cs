@@ -47,9 +47,27 @@ public class AuthStateProvider(LocalStorageService localStorage) : Authenticatio
 
     public async Task MarkUserAsLoggedOut()
     {
-        await localStorage.RemoveAsync(TokenKey);
-        NotifyAuthenticationStateChanged(Task.FromResult(Anonymous));
+        await ClearStoredTokenAsync();
+        NotifySignedOut();
     }
+
+    /// <summary>
+    /// Discards the stored token without publishing the state change.
+    /// </summary>
+    /// <remarks>
+    /// Split out of <see cref="MarkUserAsLoggedOut"/> for <see cref="AdminAuthMessageHandler"/>,
+    /// which has to clear the token, leave the page and only then publish — see the ordering
+    /// comment there. A deliberate logout has no such constraint and still does all three at once.
+    /// </remarks>
+    public async Task ClearStoredTokenAsync() => await localStorage.RemoveAsync(TokenKey);
+
+    /// <summary>
+    /// Pushes the anonymous state out to every <c>AuthorizeView</c> and <c>[Authorize]</c> page.
+    /// Without this the state produced by <see cref="GetAuthenticationStateAsync"/> stays cached,
+    /// which is why a dead session used to keep rendering as a live one.
+    /// </summary>
+    public void NotifySignedOut() =>
+        NotifyAuthenticationStateChanged(Task.FromResult(Anonymous));
 
     public async Task<string?> GetTokenAsync() => await localStorage.GetAsync(TokenKey);
 
