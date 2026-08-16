@@ -12,7 +12,17 @@ public static class SiteUrlResolver
     /// crawler-facing — when neither is configured. Returns an absolute URL with a trailing
     /// slash.
     /// </summary>
-    public static string Resolve(string? settingsSiteUrl, string? configurationSiteUrl, HttpRequest request)
+    /// <param name="settingsSiteUrl">The operator-configured value, if any.</param>
+    /// <param name="configurationSiteUrl">The <c>IConfiguration</c> value, if any.</param>
+    /// <param name="request">
+    /// The current request, or <see langword="null"/> when there is none — a background job or a
+    /// cache warmup calling into the public services has no request to fall back to, and gets the
+    /// same "configure a site URL" error as a request with an unusable origin.
+    /// </param>
+    /// <exception cref="InvalidOperationException">
+    /// Nothing is configured and no usable request origin is available.
+    /// </exception>
+    public static string Resolve(string? settingsSiteUrl, string? configurationSiteUrl, HttpRequest? request)
     {
         foreach (var candidate in new[] { settingsSiteUrl, configurationSiteUrl })
         {
@@ -24,11 +34,14 @@ public static class SiteUrlResolver
             }
         }
 
-        var origin = $"{request.Scheme}://{request.Host}{request.PathBase}/";
-        if (Uri.TryCreate(origin, UriKind.Absolute, out var requestUri) &&
-            (requestUri.Scheme == Uri.UriSchemeHttp || requestUri.Scheme == Uri.UriSchemeHttps))
+        if (request is not null)
         {
-            return requestUri.AbsoluteUri;
+            var origin = $"{request.Scheme}://{request.Host}{request.PathBase}/";
+            if (Uri.TryCreate(origin, UriKind.Absolute, out var requestUri) &&
+                (requestUri.Scheme == Uri.UriSchemeHttp || requestUri.Scheme == Uri.UriSchemeHttps))
+            {
+                return requestUri.AbsoluteUri;
+            }
         }
 
         throw new InvalidOperationException("A valid HTTP(S) site URL or request origin is required.");

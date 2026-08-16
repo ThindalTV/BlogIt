@@ -9,6 +9,10 @@ public sealed class BlogItOptions
     private string _adminPath = BlogItDefaults.AdminPath;
     private string _apiPath = BlogItDefaults.ApiPath;
     private string _mediaPath = BlogItDefaults.MediaPath;
+    private bool _serveRssFeed = true;
+    private bool _serveAtomFeed = true;
+    private bool _serveSitemap = true;
+    private bool _serveRobotsTxt = true;
     private bool _isReadOnly;
 
     public string AdminPath
@@ -38,6 +42,85 @@ public sealed class BlogItOptions
         {
             EnsureMutable();
             _mediaPath = value;
+        }
+    }
+
+    /// <summary>
+    /// Whether BlogIt maps <c>GET /rss.xml</c>. Default <see langword="true"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Unlike <see cref="AdminPath"/> and friends these four documents live at fixed, conventional
+    /// URLs that a site usually already owns, so the switch is on/off rather than a path. Turning
+    /// one off unmaps the route entirely — BlogIt stops claiming the URL, so a host static file or
+    /// host endpoint on the same path works instead of being shadowed or colliding at request time
+    /// with an <c>AmbiguousMatchException</c>.
+    /// </para>
+    /// <para>
+    /// Turning a document off does not lose its content: <see cref="Services.ISiteMetadataService"/>
+    /// exposes the same feed items, sitemap entries and robots directives as data, so the host can
+    /// serve them from its own route or fold them into a larger document.
+    /// </para>
+    /// </remarks>
+    public bool ServeRssFeed
+    {
+        get => _serveRssFeed;
+        set
+        {
+            EnsureMutable();
+            _serveRssFeed = value;
+        }
+    }
+
+    /// <summary>
+    /// Whether BlogIt maps <c>GET /atom.xml</c>. Default <see langword="true"/>.
+    /// See <see cref="ServeRssFeed"/> for what turning one of these off means.
+    /// </summary>
+    public bool ServeAtomFeed
+    {
+        get => _serveAtomFeed;
+        set
+        {
+            EnsureMutable();
+            _serveAtomFeed = value;
+        }
+    }
+
+    /// <summary>
+    /// Whether BlogIt maps <c>GET /sitemap.xml</c>. Default <see langword="true"/>.
+    /// See <see cref="ServeRssFeed"/> for what turning one of these off means.
+    /// </summary>
+    /// <remarks>
+    /// Turning this off also drops the <c>Sitemap:</c> line from BlogIt's <c>robots.txt</c>, since
+    /// there is then no such document to point crawlers at.
+    /// </remarks>
+    public bool ServeSitemap
+    {
+        get => _serveSitemap;
+        set
+        {
+            EnsureMutable();
+            _serveSitemap = value;
+        }
+    }
+
+    /// <summary>
+    /// Whether BlogIt maps <c>GET /robots.txt</c>. Default <see langword="true"/>.
+    /// See <see cref="ServeRssFeed"/> for what turning one of these off means.
+    /// </summary>
+    /// <remarks>
+    /// BlogIt's generated document only disallows <see cref="AdminPath"/>. Any other robots rule
+    /// is inexpressible through it, so a site with real crawler requirements should turn this off
+    /// and merge <see cref="Services.ISiteMetadataService.GetRobotsDirectivesAsync"/> into its own
+    /// <c>robots.txt</c>.
+    /// </remarks>
+    public bool ServeRobotsTxt
+    {
+        get => _serveRobotsTxt;
+        set
+        {
+            EnsureMutable();
+            _serveRobotsTxt = value;
         }
     }
 

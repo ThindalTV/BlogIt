@@ -2,16 +2,37 @@ using BlogIt.Services;
 using BlogIt.Shared;
 using BlogIt.Shared.Data;
 using BlogIt.Shared.Helpers;
-using Microsoft.EntityFrameworkCore;
+using System.Text;
 
 namespace BlogIt.Api;
 
 public static class SitemapApi
 {
-    public static IEndpointRouteBuilder MapSitemapApi(this IEndpointRouteBuilder app)
+    /// <summary>
+    /// Maps <c>/sitemap.xml</c> and <c>/robots.txt</c>, each only when the corresponding
+    /// <see cref="BlogItOptions"/> switch is on. A disabled document is not mapped at all rather
+    /// than mapped-and-404: a registered route would still collide with the host's own endpoint on
+    /// the same path, which is the whole reason the switch exists.
+    /// </summary>
+    public static IEndpointRouteBuilder MapSitemapApi(
+        this IEndpointRouteBuilder app,
+        BlogItOptions options)
     {
-        app.MapGet("/sitemap.xml", GetSitemapAsync).AllowAnonymous();
-        app.MapGet("/robots.txt", GetRobotsAsync).AllowAnonymous();
+        ArgumentNullException.ThrowIfNull(options);
+
+        if (options.ServeSitemap)
+        {
+            app.MapGet("/sitemap.xml", GetSitemapAsync)
+                .AllowAnonymous()
+                .WithName(BlogItEndpointNames.Sitemap);
+        }
+
+        if (options.ServeRobotsTxt)
+        {
+            app.MapGet("/robots.txt", GetRobotsAsync)
+                .AllowAnonymous()
+                .WithName(BlogItEndpointNames.RobotsTxt);
+        }
 
         return app;
     }
@@ -22,51 +43,15 @@ public static class SitemapApi
         IConfiguration config,
         HttpContext http)
     {
-        var baseUrl = SiteUrlResolver.Resolve(
+        var siteUrl = SiteUrlResolver.Resolve(
             await settings.GetAsync(SettingKeys.SiteUrl),
             config[SettingKeys.SiteUrl],
             http.Request);
-        baseUrl = baseUrl.TrimEnd('/');
 
-        var posts = await db.BlogPosts
-            .Where(p => p.IsPublished && p.PublishedAt != null)
-            .Select(p => new { p.Slug, p.PublishedAt, p.CreatedAt, p.UpdatedAt })
-            .AsNoTracking()
-            .ToListAsync();
+        var entries = await SiteMetadataService.LoadSitemapEntriesAsync(
+            db, siteUrl, http.RequestAborted);
 
-        var pages = await db.Pages
-            .Where(p => p.IsPublished)
-            .Select(p => new { p.Slug, p.UpdatedAt })
-            .AsNoTracking()
-            .ToListAsync();
-
-        var sb = new System.Text.StringBuilder();
-        sb.AppendLine("""<?xml version="1.0" encoding="UTF-8"?>""");
-        sb.AppendLine("""<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">""");
-
-        void AddUrl(string loc, DateTime? lastMod = null)
-        {
-            sb.AppendLine("  <url>");
-            sb.AppendLine($"    <loc>{System.Security.SecurityElement.Escape(loc)}</loc>");
-            if (lastMod.HasValue)
-                sb.AppendLine($"    <lastmod>{lastMod.Value:yyyy-MM-dd}</lastmod>");
-            sb.AppendLine("  </url>");
-        }
-
-        AddUrl($"{baseUrl}/");
-        AddUrl($"{baseUrl}/archive");
-
-        foreach (var post in posts)
-            AddUrl(
-                $"{baseUrl}{BlogUrlHelper.GetPostPath(post.Slug, post.PublishedAt, post.CreatedAt)}",
-                post.UpdatedAt);
-
-        foreach (var page in pages)
-            AddUrl($"{baseUrl}/{page.Slug}", page.UpdatedAt);
-
-        sb.AppendLine("</urlset>");
-
-        return Results.Content(sb.ToString(), "application/xml");
+        return Results.Content(RenderSitemap(entries), "application/xml");
     }
 
     public static async Task<IResult> GetRobotsAsync(
@@ -75,20 +60,68 @@ public static class SitemapApi
         HttpContext http,
         BlogItOptions options)
     {
-        var baseUrl = SiteUrlResolver.Resolve(
+        var siteUrl = SiteUrlResolver.Resolve(
             await settings.GetAsync(SettingKeys.SiteUrl),
             config[SettingKeys.SiteUrl],
             http.Request);
-        baseUrl = baseUrl.TrimEnd('/');
 
-        var content = $"""
-            User-agent: *
-            Allow: /
-            Disallow: {options.AdminPath.TrimEnd('/')}/
+        return Results.Content(
+            RenderRobots(SiteMetadataService.BuildRobotsDirectives(siteUrl, options)),
+            "text/plain");
+    }
 
-            Sitemap: {baseUrl}/sitemap.xml
-            """;
+    /// <summary>
+    /// Renders sitemap entries as a sitemaps.org 0.9 <c>urlset</c> document. Public so a host that
+    /// turned <c>/sitemap.xml</c> off can serve the identical document from its own route.
+    /// </summary>
+    public static string RenderSitemap(IReadOnlyList<SitemapEntry> entries)
+    {
+        ArgumentNullException.ThrowIfNull(entries);
 
-        return Results.Content(content, "text/plain");
+        var builder = new StringBuilder();
+        builder.AppendLine("""<?xml version="1.0" encoding="UTF-8"?>""");
+        builder.AppendLine("""<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">""");
+
+        foreach (var entry in entries)
+        {
+            builder.AppendLine("  <url>");
+            builder.AppendLine(
+                $"    <loc>{System.Security.SecurityElement.Escape(entry.Location)}</loc>");
+            if (entry.LastModified.HasValue)
+                builder.AppendLine($"    <lastmod>{entry.LastModified.Value:yyyy-MM-dd}</lastmod>");
+            builder.AppendLine("  </url>");
+        }
+
+        builder.AppendLine("</urlset>");
+        return builder.ToString();
+    }
+
+    /// <summary>
+    /// Renders robots directives as a <c>robots.txt</c> body. Public for the same reason as
+    /// <see cref="RenderSitemap"/>; a host merging BlogIt's groups into a larger document will
+    /// usually want to walk <see cref="RobotsDirectives"/> itself instead.
+    /// </summary>
+    public static string RenderRobots(RobotsDirectives directives)
+    {
+        ArgumentNullException.ThrowIfNull(directives);
+
+        var builder = new StringBuilder();
+
+        foreach (var group in directives.Groups)
+        {
+            builder.AppendLine($"User-agent: {group.UserAgent}");
+            foreach (var allow in group.Allow)
+                builder.AppendLine($"Allow: {allow}");
+            foreach (var disallow in group.Disallow)
+                builder.AppendLine($"Disallow: {disallow}");
+            builder.AppendLine();
+        }
+
+        foreach (var sitemap in directives.SitemapUrls)
+            builder.AppendLine($"Sitemap: {sitemap}");
+
+        // Trailing blank lines are legal but noisy, and the group separator above always leaves
+        // one behind when there is no Sitemap: line to follow it.
+        return builder.ToString().TrimEnd();
     }
 }
