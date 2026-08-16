@@ -18,7 +18,7 @@ and services for building a host-owned public site.
 | Path | Contents |
 | --- | --- |
 | `build/` | Package verification and release smoke-test helpers |
-| `src/` | BlogIt engine, contracts, browser admin, Azure provider, and MAUI admin client |
+| `src/` | BlogIt engine, contracts, browser admin, the Azure/OpenAI/Google Analytics satellite providers, and MAUI admin client |
 | `tests/` | Unit and integration tests |
 | `docs/` | Technical, administrator, and publishing documentation |
 | `samples/` | Aspire-hosted example application and public blog UI |

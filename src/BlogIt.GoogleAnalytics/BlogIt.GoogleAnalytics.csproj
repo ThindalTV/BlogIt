@@ -1,0 +1,69 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>BlogIt.GoogleAnalytics</AssemblyName>
+    <PackageId>BlogIt.GoogleAnalytics</PackageId>
+    <IsPackable>true</IsPackable>
+    <Authors>ThindalTV</Authors>
+    <Description>Google Analytics reporting provider for BlogIt, powering the admin dashboard's analytics panel, with a transitive dependency on the matching BlogIt engine package.</Description>
+    <PackageTags>aspnetcore;blog;cms;analytics;google-analytics;ga4</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+    <RepositoryType>git</RepositoryType>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+    <DebugType>portable</DebugType>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <!--
+      This package, and only this package, has to ship as a prerelease. Google publishes no stable
+      Google.Analytics.Data client - the Data API surface itself is v1beta - so a stable
+      BlogIt.GoogleAnalytics 1.0.0 would raise NU5104, and feeds configured to reject prerelease
+      transitives would refuse it outright. Isolating that constraint here, instead of letting it
+      hold the whole engine back, is the reason this satellite exists. Release it as e.g.
+      1.0.0-beta.1; the engine and every other satellite release stable from the same commit.
+      Revisit when Google ships Google.Analytics.Data.V1 (not V1Beta) as a stable package.
+    -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\BlogIt\BlogIt.csproj" />
+    <!--
+      Source builds need the contracts assembly as a compile reference for AnalyticsSummaryDto;
+      BlogIt marks its own contracts reference PrivateAssets="all", so it does not flow here.
+      PrivateAssets="all" again so this does not become a nuspec dependency on an unpublished
+      package: the BlogIt package ships BlogIt.Contracts.dll beside BlogIt.dll in its own lib
+      folder, which is where a consumer of this package resolves it from.
+    -->
+    <ProjectReference Include="..\BlogIt.Contracts\BlogIt.Contracts.csproj"
+                      PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="README.md"
+          Pack="true"
+          PackagePath="\" />
+    <!--
+      Exact pin, never a floating range: this version becomes the consuming application's
+      dependency floor, and a floating range would be re-resolved on the consumer's machine,
+      contradicting <Deterministic>true</Deterministic> above. A floating range would be doubly
+      wrong for a prerelease dependency, since it could roll a consumer onto an untested beta.
+      Enforced by the shipped-project lint in build/package-layout-tests/verify.ps1, which also
+      asserts this exact version literally - bump both in the same commit.
+    -->
+    <PackageReference Include="Google.Analytics.Data.V1Beta" Version="2.0.0-beta10" />
+  </ItemGroup>
+
+  <!--
+    Imported last so a Version or VersionPrefix set above is visible to it. See the file itself for
+    why PackageVersion has to be plumbed into the assembly stamps by hand.
+  -->
+  <Import Project="..\..\build\BlogIt.Versioning.props" />
+
+</Project>

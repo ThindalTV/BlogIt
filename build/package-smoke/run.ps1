@@ -195,9 +195,19 @@ $packageFiles = @(
         Where-Object Extension -EQ ".nupkg"
 )
 $identities = @($packageFiles | ForEach-Object { Get-PackageIdentity $_ })
+# All four release packages have to be present in the feed - the SQL smoke shares the feed
+# with the layout harness - but only BlogIt and BlogIt.AzureStorage get their own consumer
+# here. This suite exists to prove the engine works against a real SQL Server from an
+# installed package; the AI and analytics satellites add no database behaviour, and their
+# restore/compile/wiring is covered by build/package-layout-tests/verify.ps1's
+# AiAnalyticsConsumer. Packing them and never referencing them would just add minutes.
 Assert-SameSet `
     -Actual @($identities | ForEach-Object { "$($_.Id)/$($_.Version)" }) `
-    -Expected @("BlogIt/$PackageVersion", "BlogIt.AzureStorage/$PackageVersion") `
+    -Expected @(
+        "BlogIt/$PackageVersion",
+        "BlogIt.AzureStorage/$PackageVersion",
+        "BlogIt.OpenAi/$PackageVersion",
+        "BlogIt.GoogleAnalytics/$PackageVersion") `
     -Description "Installed smoke package identities"
 
 foreach ($project in @($hostProject, $azureProject)) {

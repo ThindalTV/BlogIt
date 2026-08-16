@@ -3,6 +3,15 @@
   <ItemGroup>
     <AssemblyAttribute Include="System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverageAttribute" />
     <ProjectReference Include="..\..\src\BlogIt\BlogIt.csproj" />
+    <!--
+      The AI satellite, so this sample keeps demonstrating the admin's brainstorm and
+      export-to-draft screens now that the OpenAI SDK is no longer part of the core package. The
+      analytics satellite is deliberately NOT referenced: the sample substitutes its own
+      IAnalyticsService (see ManualTestAnalyticsService.cs), which doubles as proof that a host can
+      light up the dashboard panel without taking BlogIt.GoogleAnalytics or its prerelease
+      Google SDK dependency.
+    -->
+    <ProjectReference Include="..\..\src\BlogIt.OpenAi\BlogIt.OpenAi.csproj" />
     <!-- Source builds need the bundled contracts assembly as a compile reference. The BlogIt package supplies it itself. -->
     <ProjectReference Include="..\..\src\BlogIt.Contracts\BlogIt.Contracts.csproj"
                       PrivateAssets="all" />

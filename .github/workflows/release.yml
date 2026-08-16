@@ -72,11 +72,14 @@ jobs:
             Get-ChildItem $root -File |
               Where-Object Extension -In @(".nupkg", ".snupkg")
           )
-          if (@($packages | Where-Object Extension -EQ ".nupkg").Count -ne 2) {
-            throw "Validated artifact must contain exactly two nupkgs."
+          # BlogIt plus its three satellites: AzureStorage, OpenAi, GoogleAnalytics.
+          # A count check rather than a name check on purpose - this job must publish
+          # exactly what package-smoke validated, and that job already asserted the names.
+          if (@($packages | Where-Object Extension -EQ ".nupkg").Count -ne 4) {
+            throw "Validated artifact must contain exactly four nupkgs."
           }
-          if (@($packages | Where-Object Extension -EQ ".snupkg").Count -ne 2) {
-            throw "Validated artifact must contain exactly two snupkgs."
+          if (@($packages | Where-Object Extension -EQ ".snupkg").Count -ne 4) {
+            throw "Validated artifact must contain exactly four snupkgs."
           }
           if ($packages.Count -ne $expected.Count) {
             throw "Validated artifact package count does not match SHA256SUMS."

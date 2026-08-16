@@ -4,6 +4,8 @@ public sealed class BlogItOptions
 {
     private readonly List<IBlogItDatabaseProviderRegistration> _databaseProviders = [];
     private readonly List<IBlogItStorageProviderRegistration> _storageProviders = [];
+    private readonly List<IBlogItAiProviderRegistration> _aiProviders = [];
+    private readonly List<IBlogItAnalyticsProviderRegistration> _analyticsProviders = [];
     private string _adminPath = BlogItDefaults.AdminPath;
     private string _apiPath = BlogItDefaults.ApiPath;
     private string _mediaPath = BlogItDefaults.MediaPath;
@@ -47,7 +49,7 @@ public sealed class BlogItOptions
         if (_databaseProviders.Count != 0)
         {
             throw new InvalidOperationException(
-                $"BlogIt requires exactly one database provider. '{ProviderName(_databaseProviders[0])}' is already configured; '{ProviderName(provider)}' cannot also be configured.");
+                $"BlogIt requires exactly one database provider. '{ProviderName(_databaseProviders[0].Name)}' is already configured; '{ProviderName(provider.Name)}' cannot also be configured.");
         }
 
         _databaseProviders.Add(provider);
@@ -62,16 +64,84 @@ public sealed class BlogItOptions
         if (_storageProviders.Count != 0)
         {
             throw new InvalidOperationException(
-                $"BlogIt requires exactly one storage provider. '{ProviderName(_storageProviders[0])}' is already configured; '{ProviderName(provider)}' cannot also be configured.");
+                $"BlogIt requires exactly one storage provider. '{ProviderName(_storageProviders[0].Name)}' is already configured; '{ProviderName(provider.Name)}' cannot also be configured.");
         }
 
         _storageProviders.Add(provider);
         return this;
     }
 
+    /// <summary>
+    /// Configures the AI provider that backs the admin's brainstorm and export-to-draft screens.
+    /// Optional; at most one provider may be configured.
+    /// </summary>
+    /// <remarks>
+    /// Hosts normally call the satellite package's own extension, for example
+    /// <c>options.UseOpenAi()</c> from <c>BlogIt.OpenAi</c>, rather than this method directly.
+    /// Unlike the database and storage providers this one may be left unset: the AI endpoints then
+    /// answer <c>400</c> with installation instructions (see
+    /// <c>BlogIt.Services.NotConfiguredAiService</c>) instead of failing to activate.
+    /// </remarks>
+    /// <param name="provider">The provider registration to use.</param>
+    /// <returns>The same options instance, for chaining.</returns>
+    /// <exception cref="InvalidOperationException">
+    /// An AI provider is already configured, or <c>AddBlogIt</c> has already completed.
+    /// </exception>
+    public BlogItOptions UseAiProvider(IBlogItAiProviderRegistration provider)
+    {
+        ArgumentNullException.ThrowIfNull(provider);
+        EnsureMutable();
+
+        if (_aiProviders.Count != 0)
+        {
+            throw new InvalidOperationException(
+                $"BlogIt supports at most one AI provider. '{ProviderName(_aiProviders[0].Name)}' is already configured; '{ProviderName(provider.Name)}' cannot also be configured.");
+        }
+
+        _aiProviders.Add(provider);
+        return this;
+    }
+
+    /// <summary>
+    /// Configures the analytics provider that backs the admin dashboard's analytics panel.
+    /// Optional; at most one provider may be configured.
+    /// </summary>
+    /// <remarks>
+    /// Hosts normally call the satellite package's own extension, for example
+    /// <c>options.UseGoogleAnalytics()</c> from <c>BlogIt.GoogleAnalytics</c>, rather than this
+    /// method directly. With no provider configured the analytics summary endpoint reports
+    /// <c>404 "Analytics is not configured."</c> - the same answer as a configured provider whose
+    /// credentials have not been entered.
+    /// </remarks>
+    /// <param name="provider">The provider registration to use.</param>
+    /// <returns>The same options instance, for chaining.</returns>
+    /// <exception cref="InvalidOperationException">
+    /// An analytics provider is already configured, or <c>AddBlogIt</c> has already completed.
+    /// </exception>
+    public BlogItOptions UseAnalyticsProvider(IBlogItAnalyticsProviderRegistration provider)
+    {
+        ArgumentNullException.ThrowIfNull(provider);
+        EnsureMutable();
+
+        if (_analyticsProviders.Count != 0)
+        {
+            throw new InvalidOperationException(
+                $"BlogIt supports at most one analytics provider. '{ProviderName(_analyticsProviders[0].Name)}' is already configured; '{ProviderName(provider.Name)}' cannot also be configured.");
+        }
+
+        _analyticsProviders.Add(provider);
+        return this;
+    }
+
     internal IBlogItDatabaseProviderRegistration DatabaseProvider => _databaseProviders.Single();
 
     internal IBlogItStorageProviderRegistration StorageProvider => _storageProviders.Single();
+
+    /// <summary>The configured AI provider, or <see langword="null"/> when none was configured.</summary>
+    internal IBlogItAiProviderRegistration? AiProvider => _aiProviders.SingleOrDefault();
+
+    /// <summary>The configured analytics provider, or <see langword="null"/> when none was configured.</summary>
+    internal IBlogItAnalyticsProviderRegistration? AnalyticsProvider => _analyticsProviders.SingleOrDefault();
 
     internal void NormalizeValidateAndFreeze()
     {
@@ -101,6 +171,21 @@ public sealed class BlogItOptions
 
         ValidateProviderName("database", DatabaseProvider.Name);
         ValidateProviderName("storage", StorageProvider.Name);
+
+        // No count check for these two: unlike database and storage, "none configured" is a
+        // supported deployment - the engine falls back to its documented not-configured services.
+        // The name is still validated when one is present so a broken satellite is caught here
+        // rather than surfacing as an empty string in a later error message.
+        if (AiProvider is not null)
+        {
+            ValidateProviderName("AI", AiProvider.Name);
+        }
+
+        if (AnalyticsProvider is not null)
+        {
+            ValidateProviderName("analytics", AnalyticsProvider.Name);
+        }
+
         _isReadOnly = true;
     }
 
@@ -145,11 +230,10 @@ public sealed class BlogItOptions
         }
     }
 
-    private static string ProviderName(IBlogItDatabaseProviderRegistration provider) =>
-        string.IsNullOrWhiteSpace(provider.Name) ? "<unnamed>" : provider.Name;
-
-    private static string ProviderName(IBlogItStorageProviderRegistration provider) =>
-        string.IsNullOrWhiteSpace(provider.Name) ? "<unnamed>" : provider.Name;
+    // Takes the name rather than the registration: there are now four unrelated provider
+    // interfaces, and one overload each would be four identical bodies.
+    private static string ProviderName(string? name) =>
+        string.IsNullOrWhiteSpace(name) ? "<unnamed>" : name;
 
     private void EnsureMutable()
     {

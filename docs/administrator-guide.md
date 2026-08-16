@@ -21,6 +21,12 @@ After the application has been installed and its database migrations have run:
    service-account credentials JSON.
 6. Finish setup and sign in.
 
+AI and analytics reporting come from optional packages the host installs
+(`BlogIt.OpenAi` and `BlogIt.GoogleAnalytics`). Filling in these settings does
+nothing if the corresponding package was not installed — see "Optional features"
+below — so check with whoever deployed the application before assuming a
+misconfiguration.
+
 Setup can only be completed once. It creates the first user and the JWT signing
 secret, saves the site settings, and enables login. Secrets are stored in the
 BlogIt database. Protect database backups and restrict access to the admin path.
@@ -112,6 +118,22 @@ the application.
 Use an absolute public **Site URL** without an admin path. It is used by feeds,
 sitemaps, canonical links, and SEO metadata. Sensitive AI and Analytics fields
 are not returned to the form; leaving them blank keeps their current values.
+
+## Optional features
+
+AI authoring and analytics reporting are separate packages the host application
+installs. Whether they are present is a deployment decision, not a portal
+setting, so the symptoms of a missing package are worth recognising:
+
+| Feature | Package | If it was not installed |
+| --- | --- | --- |
+| AI brainstorm and export-to-draft | `BlogIt.OpenAi` | Sending a message or exporting a draft fails with a message naming the package to install. Existing conversations still open and can still be deleted. |
+| Dashboard analytics panel | `BlogIt.GoogleAnalytics` | The panel reports that analytics is not configured — the same message it shows when the property ID or credentials JSON are blank. |
+
+The client-side Google Analytics measurement tag is built in and needs no extra
+package: saving a measurement ID starts collecting data even without
+`BlogIt.GoogleAnalytics`. That package is only needed to read the reports back
+into the dashboard.
 
 ## Operational notes
 

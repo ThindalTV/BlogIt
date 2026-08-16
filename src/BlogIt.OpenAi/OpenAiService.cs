@@ -1,3 +1,4 @@
+using BlogIt.Services;
 using BlogIt.Shared;
 using BlogIt.Shared.Data;
 using BlogIt.Shared.DTOs;
@@ -9,9 +10,20 @@ using OpenAI.Chat;
 using System.ClientModel;
 using System.Text;
 
-namespace BlogIt.Services;
+namespace BlogIt;
 
-public class AiService(BlogItDbContext db, ISettingsService settings) : IAiService
+/// <summary>
+/// The <see cref="IAiService"/> implementation backed by the official OpenAI .NET client. Covers
+/// any OpenAI-compatible endpoint as well as GitHub Copilot's Azure-hosted models endpoint;
+/// which one is used is chosen at runtime from the saved <c>Ai:Provider</c> setting, not at
+/// registration time.
+/// </summary>
+/// <remarks>
+/// Internal, like <c>AzureBlobMediaStorage</c> in <c>BlogIt.AzureStorage</c>: hosts resolve
+/// <see cref="IAiService"/> from DI and never name this type. It was public while it lived in the
+/// core package purely because it was registered from there.
+/// </remarks>
+internal sealed class OpenAiService(BlogItDbContext db, ISettingsService settings) : IAiService
 {
     // GitHub Copilot uses a fixed Azure OpenAI-compatible base URL.
     private const string GitHubCopilotBaseUrl = "https://models.inference.ai.azure.com";

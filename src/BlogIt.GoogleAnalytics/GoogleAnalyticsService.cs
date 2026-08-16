@@ -1,12 +1,30 @@
+using BlogIt.Services;
 using BlogIt.Shared;
 using BlogIt.Shared.DTOs;
 using Google.Analytics.Data.V1Beta;
 using Google.Apis.Auth.OAuth2;
 
-namespace BlogIt.Services;
+namespace BlogIt;
 
-public class AnalyticsService(ISettingsService settings) : IAnalyticsService
+/// <summary>
+/// The <see cref="IAnalyticsService"/> implementation backed by the Google Analytics Data API.
+/// </summary>
+/// <remarks>
+/// Internal, like <c>AzureBlobMediaStorage</c> in <c>BlogIt.AzureStorage</c>: hosts resolve
+/// <see cref="IAnalyticsService"/> from DI and never name this type.
+/// </remarks>
+internal sealed class GoogleAnalyticsService(ISettingsService settings) : IAnalyticsService
 {
+    /// <summary>
+    /// Reads the traffic summary for the given GA4 date range, or returns <see langword="null"/>
+    /// when the property ID or service-account JSON has not been configured or cannot be parsed.
+    /// </summary>
+    /// <remarks>
+    /// <see langword="null"/> rather than an exception because <c>AnalyticsApi</c> turns it into
+    /// <c>404 "Analytics is not configured."</c>, which is exactly the right answer for a site that
+    /// simply has not filled the settings in - and is the same answer the engine's
+    /// not-configured fallback gives when this package is not installed at all.
+    /// </remarks>
     public async Task<AnalyticsSummaryDto?> GetSummaryAsync(string startDate, string endDate)
     {
         var credentialsJson = await settings.GetAsync(SettingKeys.GoogleAnalyticsCredentialsJson);

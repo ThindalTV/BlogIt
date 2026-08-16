@@ -10,4 +10,12 @@
     <Description>Browser-safe contracts shared by BlogIt clients and the server.</Description>
   </PropertyGroup>
 
+  <!--
+    Not packable on its own, but BlogIt.dll's package carries BlogIt.Contracts.dll beside it (see
+    IncludeBlogItContractsInPackage in src/BlogIt/BlogIt.csproj), so it reaches customers and has to
+    carry the release stamp for the same reason: a stack trace crossing this assembly must identify
+    the build. Imported last so a Version or VersionPrefix set above is visible to it.
+  -->
+  <Import Project="..\..\build\BlogIt.Versioning.props" />
+
 </Project>

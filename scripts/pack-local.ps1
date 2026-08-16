@@ -50,7 +50,9 @@ Write-Host "Packing BlogIt as $packageVersion ..." -ForegroundColor Cyan
 
 $projects = @(
     (Join-Path $PSScriptRoot "..\src\BlogIt\BlogIt.csproj"),
-    (Join-Path $PSScriptRoot "..\src\BlogIt.AzureStorage\BlogIt.AzureStorage.csproj")
+    (Join-Path $PSScriptRoot "..\src\BlogIt.AzureStorage\BlogIt.AzureStorage.csproj"),
+    (Join-Path $PSScriptRoot "..\src\BlogIt.OpenAi\BlogIt.OpenAi.csproj"),
+    (Join-Path $PSScriptRoot "..\src\BlogIt.GoogleAnalytics\BlogIt.GoogleAnalytics.csproj")
 )
 
 foreach ($project in $projects) {

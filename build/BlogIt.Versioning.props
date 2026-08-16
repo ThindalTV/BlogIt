@@ -1,0 +1,57 @@
+<Project>
+
+  <!--
+    Shared release-stamping rules for every project whose output ships to a customer.
+
+    The constraint this encodes: CI and build/package-layout-tests/verify.ps1 both pack with
+    `-p:PackageVersion=<version>`, and NuGet's default wiring only flows the other way -
+    Microsoft.NET.DefaultAssemblyInfo.targets derives AssemblyVersion/FileVersion from
+    $(VersionPrefix) and InformationalVersion from $(Version), and NuGet's pack targets derive
+    PackageVersion from $(Version). Nothing derives anything from PackageVersion. So packing
+    1.4.2 shipped assemblies stamped 1.0.0.0, and a customer stack trace or crash dump could not
+    tell one release from another. Every value below is set explicitly because those SDK defaults
+    are all guarded with Condition="'$(X)' == ''" - an explicit value wins.
+
+    Import this at the BOTTOM of a csproj, not the top. A top-level import cannot see a $(Version)
+    or $(VersionPrefix) declared in the csproj's own PropertyGroup (MSBuild evaluates properties
+    top to bottom), which would silently stamp 1.0.0.0 again the first time someone pins a version
+    in the project file. Global properties from -p: are visible either way.
+
+    Rejected alternative: a repo-root Directory.Build.props. It would apply to test, sample and
+    consumer-fixture projects that never ship, and - more importantly - to
+    build/package-layout-tests/{Consumer,AzureConsumer}, whose whole job is to look like an
+    arbitrary third-party host with no BlogIt build customisation of any kind.
+  -->
+
+  <PropertyGroup>
+    <!--
+      Precedence: an explicit pack-time PackageVersion, then a csproj-declared Version or
+      VersionPrefix, then the same 1.0.0 the SDK would have defaulted to. The literal fallback
+      matters because $(Version) is only defaulted later, by Microsoft.NET.Sdk.targets, which has
+      not run at csproj-evaluation time.
+    -->
+    <_BlogItVersionSource Condition="'$(_BlogItVersionSource)' == ''">$(PackageVersion)</_BlogItVersionSource>
+    <_BlogItVersionSource Condition="'$(_BlogItVersionSource)' == ''">$(Version)</_BlogItVersionSource>
+    <_BlogItVersionSource Condition="'$(_BlogItVersionSource)' == ''">$(VersionPrefix)</_BlogItVersionSource>
+    <_BlogItVersionSource Condition="'$(_BlogItVersionSource)' == ''">1.0.0</_BlogItVersionSource>
+
+    <!--
+      AssemblyVersion and FileVersion accept exactly four numeric components and no prerelease
+      label, so "1.4.2-rc.1" has to become "1.4.2.0". The first match takes the leading numeric
+      core; appending ".0.0.0" and re-matching exactly four components then pads a short version
+      and truncates an already-four-part one, without needing MSBuild to count separators.
+    -->
+    <_BlogItVersionCore>$([System.Text.RegularExpressions.Regex]::Match($(_BlogItVersionSource), '^[0-9]+(\.[0-9]+)*').Value)</_BlogItVersionCore>
+    <_BlogItAssemblyVersion>$([System.Text.RegularExpressions.Regex]::Match('$(_BlogItVersionCore).0.0.0', '^[0-9]+(\.[0-9]+){3}').Value)</_BlogItAssemblyVersion>
+
+    <AssemblyVersion>$(_BlogItAssemblyVersion)</AssemblyVersion>
+    <FileVersion>$(_BlogItAssemblyVersion)</FileVersion>
+    <!--
+      The only stamp that keeps the prerelease label, so it is the one that identifies a build
+      exactly. SourceLink appends "+<commit sha>" to it (IncludeSourceRevisionInInformationalVersion
+      defaults to true), which is why verify.ps1 asserts a prefix match rather than equality.
+    -->
+    <InformationalVersion>$(_BlogItVersionSource)</InformationalVersion>
+  </PropertyGroup>
+
+</Project>

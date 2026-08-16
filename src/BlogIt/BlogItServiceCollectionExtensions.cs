@@ -49,11 +49,32 @@ public static class BlogItServiceCollectionExtensions
             configuredOptions.StorageProvider.Name,
             configuredOptions.StorageProvider.RegisterServices);
 
+        // Optional, so unlike the two above these can be absent. Registered before the TryAdd
+        // fallbacks below so a provider's own TryAdd wins and the fallback is only reached when no
+        // satellite package (and no host substitution) supplied an implementation.
+        if (configuredOptions.AiProvider is { } aiProvider)
+        {
+            RegisterProvider(services, "AI", aiProvider.Name, aiProvider.RegisterServices);
+        }
+
+        if (configuredOptions.AnalyticsProvider is { } analyticsProvider)
+        {
+            RegisterProvider(
+                services,
+                "analytics",
+                analyticsProvider.Name,
+                analyticsProvider.RegisterServices);
+        }
+
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<ISettingsService, SettingsService>();
         services.TryAddScoped<IAuthService, AuthService>();
-        services.TryAddScoped<IAnalyticsService, AnalyticsService>();
-        services.TryAddScoped<IAiService, AiService>();
+        // Always registered, even with no provider: the AI and analytics endpoints take these as
+        // handler parameters, so leaving them unresolvable would fail inside DI activation as an
+        // unhandled 500 before any BlogIt error handling ran. The fallbacks degrade deliberately -
+        // 400 with install instructions for AI, 404 "not configured" for analytics.
+        services.TryAddScoped<IAnalyticsService, NotConfiguredAnalyticsService>();
+        services.TryAddScoped<IAiService, NotConfiguredAiService>();
         services.TryAddSingleton<IPreviewTokenService, PreviewTokenService>();
         services.TryAddSingleton<JwtSigningKeyCache>();
         services.TryAddSingleton<IUrlRedirectService, UrlRedirectService>();

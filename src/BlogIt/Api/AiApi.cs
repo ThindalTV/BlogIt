@@ -87,7 +87,7 @@ public static class AiApi
         BlogItDbContext db,
         IAiService aiService,
         ClaimsPrincipal user,
-        ILogger<AiService> logger,
+        ILogger<IAiService> logger,
         CancellationToken ct)
     {
         var userId = Guid.Parse(user.FindFirstValue("sub") ?? user.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -113,7 +113,7 @@ public static class AiApi
         IAiService aiService,
         BlogItOptions options,
         ClaimsPrincipal user,
-        ILogger<AiService> logger,
+        ILogger<IAiService> logger,
         CancellationToken ct)
     {
         var userId = Guid.Parse(user.FindFirstValue("sub") ?? user.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -139,10 +139,15 @@ public static class AiApi
     // a generic message — a missing API key, a provider HTTP error, or the KeyNotFoundException
     // possible if the conversation is deleted between the existence check above and this call
     // would otherwise propagate as an unhandled 500 with internal details attached.
+    //
+    // The logger category above is the interface, not an implementation. The OpenAI-backed
+    // implementation now lives in the BlogIt.OpenAi satellite package, which this assembly must
+    // not reference, and ILogger<T> cannot name a static class such as AiApi — so the category is
+    // "BlogIt.Services.IAiService", stable across whichever provider package is installed.
     private static bool HandleAiFailure(
         Exception ex,
         Guid conversationId,
-        ILogger<AiService> logger,
+        ILogger<IAiService> logger,
         out IResult problem)
     {
         switch (ex)
@@ -152,9 +157,11 @@ public static class AiApi
                 return true;
 
             case InvalidOperationException:
-                // AiService only throws this for two known, safe-to-surface conditions: a
-                // missing AI API key, or the provider returning no text — not a leaked secret
-                // or stack trace.
+                // Reserved for known, safe-to-surface configuration conditions, never a leaked
+                // secret or stack trace: no AI package installed at all
+                // (NotConfiguredAiService), a missing AI API key, or the provider returning no
+                // text. The message is echoed to the caller precisely so the admin's AI screen can
+                // tell the operator what to fix.
                 logger.LogWarning(ex, "AI request rejected for conversation {ConversationId}", conversationId);
                 problem = Results.Problem(ex.Message, statusCode: StatusCodes.Status400BadRequest);
                 return true;
