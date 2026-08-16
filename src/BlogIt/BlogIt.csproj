@@ -11,6 +11,14 @@
     <Description>Embeddable ASP.NET Core blog engine with SQL Server persistence, a packaged administration UI and APIs, filesystem media storage, and host-defined public views.</Description>
     <PackageTags>aspnetcore;blog;cms;blazor;razor;sql-server</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <!--
+      Matches LICENSE.txt in the repository root. Without it NuGet.org renders "License not
+      specified", which is indistinguishable from proprietary to anyone evaluating the package.
+      An SPDX expression rather than a packed <PackageLicenseFile> so the metadata is
+      machine-readable for consumers running license audits, and so the licence does not have to be
+      duplicated into each satellite package's own content.
+    -->
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
     <RepositoryType>git</RepositoryType>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
@@ -52,10 +60,19 @@
     so the JwtBearer and EF Core floor includes shipped security fixes rather than 10.0.0.
     Bump these in lockstep with the servicing band, and update the expected versions in
     build/package-layout-tests/verify.ps1 in the same commit.
+
+    Two SDKs are deliberately absent and must stay absent. OpenAI lives in BlogIt.OpenAi and
+    Google.Analytics.Data.V1Beta in BlogIt.GoogleAnalytics, reached through
+    IBlogItAiProviderRegistration and IBlogItAnalyticsProviderRegistration - the same satellite
+    shape BlogIt.AzureStorage already uses for media. They were unconditional here, so every
+    consumer restored the OpenAI client and the whole Gax/gRPC/Protobuf tree whether or not it used
+    either feature, and - because the Google client has no stable release - a stable BlogIt 1.0.0
+    would have raised NU5104 and been rejected outright by feeds that block prerelease transitives.
+    verify.ps1 asserts both their absence from this nuspec and their absence from a BlogIt-only
+    consumer's restore graph.
   -->
   <ItemGroup>
     <PackageReference Include="BCrypt.Net-Next" Version="4.2.0" />
-    <PackageReference Include="Google.Analytics.Data.V1Beta" Version="2.0.0-beta10" />
     <PackageReference Include="Markdig" Version="1.3.2" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.11" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.11" />
@@ -64,7 +81,6 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.11" />
-    <PackageReference Include="OpenAI" Version="2.12.0" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.22.0" />
   </ItemGroup>
 
@@ -139,5 +155,11 @@
       <BuildOutputInPackage Include="$(TargetDir)BlogIt.Contracts.dll" />
     </ItemGroup>
   </Target>
+
+  <!--
+    Imported last so a Version or VersionPrefix set above is visible to it. See the file itself for
+    why PackageVersion has to be plumbed into the assembly stamps by hand.
+  -->
+  <Import Project="..\..\build\BlogIt.Versioning.props" />
 
 </Project>

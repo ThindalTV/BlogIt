@@ -11,6 +11,8 @@
     <Description>Azure Blob Storage media provider for BlogIt with a transitive dependency on the matching BlogIt engine package.</Description>
     <PackageTags>aspnetcore;blog;cms;azure;blob-storage</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <!-- Matches LICENSE.txt in the repository root; see src/BlogIt/BlogIt.csproj for why. -->
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
     <RepositoryType>git</RepositoryType>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
@@ -32,5 +34,11 @@
           PackagePath="\" />
     <PackageReference Include="Azure.Storage.Blobs" Version="12.29.1" />
   </ItemGroup>
+
+  <!--
+    Imported last so a Version or VersionPrefix set above is visible to it. See the file itself for
+    why PackageVersion has to be plumbed into the assembly stamps by hand.
+  -->
+  <Import Project="..\..\build\BlogIt.Versioning.props" />
 
 </Project>

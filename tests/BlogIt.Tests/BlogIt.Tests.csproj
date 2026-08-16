@@ -28,6 +28,15 @@
          the published wwwroot rather than the dll; here we want the opposite. -->
     <ProjectReference Include="..\..\src\BlogIt.Admin\BlogIt.Admin.csproj" />
     <ProjectReference Include="..\..\src\BlogIt.AzureStorage\BlogIt.AzureStorage.csproj" />
+    <!--
+      The AI and analytics satellites are referenced so their providers can be exercised against a
+      real host, and so the compaction-policy tests can keep reaching OpenAiService's internals
+      through InternalsVisibleTo. Referencing them here does not weaken the split: the assertion
+      that a consumer never restores these SDKs is made in build/package-layout-tests/verify.ps1
+      against a real package restore, not against this project.
+    -->
+    <ProjectReference Include="..\..\src\BlogIt.GoogleAnalytics\BlogIt.GoogleAnalytics.csproj" />
+    <ProjectReference Include="..\..\src\BlogIt.OpenAi\BlogIt.OpenAi.csproj" />
     <ProjectReference Include="..\..\src\BlogIt\BlogIt.csproj" />
     <ProjectReference Include="..\..\src\BlogIt.Contracts\BlogIt.Contracts.csproj" />
     <ProjectReference Include="..\..\samples\BlogIt.Sample\BlogIt.Sample.csproj" />

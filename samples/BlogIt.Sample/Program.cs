@@ -66,13 +66,22 @@ builder.Services.AddBlogIt(options =>
 
     options.UseSqlServer(databaseConnection!);
     options.UseFileSystemStorage(storage => storage.RootPath = mediaRoot);
+    // From the BlogIt.OpenAi satellite package. Without it the admin's AI screens answer 400 with
+    // installation instructions; the provider itself reads its key and model names from the saved
+    // site settings, so there is nothing to pass here.
+    options.UseOpenAi();
 });
 
 builder.Services.AddRazorComponents();
 
-// TEMPORARY manual-testing scaffolding — see ManualTestAnalyticsService.cs. Remove this line and
-// that file once manual browser testing of the dashboard's Analytics panel is complete.
-builder.Services.AddScoped<BlogIt.Services.IAnalyticsService, BlogIt.Sample.ManualTestAnalyticsService>();
+if (!isTesting)
+{
+    // TEMPORARY manual-testing scaffolding — see ManualTestAnalyticsService.cs. Remove this block
+    // and that file once manual browser testing of the dashboard's Analytics panel is complete.
+    // Gated on !isTesting so the integration suite sees the engine's real analytics default — the
+    // not-configured 404 a host gets without BlogIt.GoogleAnalytics — rather than this stub.
+    builder.Services.AddScoped<BlogIt.Services.IAnalyticsService, BlogIt.Sample.ManualTestAnalyticsService>();
+}
 
 var app = builder.Build();
 await app.MigrateBlogItAsync();

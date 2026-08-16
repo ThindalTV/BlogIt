@@ -9,20 +9,50 @@ checksum-verifies those exact artifacts. A release contains:
 - `BlogIt.<version>.snupkg`
 - `BlogIt.AzureStorage.<version>.nupkg`
 - `BlogIt.AzureStorage.<version>.snupkg`
+- `BlogIt.OpenAi.<version>.nupkg`
+- `BlogIt.OpenAi.<version>.snupkg`
+- `BlogIt.GoogleAnalytics.<version>.nupkg`
+- `BlogIt.GoogleAnalytics.<version>.snupkg`
 
-## Owner preflight
+## Version stamping
 
-Selecting and adding an authorized license is the only deferred publication
-metadata. The repository currently has no license grant, so the projects
-intentionally omit `PackageLicenseExpression` and `PackageLicenseFile` and set
-`PackageRequireLicenseAcceptance` to `false`. Before publishing to a public
-feed, the owner must select a license, add its authorized text, and set the
-corresponding NuGet license property. No particular license is implied.
+Every project whose output ships imports `build/BlogIt.Versioning.props`, which
+turns the packed `PackageVersion` into `AssemblyVersion`, `FileVersion`, and
+`InformationalVersion`. Nothing in the SDK does this by default — `PackageVersion`
+is derived *from* `Version`, never the reverse — so without it a release packed
+as `1.2.3` shipped assemblies stamped `1.0.0.0` and customer stack traces could
+not identify the build. `build/package-layout-tests/verify.ps1` asserts the
+stamps of all five shipped assemblies against the packed version.
 
-`PackageProjectUrl` is also intentionally absent because no canonical project
-URL is configured. It is optional and is not an owner-selected publication
-requirement. Repository URL, branch, and commit metadata are left to the SDK's
-source-control integration when a real remote is available.
+`AssemblyVersion` and `FileVersion` carry the four-part numeric core, so
+`1.2.3-rc.1` stamps `1.2.3.0`. `InformationalVersion` keeps the full version and
+has the commit SHA appended by SourceLink.
+
+## BlogIt.GoogleAnalytics releases as a prerelease
+
+`BlogIt.GoogleAnalytics` depends on `Google.Analytics.Data.V1Beta`, and Google
+publishes no stable Analytics Data client. Tagging that package stable would
+raise `NU5104` and be rejected by feeds that block prerelease transitives, so it
+ships with a prerelease label (for example `1.0.0-beta.1`) until Google ships a
+stable `Google.Analytics.Data.V1`.
+
+Isolating that in a satellite is deliberate: `BlogIt`, `BlogIt.AzureStorage`, and
+`BlogIt.OpenAi` all release stable from the same tag, and only hosts that want
+analytics reporting opt into a prerelease dependency.
+
+## License
+
+All packages declare `PackageLicenseExpression` of `MIT`, matching `LICENSE.txt`
+in the repository root, and set `PackageRequireLicenseAcceptance` to `false`.
+`verify.ps1` asserts the expression on every produced package, because a missing
+one makes NuGet.org render "License not specified" — indistinguishable from
+proprietary. Fill in the copyright holder and year in `LICENSE.txt` before
+publishing.
+
+`PackageProjectUrl` is intentionally absent because no canonical project URL is
+configured. It is optional and is not an owner-selected publication requirement.
+Repository URL, branch, and commit metadata are left to the SDK's source-control
+integration when a real remote is available.
 
 ## Feed configuration
 

@@ -22,14 +22,21 @@ else {
 $packagesPath = Join-Path $artifacts "packages"
 $consumer = Join-Path $testRoot "Consumer\Consumer.csproj"
 $azureConsumer = Join-Path $testRoot "AzureConsumer\AzureConsumer.csproj"
+$aiAnalyticsConsumer = Join-Path $testRoot "AiAnalyticsConsumer\AiAnalyticsConsumer.csproj"
 $packageProject = Join-Path $repo "src\BlogIt\BlogIt.csproj"
 $azurePackageProject = Join-Path $repo "src\BlogIt.AzureStorage\BlogIt.AzureStorage.csproj"
+$openAiPackageProject = Join-Path $repo "src\BlogIt.OpenAi\BlogIt.OpenAi.csproj"
+$analyticsPackageProject = Join-Path $repo "src\BlogIt.GoogleAnalytics\BlogIt.GoogleAnalytics.csproj"
 $consumerOutput = Join-Path $artifacts "consumer-publish"
 $version = $PackageVersion
 $packageName = "BlogIt.$version.nupkg"
 $azurePackageName = "BlogIt.AzureStorage.$version.nupkg"
+$openAiPackageName = "BlogIt.OpenAi.$version.nupkg"
+$analyticsPackageName = "BlogIt.GoogleAnalytics.$version.nupkg"
 $symbolPackageName = "BlogIt.$version.snupkg"
 $azureSymbolPackageName = "BlogIt.AzureStorage.$version.snupkg"
+$openAiSymbolPackageName = "BlogIt.OpenAi.$version.snupkg"
+$analyticsSymbolPackageName = "BlogIt.GoogleAnalytics.$version.snupkg"
 $adminAssetPrefix = "staticwebassets/BlogItAdminAssets/"
 $adminPublishTree = Join-Path $repo "src\BlogIt\obj\admin-publish\Release\wwwroot\blogit"
 
@@ -121,6 +128,7 @@ function Get-PackageInspection {
             $nuspec.SelectNodes("//n:frameworkReference", $namespace) |
                 ForEach-Object { [string]$_.name }
         )
+        $licenseNode = $nuspec.SelectSingleNode("//n:license", $namespace)
 
         return [pscustomobject]@{
             Id = [string]$nuspec.package.metadata.id
@@ -128,10 +136,93 @@ function Get-PackageInspection {
             EntryNames = @($entries.FullName)
             Dependencies = $dependencies
             FrameworkReferences = $frameworkReferences
+            LicenseType = if ($null -eq $licenseNode) { $null } else { [string]$licenseNode.type }
+            LicenseValue = if ($null -eq $licenseNode) { $null } else { [string]$licenseNode.InnerText }
         }
     }
     finally {
         $archive.Dispose()
+    }
+}
+
+# NuGet.org renders "License not specified" for any package whose nuspec carries no <license>
+# node, which is indistinguishable from proprietary to anyone evaluating the package. The repo
+# ships LICENSE.txt (MIT), so every package produced from it must advertise that as an SPDX
+# expression. Asserted as an expression rather than a packed license file so the metadata is
+# machine-readable for consumers running license audits.
+function Assert-PackageLicense {
+    param(
+        [Parameter(Mandatory)] $Inspection,
+        [Parameter(Mandatory)] [string] $Expected
+    )
+
+    if ($Inspection.LicenseType -ne "expression" -or $Inspection.LicenseValue -ne $Expected) {
+        throw "$($Inspection.Id) declares license type '$($Inspection.LicenseType)' value '$($Inspection.LicenseValue)'; expected the SPDX expression '$Expected'."
+    }
+}
+
+# PackageVersion is what CI and this harness pass on the pack command line, and NuGet's default
+# wiring only flows the other way (Version -> PackageVersion), so without explicit plumbing every
+# release shipped assemblies stamped 1.0.0.0 - leaving customer stack traces and crash dumps
+# unable to tell one build from another. AssemblyVersion/FileVersion take the four-part numeric
+# core (a prerelease label is not legal in either), and InformationalVersion carries the full
+# package version; SourceLink appends "+<commit sha>" to it, so this is a prefix match.
+function Assert-PackedAssemblyVersion {
+    param(
+        [Parameter(Mandatory)] [IO.FileInfo] $Package,
+        [Parameter(Mandatory)] [string] $Entry,
+        [Parameter(Mandatory)] [string] $PackageVersion
+    )
+
+    $numericCore = [regex]::Match($PackageVersion, '^[0-9]+(\.[0-9]+)*').Value
+    $expectedAssemblyVersion = [regex]::Match("$numericCore.0.0.0", '^[0-9]+(\.[0-9]+){3}').Value
+
+    # Copied out through streams rather than ZipFileExtensions::ExtractToFile: that is an extension
+    # method, and PowerShell fails to bind its three-argument overload here. The assembly has to
+    # land on disk either way, because AssemblyName and FileVersionInfo both need a file path -
+    # and reading metadata from a file is what keeps this from loading customer code into the
+    # verifier process.
+    $extracted = Join-Path ([IO.Path]::GetTempPath()) ("blogit-verify-" + [Guid]::NewGuid().ToString("N") + ".dll")
+    $archive = [IO.Compression.ZipFile]::OpenRead($Package.FullName)
+    try {
+        $packedEntry = $archive.Entries | Where-Object FullName -EQ $Entry | Select-Object -First 1
+        if ($null -eq $packedEntry) {
+            throw "$($Package.Name) does not contain $Entry."
+        }
+
+        $source = $packedEntry.Open()
+        try {
+            $destination = [IO.File]::Create($extracted)
+            try {
+                $source.CopyTo($destination)
+            }
+            finally {
+                $destination.Dispose()
+            }
+        }
+        finally {
+            $source.Dispose()
+        }
+    }
+    finally {
+        $archive.Dispose()
+    }
+
+    try {
+        $assemblyVersion = [Reflection.AssemblyName]::GetAssemblyName($extracted).Version.ToString()
+        $versionInfo = [Diagnostics.FileVersionInfo]::GetVersionInfo($extracted)
+        if ($assemblyVersion -ne $expectedAssemblyVersion) {
+            throw "$Entry in $($Package.Name) has AssemblyVersion '$assemblyVersion'; expected '$expectedAssemblyVersion' for package version '$PackageVersion'."
+        }
+        if ($versionInfo.FileVersion -ne $expectedAssemblyVersion) {
+            throw "$Entry in $($Package.Name) has FileVersion '$($versionInfo.FileVersion)'; expected '$expectedAssemblyVersion'."
+        }
+        if (-not $versionInfo.ProductVersion.StartsWith($PackageVersion, [StringComparison]::Ordinal)) {
+            throw "$Entry in $($Package.Name) has InformationalVersion '$($versionInfo.ProductVersion)'; expected it to start with '$PackageVersion'."
+        }
+    }
+    finally {
+        Remove-Item $extracted -Force -ErrorAction SilentlyContinue
     }
 }
 
@@ -323,7 +414,9 @@ foreach ($shippedProject in @(
     (Join-Path $repo "src\BlogIt\BlogIt.csproj"),
     (Join-Path $repo "src\BlogIt.Admin\BlogIt.Admin.csproj"),
     (Join-Path $repo "src\BlogIt.Contracts\BlogIt.Contracts.csproj"),
-    (Join-Path $repo "src\BlogIt.AzureStorage\BlogIt.AzureStorage.csproj")
+    (Join-Path $repo "src\BlogIt.AzureStorage\BlogIt.AzureStorage.csproj"),
+    (Join-Path $repo "src\BlogIt.OpenAi\BlogIt.OpenAi.csproj"),
+    (Join-Path $repo "src\BlogIt.GoogleAnalytics\BlogIt.GoogleAnalytics.csproj")
 )) {
     $floatingVersions = @(
         [regex]::Matches(
@@ -340,7 +433,9 @@ foreach ($generatedPath in @(
     (Join-Path $testRoot "Consumer\bin"),
     (Join-Path $testRoot "Consumer\obj"),
     (Join-Path $testRoot "AzureConsumer\bin"),
-    (Join-Path $testRoot "AzureConsumer\obj")
+    (Join-Path $testRoot "AzureConsumer\obj"),
+    (Join-Path $testRoot "AiAnalyticsConsumer\bin"),
+    (Join-Path $testRoot "AiAnalyticsConsumer\obj")
 )) {
     Remove-Item $generatedPath -Recurse -Force -ErrorAction SilentlyContinue
 }
@@ -378,6 +473,16 @@ if (-not $SkipPack) {
         -o $feed `
         --nologo `
         "-p:PackageVersion=$version"
+    Invoke-DotNet pack $openAiPackageProject `
+        -c Release `
+        -o $feed `
+        --nologo `
+        "-p:PackageVersion=$version"
+    Invoke-DotNet pack $analyticsPackageProject `
+        -c Release `
+        -o $feed `
+        --nologo `
+        "-p:PackageVersion=$version"
 }
 
 $producedPackages = @(
@@ -386,7 +491,7 @@ $producedPackages = @(
 )
 Assert-SameSet `
     -Actual @($producedPackages.Name) `
-    -Expected @($packageName, $azurePackageName) `
+    -Expected @($packageName, $azurePackageName, $openAiPackageName, $analyticsPackageName) `
     -Description "Produced nupkgs"
 $producedSymbolPackages = @(
     Get-ChildItem $feed -File |
@@ -394,7 +499,11 @@ $producedSymbolPackages = @(
 )
 Assert-SameSet `
     -Actual @($producedSymbolPackages.Name) `
-    -Expected @($symbolPackageName, $azureSymbolPackageName) `
+    -Expected @(
+        $symbolPackageName,
+        $azureSymbolPackageName,
+        $openAiSymbolPackageName,
+        $analyticsSymbolPackageName) `
     -Description "Produced snupkgs"
 foreach ($symbolPackage in $producedSymbolPackages) {
     $correspondingPackage = Join-Path $feed (
@@ -407,19 +516,27 @@ foreach ($symbolPackage in $producedSymbolPackages) {
 
 $package = Get-Item (Join-Path $feed $packageName)
 $azurePackage = Get-Item (Join-Path $feed $azurePackageName)
+$openAiPackage = Get-Item (Join-Path $feed $openAiPackageName)
+$analyticsPackage = Get-Item (Join-Path $feed $analyticsPackageName)
 # The ceiling is deliberately close to the real size (~11 MB) so that re-introducing the
 # precompressed admin variants - which alone added 18.4 MB of already-compressed, and
 # therefore incompressible, payload - trips this instead of passing unnoticed.
 if ($package.Length -gt 15MB) {
     throw "BlogIt package size is $([math]::Round($package.Length / 1MB, 2)) MB; expected at most 15 MB."
 }
-if ($azurePackage.Length -gt 1MB) {
-    throw "BlogIt.AzureStorage package size is $([math]::Round($azurePackage.Length / 1KB, 2)) KB; expected at most 1 MB."
+# Every satellite is a handful of source files over a provider abstraction; anything approaching a
+# megabyte means it has started duplicating the engine's assets rather than depending on them.
+foreach ($satellite in @($azurePackage, $openAiPackage, $analyticsPackage)) {
+    if ($satellite.Length -gt 1MB) {
+        throw "$($satellite.Name) size is $([math]::Round($satellite.Length / 1KB, 2)) KB; expected at most 1 MB."
+    }
 }
 
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $mainInspection = Get-PackageInspection $package
 $azureInspection = Get-PackageInspection $azurePackage
+$openAiInspection = Get-PackageInspection $openAiPackage
+$analyticsInspection = Get-PackageInspection $analyticsPackage
 
 foreach ($symbolExpectation in @(
     @{
@@ -429,6 +546,14 @@ foreach ($symbolExpectation in @(
     @{
         Package = Get-Item (Join-Path $feed $azureSymbolPackageName)
         Pdb = "lib/net10.0/BlogIt.AzureStorage.pdb"
+    },
+    @{
+        Package = Get-Item (Join-Path $feed $openAiSymbolPackageName)
+        Pdb = "lib/net10.0/BlogIt.OpenAi.pdb"
+    },
+    @{
+        Package = Get-Item (Join-Path $feed $analyticsSymbolPackageName)
+        Pdb = "lib/net10.0/BlogIt.GoogleAnalytics.pdb"
     }
 )) {
     $symbolArchive = [IO.Compression.ZipFile]::OpenRead($symbolExpectation.Package.FullName)
@@ -540,12 +665,10 @@ foreach ($dependency in $forbidden) {
 # stable build today cannot pass while still being floating tomorrow.
 $mainDependencies = [ordered]@{
     "BCrypt.Net-Next" = "4.2.0"
-    "Google.Analytics.Data.V1Beta" = "2.0.0-beta10"
     "Markdig" = "1.3.2"
     "Microsoft.AspNetCore.Authentication.JwtBearer" = "10.0.11"
     "Microsoft.EntityFrameworkCore" = "10.0.11"
     "Microsoft.EntityFrameworkCore.SqlServer" = "10.0.11"
-    "OpenAI" = "2.12.0"
     "System.IdentityModel.Tokens.Jwt" = "8.22.0"
 }
 Assert-PackageDependencies `
@@ -557,56 +680,139 @@ Assert-SameSet `
     -Expected @("Microsoft.AspNetCore.App") `
     -Description "BlogIt framework references"
 
-if ($azureInspection.Id -ne "BlogIt.AzureStorage" -or
-    $azureInspection.Version -ne $version) {
-    throw "Azure package identity is '$($azureInspection.Id) $($azureInspection.Version)', expected 'BlogIt.AzureStorage $version'."
+# Named separately from the exact-set assertion above so a regression reports the reason rather
+# than just "unexpected dependency". These two SDKs are the reason the core package could not be
+# published as a stable 1.0.0: Google.Analytics.Data.V1Beta has no stable release, so a stable
+# core version depending on it raises NU5104, and feeds configured to reject prerelease
+# transitives refuse the package outright. They also drag the Gax/gRPC/Protobuf tree into every
+# consumer that never touches AI or analytics, which is what the satellite split exists to stop.
+foreach ($satelliteOnlyDependency in @("OpenAI", "Google.Analytics.Data.V1Beta")) {
+    if (@($mainInspection.Dependencies.Id) -contains $satelliteOnlyDependency) {
+        throw "BlogIt depends on '$satelliteOnlyDependency'; that SDK belongs in its satellite package so hosts that do not use it never restore it."
+    }
 }
-if ($azureInspection.EntryNames -notcontains "README.md") {
-    throw "BlogIt.AzureStorage package is missing README.md."
+
+# Every satellite is held to the same shape: one library asset, its own README, an exact-version
+# dependency on the matching BlogIt so a consumer can never end up with a mismatched pair, exactly
+# one SDK of its own, no framework reference, and none of the engine's admin or build-transitive
+# assets duplicated. Asserted as one table so adding a satellite means adding a row, not a block.
+$satelliteExpectations = @(
+    @{
+        Inspection = $azureInspection
+        Package = $azurePackage
+        Id = "BlogIt.AzureStorage"
+        Assembly = "BlogIt.AzureStorage.dll"
+        Dependencies = [ordered]@{
+            "BlogIt" = $version
+            "Azure.Storage.Blobs" = "12.29.1"
+        }
+    },
+    @{
+        Inspection = $openAiInspection
+        Package = $openAiPackage
+        Id = "BlogIt.OpenAi"
+        Assembly = "BlogIt.OpenAi.dll"
+        Dependencies = [ordered]@{
+            "BlogIt" = $version
+            "OpenAI" = "2.12.0"
+        }
+    },
+    @{
+        Inspection = $analyticsInspection
+        Package = $analyticsPackage
+        Id = "BlogIt.GoogleAnalytics"
+        Assembly = "BlogIt.GoogleAnalytics.dll"
+        # The one prerelease dependency left in the repo, and the reason this satellite exists:
+        # Google publishes no stable Analytics Data client, so keeping it here lets BlogIt itself
+        # release stable. This package ships prerelease until Google ships a stable V1 client.
+        Dependencies = [ordered]@{
+            "BlogIt" = $version
+            "Google.Analytics.Data.V1Beta" = "2.0.0-beta10"
+        }
+    }
+)
+foreach ($satellite in $satelliteExpectations) {
+    $inspection = $satellite.Inspection
+    if ($inspection.Id -ne $satellite.Id -or $inspection.Version -ne $version) {
+        throw "Satellite package identity is '$($inspection.Id) $($inspection.Version)', expected '$($satellite.Id) $version'."
+    }
+    if ($inspection.EntryNames -notcontains "README.md") {
+        throw "$($satellite.Id) package is missing README.md."
+    }
+    Assert-SameSet `
+        -Actual @($inspection.EntryNames | Where-Object { $_ -Like "lib/*" }) `
+        -Expected @("lib/net10.0/$($satellite.Assembly)") `
+        -Description "$($satellite.Id) library assets"
+    if (@($inspection.EntryNames | Where-Object {
+        $_ -Like "staticwebassets/*" -or $_ -Like "buildTransitive/*"
+    }).Count -ne 0) {
+        throw "$($satellite.Id) duplicates BlogIt admin or build-transitive assets."
+    }
+    Assert-PackageDependencies `
+        -Inspection $inspection `
+        -Expected $satellite.Dependencies `
+        -Description $satellite.Id
+    Assert-SameSet `
+        -Actual @($inspection.FrameworkReferences) `
+        -Expected @() `
+        -Description "$($satellite.Id) framework references"
 }
-Assert-SameSet `
-    -Actual @($azureInspection.EntryNames | Where-Object { $_ -Like "lib/*" }) `
-    -Expected @("lib/net10.0/BlogIt.AzureStorage.dll") `
-    -Description "BlogIt.AzureStorage library assets"
-if (@($azureInspection.EntryNames | Where-Object {
-    $_ -Like "staticwebassets/*" -or $_ -Like "buildTransitive/*"
-}).Count -ne 0) {
-    throw "BlogIt.AzureStorage duplicates BlogIt admin or build-transitive assets."
+
+foreach ($licensedPackage in @(
+    $mainInspection,
+    $azureInspection,
+    $openAiInspection,
+    $analyticsInspection
+)) {
+    Assert-PackageLicense -Inspection $licensedPackage -Expected "MIT"
 }
-$azureDependencies = [ordered]@{
-    "BlogIt" = $version
-    "Azure.Storage.Blobs" = "12.29.1"
+
+# BlogIt.Contracts.dll is stamped too: it is not packable on its own but ships inside the BlogIt
+# package, so a stack trace crossing it has to identify the build like any other shipped assembly.
+foreach ($stampedAssembly in @(
+    @{ Package = $package; Entry = "lib/net10.0/BlogIt.dll" },
+    @{ Package = $package; Entry = "lib/net10.0/BlogIt.Contracts.dll" },
+    @{ Package = $azurePackage; Entry = "lib/net10.0/BlogIt.AzureStorage.dll" },
+    @{ Package = $openAiPackage; Entry = "lib/net10.0/BlogIt.OpenAi.dll" },
+    @{ Package = $analyticsPackage; Entry = "lib/net10.0/BlogIt.GoogleAnalytics.dll" }
+)) {
+    Assert-PackedAssemblyVersion `
+        -Package $stampedAssembly.Package `
+        -Entry $stampedAssembly.Entry `
+        -PackageVersion $version
 }
-Assert-PackageDependencies `
-    -Inspection $azureInspection `
-    -Expected $azureDependencies `
-    -Description "BlogIt.AzureStorage"
-Assert-SameSet `
-    -Actual @($azureInspection.FrameworkReferences) `
-    -Expected @() `
-    -Description "BlogIt.AzureStorage framework references"
 
 $consumerProjectText = Get-Content $consumer -Raw
 $azureConsumerProjectText = Get-Content $azureConsumer -Raw
-foreach ($projectText in @($consumerProjectText, $azureConsumerProjectText)) {
+$aiAnalyticsConsumerProjectText = Get-Content $aiAnalyticsConsumer -Raw
+foreach ($projectText in @(
+    $consumerProjectText,
+    $azureConsumerProjectText,
+    $aiAnalyticsConsumerProjectText
+)) {
     if ($projectText -match "<ProjectReference") {
         throw "Clean package consumers must not contain source ProjectReferences."
     }
 }
 if (($consumerProjectText -notmatch 'PackageReference Include="BlogIt"') -or
-    ($consumerProjectText -match 'PackageReference Include="BlogIt\.(Contracts|Admin|AzureStorage)"')) {
+    ($consumerProjectText -match 'PackageReference Include="BlogIt\.(Contracts|Admin|AzureStorage|OpenAi|GoogleAnalytics)"')) {
     throw "The filesystem consumer must reference only the BlogIt production package."
 }
 if (($azureConsumerProjectText -notmatch 'PackageReference Include="BlogIt\.AzureStorage"') -or
     ($azureConsumerProjectText -match 'PackageReference Include="BlogIt"')) {
     throw "The Azure consumer must reference only BlogIt.AzureStorage and receive BlogIt transitively."
 }
+if (($aiAnalyticsConsumerProjectText -notmatch 'PackageReference Include="BlogIt\.OpenAi"') -or
+    ($aiAnalyticsConsumerProjectText -notmatch 'PackageReference Include="BlogIt\.GoogleAnalytics"') -or
+    ($aiAnalyticsConsumerProjectText -match 'PackageReference Include="BlogIt"')) {
+    throw "The AI/analytics consumer must reference only the two satellites and receive BlogIt transitively."
+}
 
 $restoreProperties = @(
     "-p:BlogItPackageVersion=$version",
     "-p:RestorePackagesPath=$packagesPath"
 )
-foreach ($consumerProject in @($consumer, $azureConsumer)) {
+foreach ($consumerProject in @($consumer, $azureConsumer, $aiAnalyticsConsumer)) {
     Invoke-DotNet restore $consumerProject `
         "-p:RestoreAdditionalProjectSources=$feed" `
         @restoreProperties `
@@ -616,6 +822,7 @@ foreach ($consumerProject in @($consumer, $azureConsumer)) {
 }
 Invoke-DotNet build $consumer -c Release --no-restore --nologo @restoreProperties
 Invoke-DotNet build $azureConsumer -c Release --no-restore --nologo @restoreProperties
+Invoke-DotNet build $aiAnalyticsConsumer -c Release --no-restore --nologo @restoreProperties
 Invoke-DotNet publish $consumer `
     -c Release `
     --no-restore `
@@ -630,6 +837,63 @@ Assert-SameSet `
     -Actual @($consumerLibraries | Where-Object { $_ -Like "BlogIt/*" }) `
     -Expected @("BlogIt/$version") `
     -Description "Filesystem consumer BlogIt packages"
+
+# The whole point of the satellite split, measured on the real restore graph rather than inferred
+# from the nuspec: a host that installs BlogIt alone must not pull the OpenAI client or the
+# Gax/gRPC/Protobuf tree that Google.Analytics.Data.V1Beta sits on top of. Asserted by prefix over
+# every restored library because these arrive transitively - Grpc.Net.Client, Grpc.Core.Api,
+# Google.Api.Gax.Grpc, Google.Apis.Auth and Google.Protobuf are never named in any csproj.
+$satelliteOnlyLibraryPrefixes = @(
+    "OpenAI/",
+    "Google.Analytics.",
+    "Google.Api.Gax",
+    "Google.Apis.",
+    "Google.Protobuf/",
+    "Grpc."
+)
+$leakedLibraries = @(
+    $consumerLibraries | Where-Object {
+        $library = $_
+        @($satelliteOnlyLibraryPrefixes | Where-Object {
+            $library.StartsWith($_, [StringComparison]::OrdinalIgnoreCase)
+        }).Count -ne 0
+    }
+)
+if ($leakedLibraries.Count -ne 0) {
+    throw "A BlogIt-only consumer restored $($leakedLibraries.Count) AI/analytics SDK libraries it cannot use: $($leakedLibraries -join ', ')."
+}
+
+# The other half of the same claim: opting in has to actually deliver the SDKs, or the assertion
+# above would also pass for a satellite that forgot to depend on anything. Also proves BlogIt
+# arrives transitively from each satellite, so a host never pins the engine version itself.
+$aiAnalyticsConsumerAssets = Get-Content (
+    Join-Path $testRoot "AiAnalyticsConsumer\obj\project.assets.json") -Raw |
+    ConvertFrom-Json
+$aiAnalyticsConsumerLibraries = @(
+    $aiAnalyticsConsumerAssets.libraries.PSObject.Properties.Name)
+Assert-SameSet `
+    -Actual @($aiAnalyticsConsumerLibraries | Where-Object { $_ -Like "BlogIt*/*" }) `
+    -Expected @(
+        "BlogIt/$version",
+        "BlogIt.OpenAi/$version",
+        "BlogIt.GoogleAnalytics/$version") `
+    -Description "AI/analytics consumer BlogIt packages"
+foreach ($expectedLibrary in @("OpenAI/2.12.0", "Google.Analytics.Data.V1Beta/2.0.0-beta10")) {
+    if ($aiAnalyticsConsumerLibraries -notcontains $expectedLibrary) {
+        throw "The AI/analytics consumer did not restore $expectedLibrary from its satellite package."
+    }
+}
+$aiAnalyticsConsumerOutput = Join-Path $testRoot "AiAnalyticsConsumer\bin\Release\net10.0"
+foreach ($assembly in @(
+    "BlogIt.dll",
+    "BlogIt.Contracts.dll",
+    "BlogIt.OpenAi.dll",
+    "BlogIt.GoogleAnalytics.dll"
+)) {
+    if (-not (Test-Path (Join-Path $aiAnalyticsConsumerOutput $assembly) -PathType Leaf)) {
+        throw "AI/analytics package consumer output is missing $assembly."
+    }
+}
 
 $azureConsumerAssets = Get-Content (Join-Path $testRoot "AzureConsumer\obj\project.assets.json") -Raw |
     ConvertFrom-Json
@@ -693,10 +957,14 @@ Invoke-ConsumerScenario `
     -AdminWasmPath $adminWasmPath
 
 $mainSizeMb = [math]::Round($package.Length / 1MB, 2)
-$azureSizeKb = [math]::Round($azurePackage.Length / 1KB, 2)
-Write-Host "PASS packages produced: $packageName, $azurePackageName"
-Write-Host "PASS ${packageName}: $mainSizeMb MB, $($mainInspection.EntryNames.Count) files, $($adminAssets.Count) admin assets"
-Write-Host "PASS ${azurePackageName}: $azureSizeKb KB, one library asset, exact BlogIt $version dependency"
+Write-Host "PASS packages produced: $(@($producedPackages.Name) -join ', ')"
+Write-Host "PASS ${packageName}: $mainSizeMb MB, $($mainInspection.EntryNames.Count) files, $($adminAssets.Count) admin assets, $($mainInspection.Dependencies.Count) dependencies, MIT"
+foreach ($satellite in $satelliteExpectations) {
+    $satelliteSizeKb = [math]::Round($satellite.Package.Length / 1KB, 2)
+    Write-Host "PASS $($satellite.Package.Name): $satelliteSizeKb KB, one library asset, exact BlogIt $version dependency, MIT"
+}
+Write-Host "PASS release stamping: AssemblyVersion/FileVersion/InformationalVersion track $version in 5 shipped assemblies"
 Write-Host "PASS package dependency boundaries and forbidden browser dependencies: 0"
-Write-Host "PASS clean consumers: filesystem/public Razor surface and Azure startup/transitive BlogIt"
+Write-Host "PASS BlogIt-only consumer restored 0 AI/analytics SDK libraries; satellite consumer restored both"
+Write-Host "PASS clean consumers: filesystem/public Razor surface, Azure and AI/analytics startup/transitive BlogIt"
 Write-Host "PASS published consumer: $consumerOutput"

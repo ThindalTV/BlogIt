@@ -7,12 +7,16 @@ using Microsoft.EntityFrameworkCore;
 namespace BlogIt.Tests.Unit;
 
 /// <summary>
-/// Pins the size of the request AiService sends to the model for one chat turn. AiApiTests
+/// Pins the size of the request OpenAiService sends to the model for one chat turn. AiApiTests
 /// substitutes a fake IAiService, so nothing there can see this — a duplicated user message rode
 /// on every turn undetected, doubling the token bill and firing history compaction a message
 /// early, while AiHistoryCompactionTests kept passing because it tests the batch policy on a
 /// list it builds itself.
 /// </summary>
+/// <remarks>
+/// Reaches OpenAiService (in the BlogIt.OpenAi satellite package) through its InternalsVisibleTo;
+/// the type was called AiService and lived in the core package until the AI SDK was split out.
+/// </remarks>
 public class AiRequestMessageTests
 {
     [Fact]
@@ -24,7 +28,7 @@ public class AiRequestMessageTests
         var userMessage = AddUserTurn(db, conversation.Id);
         await db.SaveChangesAsync();
 
-        var ordered = AiService.SelectHistoryForRequest(conversation);
+        var ordered = OpenAiService.SelectHistoryForRequest(conversation);
 
         // The conversation was loaded tracked with Include(c => c.Messages), so EF relationship
         // fixup has already placed userMessage into that collection — appending it as well is
@@ -43,8 +47,8 @@ public class AiRequestMessageTests
         AddUserTurn(db, conversation.Id);
         await db.SaveChangesAsync();
 
-        var ordered = AiService.SelectHistoryForRequest(conversation);
-        var outbound = AiService.BuildRequestMessages(conversation.Summary, ordered);
+        var ordered = OpenAiService.SelectHistoryForRequest(conversation);
+        var outbound = OpenAiService.BuildRequestMessages(conversation.Summary, ordered);
 
         outbound.Should().HaveCount(5);
     }
@@ -58,8 +62,8 @@ public class AiRequestMessageTests
         AddUserTurn(db, conversation.Id);
         await db.SaveChangesAsync();
 
-        var ordered = AiService.SelectHistoryForRequest(conversation);
-        var outbound = AiService.BuildRequestMessages(conversation.Summary, ordered);
+        var ordered = OpenAiService.SelectHistoryForRequest(conversation);
+        var outbound = OpenAiService.BuildRequestMessages(conversation.Summary, ordered);
 
         outbound.Should().HaveCount(ordered.Count + 1);
     }
@@ -73,15 +77,15 @@ public class AiRequestMessageTests
         await using var db = CreateContext();
         var conversation = await SeedAndLoadAsync(
             db,
-            priorMessages: AiService.HistoryCompactionThreshold - 2);
+            priorMessages: OpenAiService.HistoryCompactionThreshold - 2);
 
         AddUserTurn(db, conversation.Id);
         await db.SaveChangesAsync();
 
-        var ordered = AiService.SelectHistoryForRequest(conversation);
-        var (toCompact, _) = AiService.SelectCompactionBatch(ordered, AiService.HistoryCompactionThreshold);
+        var ordered = OpenAiService.SelectHistoryForRequest(conversation);
+        var (toCompact, _) = OpenAiService.SelectCompactionBatch(ordered, OpenAiService.HistoryCompactionThreshold);
 
-        ordered.Should().HaveCount(AiService.HistoryCompactionThreshold - 1);
+        ordered.Should().HaveCount(OpenAiService.HistoryCompactionThreshold - 1);
         toCompact.Should().BeEmpty();
     }
 
@@ -94,7 +98,7 @@ public class AiRequestMessageTests
         AddUserTurn(db, conversation.Id);
         await db.SaveChangesAsync();
 
-        var ordered = AiService.SelectHistoryForRequest(conversation);
+        var ordered = OpenAiService.SelectHistoryForRequest(conversation);
 
         ordered.Select(message => message.Content).Should().Equal("prior-2", "the new turn");
     }

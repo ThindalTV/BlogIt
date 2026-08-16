@@ -25,6 +25,45 @@ includes the matching `BlogIt` package transitively:
 dotnet add package BlogIt.AzureStorage
 ```
 
+## Optional satellite packages
+
+The engine carries no AI or analytics SDK. Both are reached through provider
+abstractions in `BlogIt`, and each has its own package that brings the matching
+`BlogIt` transitively — install neither, either, or both:
+
+| Package | Adds | Configure with |
+| --- | --- | --- |
+| `BlogIt.AzureStorage` | Azure Blob media storage | `options.UseAzureStorage(...)` |
+| `BlogIt.OpenAi` | The admin's AI brainstorm and export-to-draft screens | `options.UseOpenAi()` |
+| `BlogIt.GoogleAnalytics` | The admin dashboard's analytics panel | `options.UseGoogleAnalytics()` |
+
+```powershell
+dotnet add package BlogIt.OpenAi
+dotnet add package BlogIt.GoogleAnalytics --prerelease
+```
+
+`BlogIt.GoogleAnalytics` is prerelease-only because Google publishes no stable
+Analytics Data client; see `docs/publishing.md`. Keeping it in a satellite is why
+`BlogIt` itself can release stable.
+
+`UseOpenAi()` and `UseGoogleAnalytics()` take no arguments. Both providers read
+their credentials, endpoints, and model names from the per-site settings entered
+in the admin portal, so there is nothing to configure at startup.
+
+### Without them
+
+Leaving a satellite out is a supported deployment, not a broken one:
+
+| Left out | Effect |
+| --- | --- |
+| `BlogIt.OpenAi` | `POST /api/ai/conversations/{id}/messages` and `.../export-draft` return `400` with a problem response naming the package to install. Listing, reading, creating, and deleting conversations keep working — they touch only the database. |
+| `BlogIt.GoogleAnalytics` | `GET /api/analytics/summary` returns `404 "Analytics is not configured."` — the same answer as an installed provider with no credentials entered. The client-side measurement tag is unaffected: `GaScript` lives in `BlogIt` and needs no SDK. |
+
+Both are also replaceable rather than merely omittable: `IAiService` and
+`IAnalyticsService` are public in `BlogIt`, and a host implementation registered
+before `AddBlogIt` wins over both the satellite and the fallback. The sample does
+this for analytics.
+
 ## Configure the host
 
 Add a SQL Server connection string and, optionally, a media root to the host's
@@ -44,8 +83,8 @@ configuration:
 ```
 
 Register BlogIt once, select exactly one database provider and one storage
-provider, migrate after building the app, and add BlogIt's middleware and
-endpoints:
+provider plus at most one AI and one analytics provider, migrate after building
+the app, and add BlogIt's middleware and endpoints:
 
 ```csharp
 using BlogIt;

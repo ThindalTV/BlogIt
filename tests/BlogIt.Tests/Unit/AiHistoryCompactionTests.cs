@@ -24,7 +24,7 @@ public class AiHistoryCompactionTests
     {
         var messages = MakeMessages(count);
 
-        var (toCompact, remaining) = AiService.SelectCompactionBatch(messages, AiService.HistoryCompactionThreshold);
+        var (toCompact, remaining) = OpenAiService.SelectCompactionBatch(messages, OpenAiService.HistoryCompactionThreshold);
 
         toCompact.Should().BeEmpty();
         remaining.Should().Equal(messages);
@@ -35,7 +35,7 @@ public class AiHistoryCompactionTests
     {
         var messages = MakeMessages(20);
 
-        var (toCompact, remaining) = AiService.SelectCompactionBatch(messages, 20);
+        var (toCompact, remaining) = OpenAiService.SelectCompactionBatch(messages, 20);
 
         toCompact.Should().Equal(messages.Take(10));
         remaining.Should().Equal(messages.Skip(10));
@@ -49,7 +49,7 @@ public class AiHistoryCompactionTests
         // never compact away more than half.
         var messages = MakeMessages(21);
 
-        var (toCompact, remaining) = AiService.SelectCompactionBatch(messages, 20);
+        var (toCompact, remaining) = OpenAiService.SelectCompactionBatch(messages, 20);
 
         toCompact.Should().HaveCount(10);
         remaining.Should().HaveCount(11);
@@ -65,18 +65,18 @@ public class AiHistoryCompactionTests
         const int threshold = 20;
         var messages = MakeMessages(threshold); // starts right at the trigger point
 
-        var (round1Compact, round1Remaining) = AiService.SelectCompactionBatch(messages, threshold);
+        var (round1Compact, round1Remaining) = OpenAiService.SelectCompactionBatch(messages, threshold);
         round1Compact.Should().HaveCount(10);
         round1Remaining.Should().HaveCount(10);
 
         // Adding fewer than threshold/2 new messages must not trigger another round.
         var notYet = round1Remaining.Concat(MakeMessages(9)).ToList();
-        var (round2NoTrigger, _) = AiService.SelectCompactionBatch(notYet, threshold);
+        var (round2NoTrigger, _) = OpenAiService.SelectCompactionBatch(notYet, threshold);
         round2NoTrigger.Should().BeEmpty();
 
         // The 10th new message brings it back to exactly the threshold and triggers again.
         var readyAgain = round1Remaining.Concat(MakeMessages(10)).ToList();
-        var (round2Compact, round2Remaining) = AiService.SelectCompactionBatch(readyAgain, threshold);
+        var (round2Compact, round2Remaining) = OpenAiService.SelectCompactionBatch(readyAgain, threshold);
         round2Compact.Should().HaveCount(10);
         round2Remaining.Should().HaveCount(10);
     }

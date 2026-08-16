@@ -107,6 +107,20 @@ jobs:
             "-p:PackageVersion=$env:PACKAGE_VERSION"
           if ($LASTEXITCODE -ne 0) { throw "Packing BlogIt.AzureStorage failed." }
 
+          dotnet pack src/BlogIt.OpenAi/BlogIt.OpenAi.csproj `
+            --configuration Release `
+            --no-restore `
+            --output $env:PACKAGE_FEED `
+            "-p:PackageVersion=$env:PACKAGE_VERSION"
+          if ($LASTEXITCODE -ne 0) { throw "Packing BlogIt.OpenAi failed." }
+
+          dotnet pack src/BlogIt.GoogleAnalytics/BlogIt.GoogleAnalytics.csproj `
+            --configuration Release `
+            --no-restore `
+            --output $env:PACKAGE_FEED `
+            "-p:PackageVersion=$env:PACKAGE_VERSION"
+          if ($LASTEXITCODE -ne 0) { throw "Packing BlogIt.GoogleAnalytics failed." }
+
       - name: Validate package layout and deterministic consumers
         shell: pwsh
         env:
@@ -145,11 +159,14 @@ jobs:
               Where-Object Extension -In @(".nupkg", ".snupkg") |
               Sort-Object Name
           )
-          if (@($packages | Where-Object Extension -EQ ".nupkg").Count -ne 2) {
-            throw "Expected exactly two validated nupkgs."
+          # BlogIt plus its three satellites: AzureStorage, OpenAi, GoogleAnalytics.
+          # verify.ps1 asserts their exact names; this only guards against a pack step
+          # being added or silently skipped without the release list being updated.
+          if (@($packages | Where-Object Extension -EQ ".nupkg").Count -ne 4) {
+            throw "Expected exactly four validated nupkgs."
           }
-          if (@($packages | Where-Object Extension -EQ ".snupkg").Count -ne 2) {
-            throw "Expected exactly two validated snupkgs."
+          if (@($packages | Where-Object Extension -EQ ".snupkg").Count -ne 4) {
+            throw "Expected exactly four validated snupkgs."
           }
           $checksums = @(
             $packages | ForEach-Object {
