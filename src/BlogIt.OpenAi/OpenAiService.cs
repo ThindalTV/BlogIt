@@ -23,7 +23,10 @@ namespace BlogIt;
 /// <see cref="IAiService"/> from DI and never name this type. It was public while it lived in the
 /// core package purely because it was registered from there.
 /// </remarks>
-internal sealed class OpenAiService(BlogItDbContext db, ISettingsService settings) : IAiService
+internal sealed class OpenAiService(
+    BlogItDbContext db,
+    ISettingsService settings,
+    BlogItOptions engineOptions) : IAiService
 {
     // GitHub Copilot uses a fixed Azure OpenAI-compatible base URL.
     private const string GitHubCopilotBaseUrl = "https://models.inference.ai.azure.com";
@@ -70,9 +73,8 @@ internal sealed class OpenAiService(BlogItDbContext db, ISettingsService setting
         {
             // OpenAI-compatible: use custom base URL if provided, otherwise api.openai.com
             var baseUrl = await settings.GetAsync(SettingKeys.AiBaseUrl);
-            OpenAIClientOptions? options = null;
-            if (!string.IsNullOrWhiteSpace(baseUrl))
-                options = new OpenAIClientOptions { Endpoint = new Uri(baseUrl) };
+            var endpoint = ResolveEndpoint(baseUrl, engineOptions.AllowPrivateAiEndpoints);
+            var options = endpoint is null ? null : new OpenAIClientOptions { Endpoint = endpoint };
 
             var client = options is not null
                 ? new OpenAIClient(new ApiKeyCredential(apiKey), options)
@@ -83,6 +85,45 @@ internal sealed class OpenAiService(BlogItDbContext db, ISettingsService setting
                 client.GetChatClient(exportModel ?? DefaultExportModel)
             );
         }
+    }
+
+    /// <summary>
+    /// Turns the stored <c>Ai:BaseUrl</c> setting into the endpoint to call, or
+    /// <see langword="null"/> to use the client's own default (<c>api.openai.com</c>).
+    /// </summary>
+    /// <remarks>
+    /// Checked here and not only in <c>SiteSettingsValidator</c> on purpose. Validation guards what
+    /// can be written from now on; this guards what is already in the database — a value saved before
+    /// the check existed, or written by any other route into the settings table — and it is this line
+    /// that actually hands the API key over, so this is where the decision has to hold. A private
+    /// endpoint is refused rather than ignored: silently falling back to OpenAI would send the key to
+    /// a different party than the operator configured.
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">
+    /// The stored value is not an absolute http(s) URL, or points into private address space while
+    /// <see cref="BlogItOptions.AllowPrivateAiEndpoints"/> is <see langword="false"/>.
+    /// </exception>
+    internal static Uri? ResolveEndpoint(string? baseUrl, bool allowPrivateAiEndpoints)
+    {
+        if (string.IsNullOrWhiteSpace(baseUrl))
+            return null;
+
+        var trimmed = baseUrl.Trim();
+        if (!UrlValidator.IsValidAbsoluteHttpUrl(trimmed))
+        {
+            throw new InvalidOperationException(
+                "The configured AI base URL is not an absolute http:// or https:// URL.");
+        }
+
+        if (!allowPrivateAiEndpoints && UrlValidator.IsPrivateOrLocalHttpUrl(trimmed))
+        {
+            throw new InvalidOperationException(
+                "The configured AI base URL points at a loopback, link-local, or private address. "
+                + "Set BlogItOptions.AllowPrivateAiEndpoints = true to allow a self-hosted model on "
+                + "this machine or private network.");
+        }
+
+        return new Uri(trimmed);
     }
 
     private static string? NullIfWhiteSpace(string? value) =>

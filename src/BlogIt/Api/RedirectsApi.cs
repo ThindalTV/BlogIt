@@ -1,3 +1,4 @@
+using BlogIt.Middleware;
 using BlogIt.Shared;
 using BlogIt.Shared.DTOs;
 using BlogIt.Services;
@@ -78,15 +79,6 @@ internal static class RedirectPathValidator
         "/alive"
     ];
 
-    private static readonly HashSet<string> ReservedPaths = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "/",
-        "/sitemap.xml",
-        "/robots.txt",
-        "/rss.xml",
-        "/atom.xml"
-    };
-
     public static bool TryNormalize(
         string source,
         string target,
@@ -111,6 +103,15 @@ internal static class RedirectPathValidator
             || IsReserved(sourcePath, options))
         {
             error = "The source must be a non-reserved local path without a query string or fragment.";
+            return false;
+        }
+
+        if (!RedirectSourcePolicy.IsWithinConfiguredPrefixes(sourcePath, options))
+        {
+            error =
+                "The source must start with one of the paths this site allows blog redirects on: "
+                + string.Join(", ", options.RedirectSourcePrefixes)
+                + ".";
             return false;
         }
 
@@ -149,8 +150,30 @@ internal static class RedirectPathValidator
         return true;
     }
 
+    /// <summary>
+    /// The paths BlogIt itself answers on and therefore cannot hand to a redirect. The four root
+    /// documents are listed only while the host has them switched on: reserving a URL BlogIt no
+    /// longer serves would leave a host that disabled, say, <c>/rss.xml</c> unable to redirect it
+    /// anywhere — the loose end left by making those documents optional.
+    /// </summary>
+    private static IEnumerable<string> ReservedPaths(BlogItOptions options)
+    {
+        // The site root is reserved unconditionally and is not one of the four documents: a redirect
+        // there takes the host's home page down, whatever BlogIt is or is not serving.
+        yield return "/";
+
+        if (options.ServeRssFeed)
+            yield return "/rss.xml";
+        if (options.ServeAtomFeed)
+            yield return "/atom.xml";
+        if (options.ServeSitemap)
+            yield return "/sitemap.xml";
+        if (options.ServeRobotsTxt)
+            yield return "/robots.txt";
+    }
+
     private static bool IsReserved(string sourcePath, BlogItOptions options) =>
-        ReservedPaths.Contains(sourcePath)
+        ReservedPaths(options).Contains(sourcePath, StringComparer.OrdinalIgnoreCase)
         || FrameworkReservedPrefixes
             .Append(options.ApiPath)
             .Append(options.AdminPath)

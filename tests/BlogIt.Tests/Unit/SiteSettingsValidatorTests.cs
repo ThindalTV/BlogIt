@@ -123,6 +123,57 @@ public class SiteSettingsValidatorTests
             .Should().NotContainKey("aiBaseUrl");
     }
 
+    [Theory]
+    [InlineData("http://169.254.169.254/latest/meta-data/")]
+    [InlineData("http://localhost:11434/v1")]
+    [InlineData("http://127.0.0.1:1234/v1")]
+    [InlineData("http://[::1]:1234/v1")]
+    [InlineData("http://10.0.0.5/v1")]
+    [InlineData("http://172.16.4.9/v1")]
+    [InlineData("http://192.168.1.20/v1")]
+    [InlineData("http://ollama.local/v1")]
+    public void Validate_RejectsAPrivateAiBaseUrl_ByDefault(string baseUrl)
+    {
+        // The finding: scheme validation alone still lets the API key be posted to a cloud metadata
+        // service or anything else reachable from inside the deployment.
+        var errors = SiteSettingsValidator.Validate(new SiteSettingsUpdateRequest(AiBaseUrl: baseUrl));
+
+        errors.Should().ContainKey("aiBaseUrl");
+        errors["aiBaseUrl"].Single().Should().Contain(nameof(BlogItOptions.AllowPrivateAiEndpoints));
+    }
+
+    [Theory]
+    [InlineData("http://localhost:11434/v1")]
+    [InlineData("http://192.168.1.20/v1")]
+    public void Validate_AllowsAPrivateAiBaseUrl_WhenTheHostOptedIn(string baseUrl)
+    {
+        // A self-hosted model on the same machine or LAN is a legitimate configuration; the host,
+        // not the blog author, decides that it is allowed.
+        var errors = SiteSettingsValidator.Validate(
+            new SiteSettingsUpdateRequest(AiBaseUrl: baseUrl),
+            allowPrivateAiEndpoints: true);
+
+        errors.Should().NotContainKey("aiBaseUrl");
+    }
+
+    [Fact]
+    public void Validate_StillRejectsANonHttpAiBaseUrl_WhenTheHostOptedIn()
+    {
+        // The opt-in widens which hosts are reachable, not which schemes are accepted.
+        var errors = SiteSettingsValidator.Validate(
+            new SiteSettingsUpdateRequest(AiBaseUrl: "file:///etc/passwd"),
+            allowPrivateAiEndpoints: true);
+
+        errors.Should().ContainKey("aiBaseUrl");
+    }
+
+    [Fact]
+    public void Validate_AllowsAPublicAiBaseUrl()
+    {
+        SiteSettingsValidator.Validate(new SiteSettingsUpdateRequest(AiBaseUrl: "https://api.openai.com/v1"))
+            .Should().NotContainKey("aiBaseUrl");
+    }
+
     [Fact]
     public void Validate_ReportsEveryInvalidFieldAtOnce()
     {

@@ -32,11 +32,11 @@ public static partial class SlugHelper
     /// <summary>Converts any string into a URL-safe slug, which may be empty.</summary>
     /// <remarks>
     /// Returns an empty string for input holding nothing in <c>[a-z0-9-]</c> — a Cyrillic or CJK
-    /// title, or one made only of punctuation. That is deliberate and depended on:
-    /// <c>TagResolver</c> uses the empty result to drop a tag name it cannot address, and the post
-    /// and page update paths compare this against the stored slug to decide whether a rename was
-    /// asked for. Callers creating content, for which an empty slug means unreachable content, want
-    /// <see cref="SlugifyOrFallback"/> instead.
+    /// title, or one made only of punctuation. That is deliberate and depended on: the post and page
+    /// update paths compare this against the stored slug to decide whether a rename was asked for,
+    /// and an empty result there means "no slug was requested", not "slugify harder". Callers
+    /// creating content — posts, pages, tags — want <see cref="SlugifyOrFallback"/> instead, since
+    /// for them an empty slug means content that cannot be addressed.
     /// </remarks>
     public static string Slugify(string input)
     {

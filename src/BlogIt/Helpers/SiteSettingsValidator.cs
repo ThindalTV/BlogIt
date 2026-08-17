@@ -27,7 +27,15 @@ public static class SiteSettingsValidator
     /// Returns one entry per invalid field, keyed by camelCase field name so the response reads
     /// as a standard validation problem. An empty result means the request is safe to persist.
     /// </summary>
-    public static Dictionary<string, string[]> Validate(SiteSettingsUpdateRequest request)
+    /// <param name="request">The settings the caller wants written.</param>
+    /// <param name="allowPrivateAiEndpoints">
+    /// <c>BlogItOptions.AllowPrivateAiEndpoints</c> — whether this deployment permits an AI base URL
+    /// on a loopback or private address. Passed as a bool rather than taking the options object so
+    /// this stays a pure function over the request.
+    /// </param>
+    public static Dictionary<string, string[]> Validate(
+        SiteSettingsUpdateRequest request,
+        bool allowPrivateAiEndpoints = false)
     {
         ArgumentNullException.ThrowIfNull(request);
 
@@ -39,10 +47,27 @@ public static class SiteSettingsValidator
         // Unlike SiteUrl, blank is meaningful: it clears the override and falls back to the
         // provider's own default endpoint. Anything else has to be a real http(s) URL, because
         // the configured API key is sent to whatever this resolves to.
-        if (!string.IsNullOrWhiteSpace(request.AiBaseUrl)
-            && !UrlValidator.IsValidAbsoluteHttpUrl(request.AiBaseUrl))
+        if (!string.IsNullOrWhiteSpace(request.AiBaseUrl))
         {
-            errors["aiBaseUrl"] = ["AI base URL must be an absolute http:// or https:// URL."];
+            if (!UrlValidator.IsValidAbsoluteHttpUrl(request.AiBaseUrl))
+            {
+                errors["aiBaseUrl"] = ["AI base URL must be an absolute http:// or https:// URL."];
+            }
+            else if (!allowPrivateAiEndpoints
+                && UrlValidator.IsPrivateOrLocalHttpUrl(request.AiBaseUrl))
+            {
+                // The scheme check alone left the SSRF half of the finding open: an absolute http URL
+                // pointing at 169.254.169.254 or an internal host still passed, and the stored API key
+                // is sent there as a bearer credential. Refused by default; a deployment that really
+                // does run its own model nearby opts in once, in host startup, out of reach of anyone
+                // who only has admin credentials for the blog.
+                errors["aiBaseUrl"] =
+                [
+                    "AI base URL must not point at a loopback, link-local, or private address. "
+                    + "Set BlogItOptions.AllowPrivateAiEndpoints = true to allow a self-hosted model "
+                    + "on this machine or private network."
+                ];
+            }
         }
 
         if (request.AiProvider is not null

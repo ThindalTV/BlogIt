@@ -50,9 +50,10 @@ public static class SettingsApi
     /// </summary>
     private static async Task<IResult> SaveSettings(
         SiteSettingsUpdateRequest body,
-        ISettingsService settings)
+        ISettingsService settings,
+        BlogItOptions options)
     {
-        var errors = SiteSettingsValidator.Validate(body);
+        var errors = SiteSettingsValidator.Validate(body, options.AllowPrivateAiEndpoints);
         if (errors.Count > 0)
             return Results.ValidationProblem(errors);
 

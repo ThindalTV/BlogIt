@@ -32,12 +32,20 @@ public static class TagResolver
     {
         var requested = tagNames
             .Where(name => !string.IsNullOrWhiteSpace(name))
-            .Select(name => new { Name = name.Trim(), Slug = SlugHelper.Slugify(name) })
-            .Where(tag => tag.Slug.Length > 0)
+            // SlugifyOrFallback, not Slugify: a name written only in Cyrillic, CJK or punctuation
+            // slugifies to nothing, and this used to drop it — the post saved, the tag never
+            // attached, and nothing told the author. Of the three ways out, a percent-encoded IRI
+            // slug keeping the original characters reads best but changes what a slug is everywhere
+            // one is written into a URL (see SlugHelper.SlugifyOrFallback's own note), and rejecting
+            // the tag is wrong for a name the author deliberately typed and impossible on the AI
+            // export path, which has nobody to report to. So the slug takes the hash token and the
+            // name is kept exactly as typed: Name and Slug are separate columns, every list renders
+            // Name, and only the /tag/... URL carries the token.
+            .Select(name => new { Name = name.Trim(), Slug = SlugHelper.SlugifyOrFallback(name) })
             // Dropped rather than truncated, and dropped here rather than only in the API validation
             // that answers a person with a 400: the AI export path feeds this whatever the model
             // produced for "Tags:", and there is nobody to hand a validation error to. Consistent
-            // with how blank and unslugifiable names are already handled a line above.
+            // with how a blank name is already handled a line above.
             .Where(tag => tag.Name.Length <= ContentLimits.TagNameLength)
             .DistinctBy(tag => tag.Slug, StringComparer.OrdinalIgnoreCase)
             .ToList();
