@@ -273,17 +273,45 @@ public class PackageOptionsApiTests
     }
 
     [Fact]
-    public async Task UseBlogIt_RejectsDuplicateHostAuthenticationMiddleware()
+    public async Task UseBlogIt_AcceptsAHostThatAlreadyAddedItsOwnAuthenticationMiddleware()
     {
+        // This used to throw and tell the host to remove its "duplicate" calls — calls that were the
+        // host's own. Behaviour of the resulting pipeline is covered by HostOwnedMiddlewareTests.
         var builder = WebApplication.CreateBuilder();
         builder.Services.AddBlogIt(AddFakeProviders);
         await using var app = builder.Build();
         app.UseAuthentication();
+        app.UseAuthorization();
 
         var action = () => app.UseBlogIt();
 
-        action.Should().Throw<InvalidOperationException>()
-            .WithMessage("*middleware was added before UseBlogIt*");
+        action.Should().NotThrow();
+    }
+
+    [Fact]
+    public void UseBlogIt_RequiresAPipelineOptionsDelegateWhenTheConfiguringOverloadIsUsed()
+    {
+        var action = () => ((IApplicationBuilder?)null)!.UseBlogIt(_ => { });
+        var noDelegate = () =>
+        {
+            var builder = WebApplication.CreateBuilder();
+            builder.Services.AddBlogIt(AddFakeProviders);
+            using var app = builder.Build();
+            return app.UseBlogIt(configure: null!);
+        };
+
+        action.Should().Throw<ArgumentNullException>();
+        noDelegate.Should().Throw<ArgumentNullException>();
+    }
+
+    [Fact]
+    public void PipelineOptions_DefaultToContributingEveryPipelineWideMiddleware()
+    {
+        var options = new BlogItPipelineOptions();
+
+        options.AddAuthenticationMiddleware.Should().BeTrue();
+        options.AddAuthorizationMiddleware.Should().BeTrue();
+        options.AddRateLimiterMiddleware.Should().BeTrue();
     }
 
     [Fact]
