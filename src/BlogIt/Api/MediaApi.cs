@@ -108,7 +108,35 @@ public static class MediaApi
         };
 
         db.MediaFiles.Add(media);
-        await db.SaveChangesAsync();
+        try
+        {
+            await db.SaveChangesAsync();
+        }
+        catch
+        {
+            // The blob and the row cannot be committed together, so the object that was just stored
+            // is now unreferenced: nothing knows its key, and no later request can ever produce it.
+            // Deleting it here is the only chance to clean it up. Best-effort by design — if this
+            // delete also fails the original save exception is what the caller needs to see, and an
+            // orphaned blob costs storage but breaks nothing.
+            //
+            // Not cancellation-aware for the same reason: RequestAborted is very likely already
+            // cancelled when the save failed because the client went away, and passing it would skip
+            // the cleanup in exactly the case that created the orphan. CancellationToken.None makes
+            // the compensation run regardless.
+            try
+            {
+                await mediaStorage.DeleteAsync(storageKey, CancellationToken.None);
+            }
+            catch
+            {
+                // Swallowed deliberately: rethrowing here would replace the save failure — the
+                // actual cause — with a secondary cleanup failure.
+            }
+
+            throw;
+        }
+
         await db.Entry(media).Reference(m => m.UploadedByUser).LoadAsync();
 
         return Results.Ok(ToDto(media));
@@ -123,9 +151,15 @@ public static class MediaApi
         var media = await db.MediaFiles.FindAsync(id);
         if (media is null) return Results.NotFound();
 
-        await mediaStorage.DeleteAsync(media.BackendUrl, httpContext.RequestAborted);
+        // Row first, object second. These two stores cannot be committed atomically, so the only
+        // choice is which way a partial failure lands. Deleting the object first meant a failing
+        // SaveChangesAsync left a row pointing at nothing: a permanent 404 for that media with no
+        // repair path short of hand-editing the database. This order fails into an orphaned object
+        // instead — storage nobody references, which a sweep can reclaim and which breaks nothing in
+        // the meantime — and it keeps the delete retryable, since the row is gone before the object.
         db.MediaFiles.Remove(media);
         await db.SaveChangesAsync();
+        await mediaStorage.DeleteAsync(media.BackendUrl, httpContext.RequestAborted);
         return Results.NoContent();
     }
 

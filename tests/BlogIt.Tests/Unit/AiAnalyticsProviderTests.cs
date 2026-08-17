@@ -80,8 +80,10 @@ public sealed class AiAnalyticsProviderTests
     public void HostRegisteredServices_WinOverBothTheSatelliteAndTheFallback()
     {
         // Both provider registrations and the engine's fallbacks use TryAdd, so a host that has
-        // already supplied its own implementation keeps it. This is the path the sample takes for
-        // analytics (ManualTestAnalyticsService) and AiApiTests takes for AI.
+        // already supplied its own implementation keeps it. This is the path AiApiTests takes for AI.
+        // The sample used to demonstrate it for analytics too, with a hardcoded-numbers stub; that was
+        // removed (finding #36) because a sample is copied wholesale, so the substitution point is now
+        // only documented there, not exercised.
         var services = new ServiceCollection();
         services.AddScoped<IAiService, HostAiService>();
         services.AddScoped<IAnalyticsService, HostAnalyticsService>();

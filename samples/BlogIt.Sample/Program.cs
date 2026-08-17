@@ -23,25 +23,16 @@ var isTesting = builder.Environment.IsEnvironment("Testing");
 string? databaseConnection = null;
 if (!isTesting)
 {
-    databaseConnection = builder.Configuration.GetConnectionString("BlogItDb");
-    if (string.IsNullOrWhiteSpace(databaseConnection))
-    {
-        throw new InvalidOperationException(
-            "Missing connection string 'BlogItDb'. Start via BlogIt.Sample.AppHost so Aspire injects the SQL connection.");
-    }
-
     var isAspireRun =
         !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ConnectionStrings__BlogItDb"))
         || !string.IsNullOrWhiteSpace(builder.Configuration["services:blogit-sample-sql:tcp:0"])
         || !string.IsNullOrWhiteSpace(builder.Configuration["services:blogit-sample:http:0"]);
-    if (isAspireRun
-        && (databaseConnection.Contains("Trusted_Connection=True", StringComparison.OrdinalIgnoreCase)
-            || databaseConnection.Contains("Integrated Security=True", StringComparison.OrdinalIgnoreCase)
-            || databaseConnection.Contains("mssqllocaldb", StringComparison.OrdinalIgnoreCase)))
-    {
-        throw new InvalidOperationException(
-            $"Invalid BlogItDb connection for this setup: '{databaseConnection}'. Use Aspire-provisioned SQL Server credentials.");
-    }
+
+    // See SampleDatabaseConnection for why this is a separate class and what each flag decides.
+    databaseConnection = BlogIt.Sample.SampleDatabaseConnection.Require(
+        builder.Configuration.GetConnectionString("BlogItDb"),
+        isAspireRun,
+        builder.Environment.IsDevelopment());
 }
 
 var configuredMediaRoot = builder.Configuration["BlogIt:Storage:RootPath"];
@@ -74,16 +65,27 @@ builder.Services.AddBlogIt(options =>
 
 builder.Services.AddRazorComponents();
 
-if (!isTesting)
-{
-    // TEMPORARY manual-testing scaffolding — see ManualTestAnalyticsService.cs. Remove this block
-    // and that file once manual browser testing of the dashboard's Analytics panel is complete.
-    // Gated on !isTesting so the integration suite sees the engine's real analytics default — the
-    // not-configured 404 a host gets without BlogIt.GoogleAnalytics — rather than this stub.
-    builder.Services.AddScoped<BlogIt.Services.IAnalyticsService, BlogIt.Sample.ManualTestAnalyticsService>();
-}
+// No IAnalyticsService registration. A stub returning hardcoded session and user counts used to be
+// substituted here for manual testing of the dashboard's Analytics panel; it was deleted rather than
+// gated further, because the engine's own not-configured path now logs and reports its state
+// distinguishably, and a sample is copied wholesale — invented numbers that look like real traffic are
+// the last thing to hand an integrator. Analytics remains a host-substitutable abstraction:
+// implementing BlogIt.Services.IAnalyticsService and registering it here overrides the default without
+// installing BlogIt.GoogleAnalytics or referencing any Google SDK.
 
 var app = builder.Build();
+
+if (isTesting)
+{
+    // Loud on purpose. The Testing environment swaps the database and media storage for in-memory
+    // ones, which used to happen in complete silence: a deploy that inherited ASPNETCORE_ENVIRONMENT
+    // =Testing looked healthy, accepted posts and uploads, and lost every one of them on restart.
+    app.Logger.LogWarning(
+        "BlogIt.Sample is running in the Testing environment: the database and media storage are "
+        + "IN-MEMORY and ALL CONTENT IS LOST ON SHUTDOWN. This environment exists for the automated "
+        + "test suite only — if this is a deployment, set ASPNETCORE_ENVIRONMENT and configure "
+        + "ConnectionStrings:BlogItDb.");
+}
 await app.MigrateBlogItAsync();
 
 // Renders a real 404 with real HTML for public post/page URLs that don't resolve to published
@@ -91,6 +93,13 @@ await app.MigrateBlogItAsync();
 // HttpContext.Response.StatusCode / NavigationManager.NotFound(): both were tried and both hit
 // hard framework issues (silently discarded body; a second NavigationManager initializing in
 // the same request scope) that a raw HtmlRenderer pass sidesteps entirely.
+//
+// UseRouting is called explicitly, and first, so the middleware can see which endpoint the request
+// matched: it buffers the response only for Razor component page renders, because buffering
+// everything meant every media download was read into memory in full before any of it was sent.
+// Without an explicit UseRouting here, WebApplication inserts routing for us but the endpoint is not
+// resolved yet at this position in the pipeline, and the middleware would see null for every request.
+app.UseRouting();
 app.UseMiddleware<BlogIt.Sample.NotFoundResponseMiddleware>();
 
 app.UseStaticFiles();

@@ -11,10 +11,19 @@ internal sealed class AzureBlobMediaStorage : IBlogItMediaStorage
     private bool isContainerInitialized;
 
     public AzureBlobMediaStorage(AzureStorageSettings settings)
+        : this(new BlobContainerClient(settings.ConnectionString, settings.ContainerName))
     {
-        container = new BlobContainerClient(
-            settings.ConnectionString,
-            settings.ContainerName);
+    }
+
+    /// <summary>
+    /// Takes the container client directly so tests can substitute one whose operations fail the way
+    /// the service does. The SDK makes those operations virtual for exactly this, and it is the only
+    /// way to cover a credential that is denied container creation without provisioning a real
+    /// scoped credential against a real storage account.
+    /// </summary>
+    internal AzureBlobMediaStorage(BlobContainerClient container)
+    {
+        this.container = container;
     }
 
     public async Task<string> StoreAsync(
@@ -54,8 +63,15 @@ internal sealed class AzureBlobMediaStorage : IBlogItMediaStorage
         CancellationToken cancellationToken = default)
     {
         ValidateStorageKey(storageKey);
-        await EnsureContainerAsync(cancellationToken);
 
+        // Deliberately no EnsureContainerAsync. Reading cannot need a container created for it: if
+        // the container is missing there is nothing to read, and the service answers 404 for a blob
+        // in a missing container just as it does for a missing blob, so this path degrades to "no
+        // such media" on its own. Calling it here instead demanded container-create permission on
+        // every image request, and a credential scoped to blob read/write got a 403 on the first one
+        // and — because the initialised flag was only set after a successful create — on every
+        // request after that. That turns a provisioning nuance into every image on the site being
+        // permanently broken.
         try
         {
             var response = await container
@@ -74,8 +90,10 @@ internal sealed class AzureBlobMediaStorage : IBlogItMediaStorage
         CancellationToken cancellationToken = default)
     {
         ValidateStorageKey(storageKey);
-        await EnsureContainerAsync(cancellationToken);
 
+        // No EnsureContainerAsync here either, and for the same reason as OpenReadAsync: deleting a
+        // blob from a container that does not exist is already a no-op, which is exactly what
+        // DeleteIfExists means.
         await container
             .GetBlobClient(storageKey)
             .DeleteIfExistsAsync(cancellationToken: cancellationToken);
@@ -106,9 +124,27 @@ internal sealed class AzureBlobMediaStorage : IBlogItMediaStorage
             if (isContainerInitialized)
                 return;
 
-            await container.CreateIfNotExistsAsync(
-                PublicAccessType.None,
-                cancellationToken: cancellationToken);
+            try
+            {
+                await container.CreateIfNotExistsAsync(
+                    PublicAccessType.None,
+                    cancellationToken: cancellationToken);
+            }
+            catch (RequestFailedException exception) when (exception.Status is 403 or 409)
+            {
+                // The credential may read and write blobs but not create containers — a SAS or role
+                // assignment scoped to an already-provisioned container, which is the recommended
+                // least-privilege setup. Creation is a convenience, not a requirement: swallow the
+                // refusal and let the upload below speak for itself. If the container really is
+                // missing, that upload fails with its own 404 per request, which is a clear error
+                // rather than a blanket 403 on everything.
+                //
+                // Only these two statuses. A 5xx or a timeout means "ask again", so it must NOT be
+                // cached as handled — see the transient case in AzureBlobContainerPermissionTests.
+            }
+
+            // Set even when the create was refused above, so the doomed round trip is attempted once
+            // per process rather than once per write.
             Volatile.Write(ref isContainerInitialized, true);
         }
         finally
