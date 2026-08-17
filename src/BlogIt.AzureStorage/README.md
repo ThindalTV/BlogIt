@@ -56,7 +56,14 @@ returned by the provider is an opaque storage key, not a public URL; consumers
 must not parse or construct it. Configure BlogIt's `/blogit`, `/api`, and
 `/media` prefixes through `BlogItOptions` in the same `AddBlogIt` callback.
 
-`UseBlogIt` owns BlogIt's redirect, `BlogIt.Jwt` authentication, and
-`BlogIt.Admin` authorization middleware. Map package endpoints with
-`MapBlogIt`; host-defined public views can use `IPublicContentService`,
-`SeoHead`, and `GaScript` from the transitive main package.
+`UseBlogIt` adds BlogIt's redirect middleware, and adds authentication,
+authorization and rate limiting unless it can see the host already did — it skips
+the two auth middlewares when they were registered before it, and
+`UseBlogIt(options => …)` opts out explicitly. BlogIt's `BlogIt.Admin` policy
+names its `BlogIt.Jwt` scheme, so BlogIt's tokens authenticate for BlogIt's
+endpoints regardless of the host's default scheme. See "If your application
+already has authentication" in the technical guide.
+
+Map package endpoints with `MapBlogIt`; host-defined public views can use
+`IPublicContentService`, `SeoHead`, and `GaScript` from the transitive main
+package.
