@@ -175,15 +175,17 @@ public sealed class AzureBlobContainerPermissionTests
 
         protected override IEnumerable<HttpHeader> EnumerateHeaders() => [];
 
-        protected override bool TryGetHeader(string name, out string? value)
+        // Signatures match the base exactly (non-nullable out, never read on a false return) so the
+        // Release build stays warning-free.
+        protected override bool TryGetHeader(string name, out string value)
         {
-            value = null;
+            value = null!;
             return false;
         }
 
-        protected override bool TryGetHeaderValues(string name, out IEnumerable<string>? values)
+        protected override bool TryGetHeaderValues(string name, out IEnumerable<string> values)
         {
-            values = null;
+            values = null!;
             return false;
         }
     }
