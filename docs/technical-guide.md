@@ -230,6 +230,11 @@ a `400`. The check also runs when a redirect is *served*, so setting this stops
 honouring rows that already exist — which is the point when a redirect on the
 host's login page is already in the table.
 
+One thing to include when you set it: BlogIt writes an *automatic* redirect when a
+post's slug changes, on the post's old path — `/{year}/{slug}` by default, wherever
+your public routes put it. Prefixes that do not cover those paths mean those
+redirects stop being served too, and old links to renamed posts start 404ing.
+
 The default is unrestricted, and deliberately so: a redirect source is a URL the
 site no longer serves, which is where the previous site put it rather than
 anywhere the blog owns, so a blog-only default would refuse the feature's main
