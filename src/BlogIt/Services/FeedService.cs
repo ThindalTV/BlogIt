@@ -4,6 +4,7 @@ using BlogIt.Shared.Helpers;
 using BlogIt.Api;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text;
 using System.Xml;
@@ -48,6 +49,8 @@ public static class FeedService
     public static string CreateRss(BlogFeed feed)
     {
         ArgumentNullException.ThrowIfNull(feed);
+
+        feed = Sanitize(feed);
 
         return WriteXml(writer =>
         {
@@ -99,6 +102,8 @@ public static class FeedService
     public static string CreateAtom(BlogFeed feed)
     {
         ArgumentNullException.ThrowIfNull(feed);
+
+        feed = Sanitize(feed);
 
         return WriteXml(writer =>
         {
@@ -158,12 +163,110 @@ public static class FeedService
             MaxItems,
             cancellationToken);
 
-    // Absolutizing lives here, in the renderer, and not on BlogFeedItem: this resolves a rooted
-    // path against the site URL's *origin*, so it drops the prefix of a blog mounted under one -
-    // a known open defect in the rendered feeds. Keeping it out of the public records means fixing
-    // it stays a change to one line of rendering rather than a change to the published contract.
+    // Absolutizing lives here, in the renderer, and not on BlogFeedItem - keeping it out of the
+    // public records is what let the fix below stay a change to one line of rendering rather than
+    // a change to the published contract.
+    //
+    // Concatenation against the trimmed base, and never `new Uri(base, path)`: the Uri overload
+    // resolves a rooted path against the site URL's *origin*, so a blog mounted at
+    // https://example.com/blog/ used to emit https://example.com/rss.xml and item links with the
+    // prefix silently dropped. Same rule, and same reason, as SiteMetadataService's sitemap entries
+    // and SitemapApi's base handling. Paths passed here always start with '/' (BlogFeedItem.Path
+    // guarantees it, and the two literals are rooted), so this cannot produce a doubled slash.
     private static string AbsoluteUrl(string siteUrl, string path) =>
-        new Uri(new Uri(siteUrl), path).AbsoluteUri;
+        siteUrl.TrimEnd('/') + path;
+
+    /// <summary>
+    /// Returns <paramref name="feed"/> with every string field stripped of characters XML 1.0
+    /// cannot represent, so one post cannot take the whole document down.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <see cref="XmlWriterSettings.CheckCharacters"/> defaults to true, and rightly so: a raw
+    /// control character in the output is a feed no reader can parse. But it threw from the middle
+    /// of a half-written document, so a single vertical tab pasted into one post - Word and PDF
+    /// copy-paste produce them routinely - answered <c>/rss.xml</c> and <c>/atom.xml</c> with a 500
+    /// for every post on the site.
+    /// </para>
+    /// <para>
+    /// Stripping rather than skipping the offending item. Skipping was considered and rejected: it
+    /// silently drops a post from every subscriber's reader, and because feed readers key on the
+    /// item id, a post that appears once the character is edited out arrives as new content weeks
+    /// late. Stripping alters the content, but only by removing characters that are invisible in
+    /// any reader and that XML has no representation for at all - there is no lossless option here.
+    /// Doing it once over the whole record, rather than at each of the twenty write calls, is what
+    /// makes it impossible for a later field to be added without the guard.
+    /// </para>
+    /// </remarks>
+    private static BlogFeed Sanitize(BlogFeed feed) => feed with
+    {
+        Title = XmlText(feed.Title),
+        Description = XmlText(feed.Description),
+        SiteUrl = XmlText(feed.SiteUrl),
+        Items = [.. feed.Items.Select(item => item with
+        {
+            Title = XmlText(item.Title),
+            Path = XmlText(item.Path),
+            StableId = XmlText(item.StableId),
+            SummaryHtml = XmlText(item.SummaryHtml),
+            ContentHtml = XmlText(item.ContentHtml),
+            Author = XmlText(item.Author)
+        })]
+    };
+
+    /// <summary>
+    /// <paramref name="value"/> with everything outside the XML 1.0 <c>Char</c> production removed:
+    /// the C0 controls other than tab, newline and carriage return, unpaired surrogates, and the
+    /// two non-characters at the end of the BMP.
+    /// </summary>
+    /// <remarks>
+    /// Returns the same instance when there is nothing to strip, which is every normal post - the
+    /// scan is a read over the string with no allocation, so the common case pays only for that.
+    /// </remarks>
+    [return: NotNullIfNotNull(nameof(value))]
+    private static string? XmlText(string? value)
+    {
+        if (value is null)
+            return null;
+
+        var firstBad = IndexOfInvalidChar(value, 0);
+        if (firstBad < 0)
+            return value;
+
+        var builder = new StringBuilder(value.Length);
+        var start = 0;
+        while (firstBad >= 0)
+        {
+            builder.Append(value, start, firstBad - start);
+            start = firstBad + 1;
+            firstBad = IndexOfInvalidChar(value, start);
+        }
+
+        builder.Append(value, start, value.Length - start);
+        return builder.ToString();
+    }
+
+    // A surrogate is legal only as half of a well-formed pair, so it is checked against its
+    // neighbour; XmlConvert.IsXmlChar rejects every surrogate on its own.
+    private static int IndexOfInvalidChar(string value, int startIndex)
+    {
+        for (var index = startIndex; index < value.Length; index++)
+        {
+            var current = value[index];
+            if (char.IsHighSurrogate(current)
+                && index + 1 < value.Length
+                && XmlConvert.IsXmlSurrogatePair(value[index + 1], current))
+            {
+                index++;
+                continue;
+            }
+
+            if (!XmlConvert.IsXmlChar(current))
+                return index;
+        }
+
+        return -1;
+    }
 
     private static void WriteAtomLink(XmlWriter writer, string href, string rel, string type)
     {
