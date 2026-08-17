@@ -1,4 +1,5 @@
 using BlogIt.Shared.Data;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 
 namespace BlogIt.Api;
@@ -11,7 +12,11 @@ public static class MediaProxyApi
     {
         app.MapGet(BlogItPath.Combine(mediaPath, "{**path}"), ServeMedia)
             .WithTags("Media")
-            .AllowAnonymous();
+            .AllowAnonymous()
+            // Anonymous, and every hit costs a database lookup plus a storage read. The limit is
+            // sized for real visitor traffic — many requests per page view — rather than for admin
+            // traffic; BlogItRateLimiterPolicies.Media carries the arithmetic.
+            .RequireRateLimiting(BlogItDefaults.MediaRateLimiterPolicy);
 
         return app;
     }

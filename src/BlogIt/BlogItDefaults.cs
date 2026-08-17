@@ -8,7 +8,35 @@ public static class BlogItDefaults
 
     public const string AuthenticationScheme = "BlogIt.Jwt";
     public const string AdminAuthorizationPolicy = "BlogIt.Admin";
+
+    /// <summary>Rate limiter policy guarding <c>POST /auth/login</c>.</summary>
     public const string LoginRateLimiterPolicy = "BlogIt.LoginRateLimit";
+
+    /// <summary>
+    /// Rate limiter policy guarding the credential-touching admin operations —
+    /// <c>POST /auth/change-password</c> and <c>POST /users</c>. Separate from
+    /// <see cref="LoginRateLimiterPolicy"/> because it partitions on the bearer token rather than
+    /// the caller's address: the threat here is a stolen token, which can move between addresses.
+    /// </summary>
+    public const string AccountRateLimiterPolicy = "BlogIt.AccountRateLimit";
+
+    /// <summary>
+    /// Rate limiter policy guarding the anonymous setup endpoints, <c>GET /setup/status</c> and
+    /// <c>POST /setup/initialize</c>.
+    /// </summary>
+    public const string SetupRateLimiterPolicy = "BlogIt.SetupRateLimit";
+
+    /// <summary>
+    /// Rate limiter policy guarding the anonymous media proxy. Sized for ordinary visitor traffic
+    /// rather than for admin traffic — see <c>BlogItRateLimiterPolicies.Media</c>.
+    /// </summary>
+    public const string MediaRateLimiterPolicy = "BlogIt.MediaRateLimit";
+
+    /// <summary>
+    /// Rate limiter policy guarding the anonymous crawler-facing documents at the site root:
+    /// <c>/sitemap.xml</c>, <c>/robots.txt</c>, <c>/rss.xml</c> and <c>/atom.xml</c>.
+    /// </summary>
+    public const string RootDocumentRateLimiterPolicy = "BlogIt.RootDocumentRateLimit";
 }
 
 /// <summary>

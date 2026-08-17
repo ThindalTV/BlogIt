@@ -2,6 +2,7 @@ using BlogIt.Services;
 using BlogIt.Shared;
 using BlogIt.Shared.Data;
 using BlogIt.Shared.Helpers;
+using Microsoft.AspNetCore.RateLimiting;
 using System.Text;
 
 namespace BlogIt.Api;
@@ -24,14 +25,20 @@ public static class SitemapApi
         {
             app.MapGet("/sitemap.xml", GetSitemapAsync)
                 .AllowAnonymous()
-                .WithName(BlogItEndpointNames.Sitemap);
+                .WithName(BlogItEndpointNames.Sitemap)
+                // The most expensive anonymous route in the engine: it loads every published post
+                // and page, with no cap, where the feeds stop at FeedService.MaxItems. See
+                // BlogItRateLimiterPolicies.RootDocument for why this is throttled rather than
+                // capped or cached.
+                .RequireRateLimiting(BlogItDefaults.RootDocumentRateLimiterPolicy);
         }
 
         if (options.ServeRobotsTxt)
         {
             app.MapGet("/robots.txt", GetRobotsAsync)
                 .AllowAnonymous()
-                .WithName(BlogItEndpointNames.RobotsTxt);
+                .WithName(BlogItEndpointNames.RobotsTxt)
+                .RequireRateLimiting(BlogItDefaults.RootDocumentRateLimiterPolicy);
         }
 
         return app;

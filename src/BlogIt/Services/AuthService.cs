@@ -4,6 +4,7 @@ using System.Text;
 using BlogIt.Shared;
 using BlogIt.Shared.Data;
 using BlogIt.Shared.DTOs;
+using BlogIt.Shared.Helpers;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 
@@ -42,6 +43,15 @@ public class AuthService(BlogItDbContext db, ISettingsService settings) : IAuthS
 
     public async Task<bool> ChangePasswordAsync(Guid userId, ChangePasswordRequest request)
     {
+        ArgumentNullException.ThrowIfNull(request);
+
+        // Enforced here and not only in AuthApi: an embedder resolving IAuthService and calling this
+        // directly used to bypass PasswordPolicy entirely, so the policy only held for requests that
+        // happened to arrive through BlogIt's own endpoint. Checked before the BCrypt verify below
+        // because it is free, and a rejected password should not cost a hash computation.
+        if (PasswordPolicy.Validate(request.NewPassword) is string passwordError)
+            throw new ArgumentException(passwordError, nameof(request));
+
         var user = await db.Users.FindAsync(userId);
         if (user is null || !BCrypt.Net.BCrypt.Verify(request.CurrentPassword, user.PasswordHash))
             return false;
@@ -56,7 +66,13 @@ public class AuthService(BlogItDbContext db, ISettingsService settings) : IAuthS
         return true;
     }
 
-    public string GenerateToken(
+    /// <summary>
+    /// Signs a token for an already-authenticated user. Not on <see cref="IAuthService"/> and not
+    /// public: the only legitimate caller is <see cref="LoginAsync"/>, after it has verified a
+    /// password. Internal rather than private so the JWT shape can be asserted directly by the
+    /// tests, which reach it through this assembly's <c>InternalsVisibleTo</c>.
+    /// </summary>
+    internal string GenerateToken(
         Guid userId,
         string username,
         string displayName,

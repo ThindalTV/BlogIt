@@ -2,6 +2,7 @@ using BlogIt.Shared.Data;
 using BlogIt.Services;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Configuration;
 using System.Text;
@@ -29,7 +30,11 @@ public static class FeedsApi
             app.MapGet("/rss.xml", GetRssAsync)
                 .AllowAnonymous()
                 .WithName(BlogItEndpointNames.RssFeed)
-                .Produces(StatusCodes.Status200OK, contentType: RssContentType);
+                .Produces(StatusCodes.Status200OK, contentType: RssContentType)
+                // Same policy as /sitemap.xml. These are cheaper — capped at FeedService.MaxItems —
+                // but they are the same kind of route: anonymous, crawler-facing, and backed by a
+                // query. Sharing one bucket keeps the root documents consistent.
+                .RequireRateLimiting(BlogItDefaults.RootDocumentRateLimiterPolicy);
         }
 
         if (options.ServeAtomFeed)
@@ -37,7 +42,8 @@ public static class FeedsApi
             app.MapGet("/atom.xml", GetAtomAsync)
                 .AllowAnonymous()
                 .WithName(BlogItEndpointNames.AtomFeed)
-                .Produces(StatusCodes.Status200OK, contentType: AtomContentType);
+                .Produces(StatusCodes.Status200OK, contentType: AtomContentType)
+                .RequireRateLimiting(BlogItDefaults.RootDocumentRateLimiterPolicy);
         }
 
         return app;

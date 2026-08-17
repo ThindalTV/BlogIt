@@ -2,6 +2,7 @@ using BlogIt.Shared.Data;
 using BlogIt.Shared.DTOs;
 using BlogIt.Shared.Entities;
 using BlogIt.Shared.Helpers;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 
@@ -24,7 +25,11 @@ public static class UsersApi
             .RequireAuthorization(BlogItDefaults.AdminAuthorizationPolicy);
 
         group.MapGet("/", GetUsers);
-        group.MapPost("/", CreateUser);
+        // Throttled where the two reads are not: creating a user is how an attacker with a stolen
+        // token would give themselves a durable second way in, and every AppUser is fully privileged
+        // (see the note above), so it belongs in the same bucket as change-password.
+        group.MapPost("/", CreateUser)
+            .RequireRateLimiting(BlogItDefaults.AccountRateLimiterPolicy);
         group.MapDelete("/{id:guid}", DeleteUser);
 
         return app;

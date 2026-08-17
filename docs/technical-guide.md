@@ -187,6 +187,33 @@ transfer size should add `UseResponseCompression` before `UseBlogIt`, or let the
 reverse proxy or CDN in front of the application compress and cache the
 responses.
 
+### Rate limits
+
+`UseBlogIt` installs `UseRateLimiter` and BlogIt attaches a fixed-window policy
+to every anonymous or credential-touching route. Exceeding one returns `429`.
+The limits are not configurable today; they are per-partition, so one caller
+tripping a limit does not affect anyone else.
+
+| Routes | Limit | Partitioned by |
+| --- | --- | --- |
+| `POST /api/auth/login` | 10 / 5 min | Client address |
+| `POST /api/auth/change-password`, `POST /api/users` | 20 / 5 min | Bearer token, else client address |
+| `GET /api/setup/status`, `POST /api/setup/initialize` | 60 / min | Client address |
+| `GET /media/**` | 600 / min | Client address |
+| `/rss.xml`, `/atom.xml`, `/sitemap.xml`, `/robots.txt` | 30 / min | Client address |
+
+The media limit is the one worth knowing about: it is sized for real page loads
+(one request per image, ~600 permitting ten 60-image gallery views a minute) and
+media responses carry `Cache-Control: max-age=31536000`, so returning visitors
+re-request nothing. Sites behind a single large shared egress address — a
+corporate proxy, carrier-grade NAT — share one partition and so share that
+budget. Put a CDN or reverse-proxy cache in front of `/media` if that applies to
+you.
+
+The authenticated read and update routes are deliberately not limited: they
+already require a valid admin token, and capping them would cap the admin UI's
+own paging.
+
 `MigrateBlogItAsync` applies the package's EF Core migrations. Run it before the
 application begins serving requests and use a database identity with schema
 change permission during deployment.
