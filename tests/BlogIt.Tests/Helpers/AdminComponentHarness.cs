@@ -66,6 +66,17 @@ public class AdminComponentHarness : BunitContext
         return this;
     }
 
+    /// <summary>
+    /// Answers any request whose URL contains <paramref name="urlFragment"/> with a failure status
+    /// and a body — the shape needed to exercise a screen's handling of a server error message,
+    /// which <see cref="RouteStatus"/> cannot express because it always sends an empty object.
+    /// </summary>
+    public AdminComponentHarness RouteJson(string urlFragment, HttpStatusCode status, string json)
+    {
+        _handler.Routes.Add((urlFragment, status, json));
+        return this;
+    }
+
     /// <summary>A one-item page, the shape every list screen needs to render rows at all.</summary>
     public static PagedResult<T> OnePage<T>(params T[] items) => new(items, items.Length, 1, 20);
 

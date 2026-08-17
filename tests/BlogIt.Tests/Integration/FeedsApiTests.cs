@@ -108,14 +108,171 @@ public class FeedsApiTests
         var entries = document.Root!.Elements(Atom + "entry").ToList();
         entries.Should().HaveCount(FeedService.MaxItems);
         entries[0].Element(Atom + "title")!.Value.Should().Be($"Post {FeedService.MaxItems + 1}");
+        // The request PathBase is part of the resolved site URL, so every URL in the feed keeps it.
         entries[0].Element(Atom + "link")!.Attribute("href")!.Value
-            .Should().Be($"https://origin.example:8443/2025/post-{FeedService.MaxItems + 1}");
+            .Should().Be($"https://origin.example:8443/site/2025/post-{FeedService.MaxItems + 1}");
         entries[0].Element(Atom + "id")!.Value.Should().StartWith("urn:uuid:");
         entries[0].Element(Atom + "author")!.Element(Atom + "name")!.Value
             .Should().Be("Atom Author");
         document.Root.Elements(Atom + "link")
             .Single(link => link.Attribute("rel")!.Value == "self")
-            .Attribute("href")!.Value.Should().Be("https://origin.example:8443/atom.xml");
+            .Attribute("href")!.Value.Should().Be("https://origin.example:8443/site/atom.xml");
+    }
+
+    /// <summary>
+    /// Mounting BlogIt under a path prefix is the most likely way a host embeds it, and the site
+    /// URL's own path has to survive into every URL the feeds emit — the document link, the
+    /// self link and each item link.
+    /// </summary>
+    [Theory]
+    [InlineData("https://example.com/blog")]
+    [InlineData("https://example.com/blog/")]
+    public async Task Rss_KeepsThePathPrefixOfABlogMountedUnderOne(string configuredSiteUrl)
+    {
+        await using var db = CreateDb();
+        var author = new AppUser
+        {
+            Username = "prefix-author",
+            DisplayName = "Prefix Author",
+            PasswordHash = "not-used"
+        };
+        db.Users.Add(author);
+        db.BlogPosts.Add(CreatePost(
+            author, "Mounted", "mounted", new DateTime(2025, 5, 6, 7, 0, 0), true));
+        await db.SaveChangesAsync();
+
+        var result = await FeedsApi.GetRssAsync(
+            db,
+            Settings(("SiteUrl", configuredSiteUrl)),
+            Configuration(),
+            HttpContext("https", "ignored.example"),
+            CancellationToken.None);
+
+        var channel = XDocument.Parse((await ExecuteAsync(result)).Body).Root!.Element("channel")!;
+        channel.Element("link")!.Value.Should().Be("https://example.com/blog/");
+        channel.Element(Atom + "link")!.Attribute("href")!.Value
+            .Should().Be("https://example.com/blog/rss.xml");
+        channel.Element("item")!.Element("link")!.Value
+            .Should().Be("https://example.com/blog/2025/mounted");
+    }
+
+    /// <inheritdoc cref="Rss_KeepsThePathPrefixOfABlogMountedUnderOne"/>
+    [Fact]
+    public async Task Atom_KeepsThePathPrefixOfABlogMountedUnderOne()
+    {
+        await using var db = CreateDb();
+        var author = new AppUser
+        {
+            Username = "prefix-atom-author",
+            DisplayName = "Prefix Atom Author",
+            PasswordHash = "not-used"
+        };
+        db.Users.Add(author);
+        db.BlogPosts.Add(CreatePost(
+            author, "Mounted", "mounted", new DateTime(2025, 5, 6, 7, 0, 0), true));
+        await db.SaveChangesAsync();
+
+        var result = await FeedsApi.GetAtomAsync(
+            db,
+            Settings(("SiteUrl", "https://example.com/blog/")),
+            Configuration(),
+            HttpContext("https", "ignored.example"),
+            CancellationToken.None);
+
+        var root = XDocument.Parse((await ExecuteAsync(result)).Body).Root!;
+        root.Elements(Atom + "link").Single(link => link.Attribute("rel")!.Value == "self")
+            .Attribute("href")!.Value.Should().Be("https://example.com/blog/atom.xml");
+        root.Element(Atom + "entry")!.Element(Atom + "link")!.Attribute("href")!.Value
+            .Should().Be("https://example.com/blog/2025/mounted");
+    }
+
+    /// <summary>
+    /// A control character pasted into one post must not take the feeds down for every other post:
+    /// <see cref="System.Xml.XmlWriterSettings.CheckCharacters"/> defaults to true, so an
+    /// unrepresentable character used to throw out of the middle of a half-written document.
+    /// </summary>
+    [Fact]
+    public async Task Feeds_StillRenderWhenOnePostHoldsControlCharacters()
+    {
+        await using var db = CreateDb();
+        var author = new AppUser
+        {
+            Username = "control-char-author",
+            DisplayName = "Vertical\vTab",
+            PasswordHash = "not-used"
+        };
+        db.Users.Add(author);
+
+        var bad = CreatePost(author, "Pasted\vfrom Word", "pasted", new DateTime(2025, 2, 3), true);
+        bad.Summary = "A summary with a \v vertical tab";
+        bad.Content = "Body with \v a vertical tab and a \u0001 start-of-heading.";
+        db.BlogPosts.AddRange(
+            bad,
+            CreatePost(author, "Clean", "clean", new DateTime(2025, 2, 4), true));
+        await db.SaveChangesAsync();
+
+        var settings = Settings(("SiteUrl", "https://blog.example/"));
+        var rss = await ExecuteAsync(await FeedsApi.GetRssAsync(
+            db, settings, Configuration(), HttpContext("https", "blog.example"),
+            CancellationToken.None));
+        var atom = await ExecuteAsync(await FeedsApi.GetAtomAsync(
+            db, settings, Configuration(), HttpContext("https", "blog.example"),
+            CancellationToken.None));
+
+        // Both posts are still there: the offending characters are dropped, not the item.
+        var items = XDocument.Parse(rss.Body).Root!.Element("channel")!.Elements("item").ToList();
+        items.Select(item => item.Element("title")!.Value)
+            .Should().Equal("Clean", "Pastedfrom Word");
+        items[1].Element("description")!.Value.Should().Contain("vertical tab");
+        items[1].Element(DublinCore + "creator")!.Value.Should().Be("VerticalTab");
+        rss.Body.Should().NotContain("\v").And.NotContain("\u0001");
+
+        XDocument.Parse(atom.Body).Root!.Elements(Atom + "entry")
+            .Select(entry => entry.Element(Atom + "title")!.Value)
+            .Should().Equal("Clean", "Pastedfrom Word");
+        atom.Body.Should().NotContain("\v").And.NotContain("\u0001");
+    }
+
+    /// <summary>
+    /// The other half of the character guard: a rocket emoji is a surrogate pair, which is
+    /// perfectly representable in XML and must survive, while a half of one left behind by a
+    /// truncating editor is not and must go. Checking a character at a time cannot tell those
+    /// apart, so this is the case a naive strip breaks - silently, and in every feed.
+    /// </summary>
+    [Fact]
+    public async Task Feeds_KeepEmojiButDropHalfOfASurrogatePair()
+    {
+        await using var db = CreateDb();
+        var author = new AppUser
+        {
+            Username = "emoji-author",
+            DisplayName = "Emoji Author",
+            PasswordHash = "not-used"
+        };
+        db.Users.Add(author);
+
+        var post = CreatePost(author, "Ship it \U0001F680", "ship-it", new DateTime(2025, 4, 5), true);
+        post.Summary = "Launched \U0001F680 today";
+        // A lone high surrogate: what a title truncated mid-pair by a fixed-width column leaves.
+        post.Content = "Truncated \ud83d here";
+        db.BlogPosts.Add(post);
+        await db.SaveChangesAsync();
+
+        var settings = Settings(("SiteUrl", "https://blog.example/"));
+        var rss = await ExecuteAsync(await FeedsApi.GetRssAsync(
+            db, settings, Configuration(), HttpContext("https", "blog.example"),
+            CancellationToken.None));
+        var atom = await ExecuteAsync(await FeedsApi.GetAtomAsync(
+            db, settings, Configuration(), HttpContext("https", "blog.example"),
+            CancellationToken.None));
+
+        var item = XDocument.Parse(rss.Body).Root!.Element("channel")!.Element("item")!;
+        item.Element("title")!.Value.Should().Be("Ship it \U0001F680");
+        item.Element("description")!.Value.Should().Contain("Launched \U0001F680 today");
+        item.Element(Content + "encoded")!.Value.Should().Contain("Truncated  here");
+
+        XDocument.Parse(atom.Body).Root!.Element(Atom + "entry")!
+            .Element(Atom + "title")!.Value.Should().Be("Ship it \U0001F680");
     }
 
     private static BlogItDbContext CreateDb()

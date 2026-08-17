@@ -89,6 +89,14 @@ else
             {
                 <div class="loading-spinner-wrap"><div class="spinner"></div></div>
             }
+            else if (!string.IsNullOrEmpty(analyticsError))
+            {
+                @* Separate from the empty state below, because they mean opposite things: a 404 is
+                   "you have not set this up", while this is the server's own words about a setup
+                   that is broken or a provider call that failed. Both used to render as the line
+                   below, so a site whose credentials had gone bad looked merely unconfigured. *@
+                <div class="alert alert-error">@analyticsError</div>
+            }
             else if (analytics == null)
             {
                 <p class="empty-state">Analytics not configured or no data available.</p>
@@ -131,6 +139,7 @@ else
     private bool isLoading = true;
     private bool analyticsLoading;
     private string errorMsg = "";
+    private string analyticsError = "";
     private int publishedCount, draftCount, pageCount, mediaCount;
     private IReadOnlyList<BlogPostSummaryDto>? recentPosts;
     private AnalyticsSummaryDto? analytics;
@@ -176,8 +185,20 @@ else
     private async Task LoadAnalytics()
     {
         analyticsLoading = true;
-        try { analytics = await Api.GetAnalyticsSummaryAsync(startDate, endDate); }
-        catch { analytics = null; }
+        analyticsError = "";
+        try
+        {
+            analytics = await Api.GetAnalyticsSummaryAsync(startDate, endDate);
+        }
+        catch (Exception ex)
+        {
+            // Still caught: analytics is one panel of the landing page and must not take the rest
+            // of the dashboard down with it. But the message is kept now rather than discarded -
+            // the server sends one written to be read by an admin (which credential to re-paste,
+            // or that the provider call failed), and throwing it away left nothing to act on.
+            analytics = null;
+            analyticsError = ex.Message;
+        }
         analyticsLoading = false;
     }
 }
