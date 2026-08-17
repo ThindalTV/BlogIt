@@ -11,7 +11,7 @@
 <div class="page-header">
     <h1 class="page-title">@(isNew ? "New Page" : page?.Title ?? "Edit Page")</h1>
     <div class="header-actions">
-        @if (!isNew && Id.HasValue)
+        @if (!isNew)
         {
             <button class="btn btn-secondary" @onclick="Preview">Preview</button>
         }
@@ -116,7 +116,16 @@ else
     [Parameter] public Guid? Id { get; set; }
 
     private PageDto? page;
-    private bool isNew => Id == null;
+
+    /// <summary>
+    /// The page the fields below describe. See <c>PostEdit.razor</c>: this is set by a create as soon
+    /// as the server answers, ahead of the route parameter, so no branch has to consult <see cref="Id"/>
+    /// to know which page is on screen.
+    /// </summary>
+    private Guid? pageId;
+
+    private bool loadedOnce;
+    private bool isNew => pageId is null;
     private bool isLoading = true;
     private bool isSaving;
     private string errorMsg = "";
@@ -136,26 +145,46 @@ else
     private string scheduledPublishLocal = "";
     private string scheduledUnpublishLocal = "";
 
-    protected override async Task OnInitializedAsync()
+    /// <remarks>
+    /// See <c>PostEdit.razor</c> for why this is a parameter-set hook rather than initialisation:
+    /// <c>pages/new</c> and <c>pages/{id}</c> are the same component, so the navigation a create does
+    /// never re-initialises it and the DTO stayed null — leaving the header on "Edit Page", the slug
+    /// editable after the server had locked it, no schedule state line, and an empty concurrency token
+    /// on the following save, which the API answers with a 409.
+    /// </remarks>
+    protected override async Task OnParametersSetAsync()
     {
-        if (!isNew && Id.HasValue)
-        {
-            page = await Api.GetPageAsync(Id.Value);
-            if (page != null)
-            {
-                title = page.Title;
-                slug = page.Slug;
-                content = page.Content;
-                isPublished = page.IsPublished;
-                seoTitle = page.SeoTitle ?? "";
-                seoDescription = page.SeoDescription ?? "";
-                seoKeywords = page.SeoKeywords ?? "";
-                ogImageUrl = page.OgImageUrl ?? "";
-                scheduledPublishLocal = ToLocalInput(page.ScheduledPublishAt);
-                scheduledUnpublishLocal = ToLocalInput(page.ScheduledUnpublishAt);
-            }
-        }
+        if (loadedOnce && Id == pageId) return;
+        await LoadAsync(Id);
+    }
+
+    private async Task LoadAsync(Guid? id)
+    {
+        // First load only for the spinner: replacing the form later would destroy the textarea EasyMDE
+        // is bound to.
+        isLoading = !loadedOnce;
+        pageId = id;
+        page = id.HasValue ? await Api.GetPageAsync(id.Value) : null;
+        ApplyFields(page);
+        loadedOnce = true;
         isLoading = false;
+
+        if (editorInitialized)
+            await JS.InvokeVoidAsync("blogitInterop.setEditorValue", "page-content-editor", content);
+    }
+
+    private void ApplyFields(PageDto? loaded)
+    {
+        title = loaded?.Title ?? "";
+        slug = loaded?.Slug ?? "";
+        content = loaded?.Content ?? "";
+        isPublished = loaded?.IsPublished ?? false;
+        seoTitle = loaded?.SeoTitle ?? "";
+        seoDescription = loaded?.SeoDescription ?? "";
+        seoKeywords = loaded?.SeoKeywords ?? "";
+        ogImageUrl = loaded?.OgImageUrl ?? "";
+        scheduledPublishLocal = ToLocalInput(loaded?.ScheduledPublishAt);
+        scheduledUnpublishLocal = ToLocalInput(loaded?.ScheduledUnpublishAt);
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -197,18 +226,23 @@ else
                     isPublished, scheduledPublishAt, scheduledUnpublishAt);
                 var created = await Api.CreatePageAsync(req);
                 if (created != null)
+                {
+                    // Read it back rather than trusting the create reply, then move the URL onto the
+                    // saved page. See PostEdit.razor for the round-trip accounting.
+                    await LoadAsync(created.Id);
                     Nav.NavigateTo($"pages/{created.Id}", replace: true);
+                }
             }
-            else if (Id.HasValue)
+            else if (pageId.HasValue)
             {
                 // See PostEdit.razor: the token proves this edit is based on the current version.
                 var req = new UpdatePageRequest(
                     title, slug, content, seoTitle, seoDescription, seoKeywords, ogImageUrl,
                     isPublished, scheduledPublishAt, scheduledUnpublishAt,
                     page?.ConcurrencyStamp ?? default);
-                await Api.UpdatePageAsync(Id.Value, req);
+                await Api.UpdatePageAsync(pageId.Value, req);
                 successMsg = "Page saved.";
-                page = await Api.GetPageAsync(Id.Value);
+                page = await Api.GetPageAsync(pageId.Value);
                 if (page is not null)
                 {
                     scheduledPublishLocal = ToLocalInput(page.ScheduledPublishAt);
@@ -222,8 +256,8 @@ else
 
     private async Task Preview()
     {
-        if (!Id.HasValue) return;
-        var preview = await Api.CreatePagePreviewAsync(Id.Value);
+        if (!pageId.HasValue) return;
+        var preview = await Api.CreatePagePreviewAsync(pageId.Value);
         if (preview is not null)
             Nav.NavigateTo(preview.Url, forceLoad: true);
     }
