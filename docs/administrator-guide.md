@@ -104,7 +104,10 @@ stored value.
 301 redirect for a lasting move or a temporary 302 redirect for a short-lived
 change. The list distinguishes manually managed and automatically generated
 redirects. Avoid redirect loops and do not use a source path already handled by
-the application.
+the application: redirects are matched before the application's own pages, so a
+redirect on a path a page already uses hides that page. Your developers can
+restrict redirect sources to particular path prefixes; if they have, a source
+outside them is refused and the error message lists the prefixes you may use.
 
 ## Settings
 
@@ -120,6 +123,13 @@ the application.
 Use an absolute public **Site URL** without an admin path. It is used by feeds,
 sitemaps, canonical links, and SEO metadata. Sensitive AI and Analytics fields
 are not returned to the form; leaving them blank keeps their current values.
+
+The **AI** endpoint must be an absolute `http://` or `https://` URL, and by
+default it may not point at the machine itself or at a private network address —
+your API key is sent to whatever you enter there, so addresses reachable only from
+inside the deployment are refused. Leave it blank to use the provider's own
+endpoint. If your organisation runs its own model locally, ask your developers to
+enable private AI endpoints in the host application; it is not a portal setting.
 
 ## Optional features
 

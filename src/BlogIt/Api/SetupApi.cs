@@ -31,7 +31,8 @@ public static class SetupApi
         group.MapPost("/initialize", async (
             SetupInitializeRequest request,
             BlogItDbContext db,
-            ISettingsService settings) =>
+            ISettingsService settings,
+            BlogItOptions options) =>
         {
             if (await db.Users.AnyAsync())
                 return Results.Conflict("Setup has already been completed.");
@@ -42,6 +43,17 @@ public static class SetupApi
                 {
                     ["siteUrl"] = ["Site URL must be an absolute http:// or https:// URL."]
                 });
+            }
+
+            // The same AI endpoint policy the authenticated settings route applies. This route is
+            // anonymous — it is how an unclaimed site gets claimed — so it is the last place that
+            // should be a way around it.
+            if (SiteSettingsValidator.Validate(
+                    new SiteSettingsUpdateRequest(AiBaseUrl: request.AiBaseUrl),
+                    options.AllowPrivateAiEndpoints)
+                is { Count: > 0 } aiErrors)
+            {
+                return Results.ValidationProblem(aiErrors);
             }
 
             if (PasswordPolicy.Validate(request.Password) is string passwordError)

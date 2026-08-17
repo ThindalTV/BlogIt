@@ -13,6 +13,8 @@ public sealed class BlogItOptions
     private bool _serveAtomFeed = true;
     private bool _serveSitemap = true;
     private bool _serveRobotsTxt = true;
+    private bool _allowPrivateAiEndpoints;
+    private IReadOnlyList<string> _redirectSourcePrefixes = [];
     private bool _isReadOnly;
 
     public string AdminPath
@@ -121,6 +123,92 @@ public sealed class BlogItOptions
         {
             EnsureMutable();
             _serveRobotsTxt = value;
+        }
+    }
+
+    /// <summary>
+    /// The path prefixes a redirect's <em>source</em> may fall under. Empty by default, which places
+    /// no prefix restriction on redirect sources.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// BlogIt's redirect middleware runs ahead of the host's endpoints, so a redirect whose source is
+    /// <c>/login</c> shadows the host's own login page and can send visitors anywhere — and a
+    /// permanent one stays in browser caches long after the row is deleted. Every authenticated blog
+    /// user can create redirects, so without this option the blog grants its authors authority over
+    /// the whole host application's URL space. Setting this to, for example, <c>["/blog"]</c> confines
+    /// them to URLs the host has handed the blog.
+    /// </para>
+    /// <para>
+    /// The default is unrestricted rather than blog-owned, which is not the safer choice, so the
+    /// reasoning matters. A redirect source is by definition a URL the site no longer serves — the
+    /// feature exists to keep inbound links from a previous site alive, and those live wherever that
+    /// site put them (<c>/2019/03/15/old-title</c>, <c>/index.php?p=12</c>'s path, a vanity
+    /// <c>/promo</c>). A blog-owned default would therefore reject the feature's primary use rather
+    /// than an edge case. It would also break running deployments, not just new writes: the prefixes
+    /// are enforced when a redirect is <em>served</em> as well as when it is saved, so tightening this
+    /// silently stops honouring rows that already exist — correct when the host asked for it,
+    /// unacceptable as an upgrade side effect. Hosts that do not want the blog reaching outside its
+    /// own paths set this in one line; the administrator guide says so, and says which way the default
+    /// goes.
+    /// </para>
+    /// <para>
+    /// Reserved paths are enforced independently of this: BlogIt's own admin, API and media paths and
+    /// the root documents it still serves are never available as redirect sources, prefixes or not.
+    /// </para>
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">
+    /// An entry is empty or not a valid path, or <c>AddBlogIt</c> has already completed.
+    /// </exception>
+    public IReadOnlyList<string> RedirectSourcePrefixes
+    {
+        get => _redirectSourcePrefixes;
+        set
+        {
+            EnsureMutable();
+            // Normalized on assignment rather than in NormalizeValidateAndFreeze, unlike the single
+            // paths above: a bad entry here is a typo in one literal, and reporting it at the line
+            // that wrote it beats reporting it from the end of AddBlogIt.
+            _redirectSourcePrefixes = (value ?? [])
+                .Select(prefix => NormalizePath(nameof(RedirectSourcePrefixes), prefix))
+                .ToList();
+        }
+    }
+
+    /// <summary>
+    /// Whether the AI base URL may point at a loopback, link-local or private address.
+    /// Default <see langword="false"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The AI base URL is a stored setting any authenticated blog user can change, and the configured
+    /// API key is sent to whatever it names as a bearer credential. Left open, that is an SSRF
+    /// primitive with a credential attached: <c>http://169.254.169.254/</c> reaches the cloud metadata
+    /// service, and any internal host reachable from the deployment is one setting away.
+    /// </para>
+    /// <para>
+    /// A blanket ban was rejected because a self-hosted model — Ollama on <c>localhost:11434</c>, a
+    /// vLLM box on the LAN — is a legitimate and common configuration for exactly this setting. A
+    /// host allow-list of specific endpoints was rejected as the wrong shape: the endpoint is chosen
+    /// in the admin UI at runtime, so a compile-time list in the host's startup would have to be kept
+    /// in step with it by hand. This flag is the smallest thing that puts the decision where it
+    /// belongs — with the person deploying the application, not the person writing blog posts — and
+    /// defaults to the safe answer, so a deployment that never thinks about it cannot be turned into
+    /// a metadata-service client.
+    /// </para>
+    /// <para>
+    /// It is a configuration guard, not a general SSRF defence: a public DNS name that resolves into
+    /// private space passes, because resolving names at validation time is both unreliable and
+    /// defeated by rebinding. Anything stronger belongs in egress firewall rules.
+    /// </para>
+    /// </remarks>
+    public bool AllowPrivateAiEndpoints
+    {
+        get => _allowPrivateAiEndpoints;
+        set
+        {
+            EnsureMutable();
+            _allowPrivateAiEndpoints = value;
         }
     }
 
