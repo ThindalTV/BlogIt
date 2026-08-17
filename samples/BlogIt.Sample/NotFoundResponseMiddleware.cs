@@ -1,5 +1,6 @@
 using BlogIt.Services;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Endpoints;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.Logging;
 
@@ -40,8 +41,40 @@ public sealed class NotFoundResponseMiddleware(RequestDelegate next, ILoggerFact
 {
     public const string ItemKey = "BlogIt.ContentNotFound";
 
+    /// <summary>
+    /// Whether this request's response has to be buffered so its status and body can still be
+    /// rewritten after rendering.
+    /// </summary>
+    /// <remarks>
+    /// Only a rendered Razor component page can raise <see cref="ItemKey"/>, so only a request routed
+    /// to one needs buffering. Everything else — <c>MediaProxyApi</c>'s streaming download, the
+    /// admin API, static files, unmatched paths — is passed through untouched.
+    /// <para>
+    /// This scoping is not an optimisation. Buffering ran in front of the entire pipeline, which read
+    /// every media download in full into an unbounded <see cref="MemoryStream"/> before a single byte
+    /// reached the client: the response size became the memory cost per concurrent request, and the
+    /// incremental delivery a video needs (this sample ships an .mp4 precisely to demonstrate it) was
+    /// gone even though <c>MediaProxyApi</c> enables range processing.
+    /// </para>
+    /// <para>
+    /// Decided on the matched endpoint rather than the request path because the content routes are
+    /// slug-driven and cannot be pattern-matched from here, and rather than on the Accept header
+    /// because a browser navigating straight to a media URL sends <c>text/html</c> too. Reading the
+    /// endpoint requires routing to have run first, which is why <c>Program.cs</c> calls
+    /// <c>UseRouting()</c> explicitly before registering this middleware.
+    /// </para>
+    /// </remarks>
+    public static bool ShouldBufferResponse(HttpContext context) =>
+        context.GetEndpoint()?.Metadata.GetMetadata<ComponentTypeMetadata>() is not null;
+
     public async Task InvokeAsync(HttpContext context)
     {
+        if (!ShouldBufferResponse(context))
+        {
+            await next(context);
+            return;
+        }
+
         var originalBody = context.Response.Body;
         await using var buffer = new MemoryStream();
         context.Response.Body = buffer;

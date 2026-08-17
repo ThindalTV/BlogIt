@@ -91,6 +91,13 @@ await app.MigrateBlogItAsync();
 // HttpContext.Response.StatusCode / NavigationManager.NotFound(): both were tried and both hit
 // hard framework issues (silently discarded body; a second NavigationManager initializing in
 // the same request scope) that a raw HtmlRenderer pass sidesteps entirely.
+//
+// UseRouting is called explicitly, and first, so the middleware can see which endpoint the request
+// matched: it buffers the response only for Razor component page renders, because buffering
+// everything meant every media download was read into memory in full before any of it was sent.
+// Without an explicit UseRouting here, WebApplication inserts routing for us but the endpoint is not
+// resolved yet at this position in the pipeline, and the middleware would see null for every request.
+app.UseRouting();
 app.UseMiddleware<BlogIt.Sample.NotFoundResponseMiddleware>();
 
 app.UseStaticFiles();
