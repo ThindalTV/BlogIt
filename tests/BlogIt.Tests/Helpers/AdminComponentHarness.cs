@@ -48,6 +48,17 @@ public class AdminComponentHarness : BunitContext
         Services.AddSingleton<AuthenticationStateProvider>(authProvider);
     }
 
+    /// <summary>
+    /// Every request the rendered components made, in order, with its body. Needed for the
+    /// assertions that are about what a screen <em>sent</em> rather than what it rendered — the
+    /// concurrency token on an update is invisible in the markup, and a save that quietly skips its
+    /// unpublish call looks identical on screen to one that made it.
+    /// </summary>
+    public IReadOnlyList<RecordedRequest> Requests => _handler.Recorded;
+
+    /// <summary>One request the admin sent, as the fake server saw it.</summary>
+    public sealed record RecordedRequest(HttpMethod Method, string Url, string Body);
+
     /// <summary>Answers any request whose URL contains <paramref name="urlFragment"/> with <paramref name="payload"/>.</summary>
     public AdminComponentHarness Route<T>(string urlFragment, T payload) =>
         RouteJson(urlFragment, JsonSerializer.Serialize(payload, Web));
@@ -84,10 +95,21 @@ public class AdminComponentHarness : BunitContext
     {
         public List<(string Fragment, HttpStatusCode Status, string Json)> Routes { get; } = [];
 
-        protected override Task<HttpResponseMessage> SendAsync(
+        public List<RecordedRequest> Recorded { get; } = [];
+
+        protected override async Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request, CancellationToken cancellationToken)
         {
             var url = request.RequestUri!.PathAndQuery;
+
+            // Read the body here rather than handing the test the HttpRequestMessage: the content is
+            // disposed with the message once the handler returns, so a test reaching for it later
+            // would find it gone.
+            var body = request.Content is null
+                ? string.Empty
+                : await request.Content.ReadAsStringAsync(cancellationToken);
+            Recorded.Add(new RecordedRequest(request.Method, url, body));
+
             // First match wins, so a test can register a narrow route ahead of a broad one.
             var route = Routes.FirstOrDefault(r => url.Contains(r.Fragment, StringComparison.OrdinalIgnoreCase));
 
@@ -105,7 +127,7 @@ public class AdminComponentHarness : BunitContext
                 };
 
             response.RequestMessage = request;
-            return Task.FromResult(response);
+            return response;
         }
     }
 }

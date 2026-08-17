@@ -11,7 +11,7 @@
 <div class="page-header">
     <h1 class="page-title">@(isNew ? "New Post" : post?.Title ?? "Edit Post")</h1>
     <div class="header-actions">
-        @if (!isNew && Id.HasValue)
+        @if (!isNew)
         {
             <button class="btn btn-secondary" @onclick="Preview">Preview</button>
         }
@@ -138,7 +138,19 @@ else
     [Parameter] public Guid? Id { get; set; }
 
     private BlogPostDetailDto? post;
-    private bool isNew => Id == null;
+
+    /// <summary>
+    /// The post the fields below describe. Not the same thing as <see cref="Id"/>: a create sets this
+    /// as soon as the server answers, while the route parameter only catches up once the router has
+    /// processed the navigation. Every branch that asks "which post is this?" reads this field, so the
+    /// component is never momentarily convinced it is still on a blank form.
+    /// </summary>
+    private Guid? postId;
+
+    /// <summary>Whether <see cref="postId"/> and the fields have been filled in at least once.</summary>
+    private bool loadedOnce;
+
+    private bool isNew => postId is null;
     private bool isLoading = true;
     private bool isSaving;
     private string errorMsg = "";
@@ -161,27 +173,59 @@ else
     private string scheduledPublishLocal = "";
     private string scheduledUnpublishLocal = "";
 
-    protected override async Task OnInitializedAsync()
+    /// <remarks>
+    /// Loading lives here and not in <c>OnInitializedAsync</c> because <c>posts/new</c> and
+    /// <c>posts/{id}</c> resolve to this same component: navigating from one to the other after a
+    /// create hands the router a new route value but keeps the instance, so initialisation never runs
+    /// again. Every read of the DTO then saw null — the header fell back to "Edit Post", the schedule
+    /// state line vanished, the slug stayed editable after the server had locked it, the concurrency
+    /// token on the next save went out empty (which the API fails closed on), and Save Draft compared
+    /// <c>post?.IsPublished == true</c> against null and quietly left a live post published.
+    /// <para>
+    /// Rejected: <c>forceLoad: true</c> on the navigation, which fixes it by restarting the whole
+    /// WebAssembly app — seconds of blank page for what is one GET. Also rejected: skipping the
+    /// navigation and keeping the create reply as the state, which leaves the URL on <c>posts/new</c>
+    /// so a refresh or a shared link loses the post, and holds a DTO that predates the publish call.
+    /// </para>
+    /// </remarks>
+    protected override async Task OnParametersSetAsync()
     {
-        if (!isNew && Id.HasValue)
-        {
-            post = await Api.GetPostAsync(Id.Value);
-            if (post != null)
-            {
-                title = post.Title;
-                slug = post.Slug;
-                summary = post.Summary;
-                content = post.Content ?? "";
-                tagsInput = string.Join(", ", post.Tags.Select(t => t.Name));
-                seoTitle = post.SeoTitle ?? "";
-                seoDescription = post.SeoDescription ?? "";
-                seoKeywords = post.SeoKeywords ?? "";
-                ogImageUrl = post.OgImageUrl ?? "";
-                scheduledPublishLocal = ToLocalInput(post.ScheduledPublishAt);
-                scheduledUnpublishLocal = ToLocalInput(post.ScheduledUnpublishAt);
-            }
-        }
+        if (loadedOnce && Id == postId) return;
+        await LoadAsync(Id);
+    }
+
+    /// <summary>Fills the form from the server's copy of <paramref name="id"/>, or blanks it for a new post.</summary>
+    private async Task LoadAsync(Guid? id)
+    {
+        // Only the first load draws the spinner. A later one has to leave the form mounted: the
+        // loading branch would tear out the textarea EasyMDE has attached itself to, and Blazor would
+        // rebuild a fresh one that the editor instance knows nothing about.
+        isLoading = !loadedOnce;
+        postId = id;
+        post = id.HasValue ? await Api.GetPostAsync(id.Value) : null;
+        ApplyFields(post);
+        loadedOnce = true;
         isLoading = false;
+
+        // The editor keeps its own copy of the text, so a reload has to be pushed into it; on the
+        // first load the textarea does not exist yet and OnAfterRenderAsync does this instead.
+        if (editorInitialized)
+            await JS.InvokeVoidAsync("blogitInterop.setEditorValue", "post-content-editor", content);
+    }
+
+    private void ApplyFields(BlogPostDetailDto? loaded)
+    {
+        title = loaded?.Title ?? "";
+        slug = loaded?.Slug ?? "";
+        summary = loaded?.Summary ?? "";
+        content = loaded?.Content ?? "";
+        tagsInput = loaded is null ? "" : string.Join(", ", loaded.Tags.Select(t => t.Name));
+        seoTitle = loaded?.SeoTitle ?? "";
+        seoDescription = loaded?.SeoDescription ?? "";
+        seoKeywords = loaded?.SeoKeywords ?? "";
+        ogImageUrl = loaded?.OgImageUrl ?? "";
+        scheduledPublishLocal = ToLocalInput(loaded?.ScheduledPublishAt);
+        scheduledUnpublishLocal = ToLocalInput(loaded?.ScheduledUnpublishAt);
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -230,8 +274,8 @@ else
 
     private async Task Preview()
     {
-        if (!Id.HasValue) return;
-        var preview = await Api.CreatePostPreviewAsync(Id.Value);
+        if (!postId.HasValue) return;
+        var preview = await Api.CreatePostPreviewAsync(postId.Value);
         if (preview is not null)
             Nav.NavigateTo(preview.Url, forceLoad: true);
     }
@@ -263,10 +307,18 @@ else
                 if (created != null)
                 {
                     if (publish) await Api.PublishPostAsync(created.Id);
+
+                    // Read the post back before handing the URL over. The create reply cannot stand in
+                    // for it: it predates the publish call above, so its IsPublished, PublishedAt and
+                    // concurrency stamp are already stale. Loading here rather than leaving it to the
+                    // parameter change the navigation triggers means the screen is correct the moment
+                    // the save returns — and since postId now matches Id, that parameter change finds
+                    // nothing to do and costs no second round trip.
+                    await LoadAsync(created.Id);
                     Nav.NavigateTo($"posts/{created.Id}", replace: true);
                 }
             }
-            else if (Id.HasValue)
+            else if (postId.HasValue)
             {
                 // The token from the load this edit is based on. The server rejects the update with
                 // a 409 if someone else saved the post in the meantime, rather than clobbering it.
@@ -274,13 +326,13 @@ else
                     title, summary, content, seoTitle, seoDescription, seoKeywords, ogImageUrl, tags,
                     scheduledPublishAt, scheduledUnpublishAt, slug,
                     post?.ConcurrencyStamp ?? default);
-                await Api.UpdatePostAsync(Id.Value, req);
+                await Api.UpdatePostAsync(postId.Value, req);
                 if (publish && post?.IsPublished != true)
-                    await Api.PublishPostAsync(Id.Value);
+                    await Api.PublishPostAsync(postId.Value);
                 else if (!publish && post?.IsPublished == true)
-                    await Api.UnpublishPostAsync(Id.Value);
+                    await Api.UnpublishPostAsync(postId.Value);
                 successMsg = "Post saved.";
-                post = await Api.GetPostAsync(Id.Value);
+                post = await Api.GetPostAsync(postId.Value);
                 if (post is not null)
                 {
                     slug = post.Slug;
