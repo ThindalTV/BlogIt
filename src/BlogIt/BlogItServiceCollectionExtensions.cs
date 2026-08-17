@@ -2,14 +2,12 @@ using BlogIt.Services;
 using BlogIt.Shared.Data;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using System.Security.Claims;
-using System.Threading.RateLimiting;
 
 namespace BlogIt;
 
@@ -128,17 +126,10 @@ public static class BlogItServiceCollectionExtensions
                 return ValueTask.CompletedTask;
             };
 
-            // Partitioned per client IP (falls back to a shared bucket when the IP is
-            // unavailable) so one attacker guessing passwords can't lock out everyone else.
-            options.AddPolicy(BlogItDefaults.LoginRateLimiterPolicy, httpContext =>
-                RateLimitPartition.GetFixedWindowLimiter(
-                    httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-                    _ => new FixedWindowRateLimiterOptions
-                    {
-                        PermitLimit = 10,
-                        Window = TimeSpan.FromMinutes(5),
-                        QueueLimit = 0
-                    }));
+            // Limits and partition keys live in BlogItRateLimiterPolicies rather than inline here:
+            // RateLimiterOptions keeps its policy map internal to ASP.NET Core, so a limit
+            // configured in this lambda is only observable by sending enough requests to trip it.
+            BlogItRateLimiterPolicies.AddTo(options);
         });
 
         services.TryAddEnumerable(

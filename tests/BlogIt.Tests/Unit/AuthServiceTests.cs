@@ -90,12 +90,121 @@ public class AuthServiceTests
 
         var service = new AuthService(db, settings);
         var success = await service.ChangePasswordAsync(user.Id,
-            new BlogIt.Shared.DTOs.ChangePasswordRequest("old", "new"));
+            new BlogIt.Shared.DTOs.ChangePasswordRequest("old", "NewPass1!"));
 
         success.Should().BeTrue();
         var updated = await db.Users.FindAsync(user.Id);
-        BCrypt.Net.BCrypt.Verify("new", updated!.PasswordHash).Should().BeTrue();
+        BCrypt.Net.BCrypt.Verify("NewPass1!", updated!.PasswordHash).Should().BeTrue();
     }
+
+    [Fact]
+    public async Task ChangePasswordAsync_RotatesTheSecurityStamp()
+    {
+        var (db, settings) = CreateSubject();
+        var user = new AppUser
+        {
+            Username = "carol",
+            DisplayName = "Carol",
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword("OldPass1!")
+        };
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+        var originalStamp = user.SecurityStamp;
+
+        await CreateService(db, settings).ChangePasswordAsync(user.Id,
+            new BlogIt.Shared.DTOs.ChangePasswordRequest("OldPass1!", "NewPass1!"));
+
+        (await db.Users.FindAsync(user.Id))!.SecurityStamp.Should().NotBe(originalStamp);
+    }
+
+    [Theory]
+    [InlineData("short1A")]        // one below the minimum
+    [InlineData("abc")]            // the case the old test asserted was allowed
+    [InlineData("nouppercase1")]
+    [InlineData("NOLOWERCASE1")]
+    [InlineData("NoDigitsHere")]
+    public async Task ChangePasswordAsync_RejectsANewPasswordThePolicyWouldNotAllow(string weak)
+    {
+        // The service, not just the API, enforces the policy: an embedder resolving IAuthService
+        // and calling this directly used to bypass PasswordPolicy entirely. This test previously
+        // asserted the opposite — that a 3-character password was accepted — which is exactly the
+        // bug it encoded.
+        var (db, settings) = CreateSubject();
+        var user = new AppUser
+        {
+            Username = "eve",
+            DisplayName = "Eve",
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword("OldPass1!")
+        };
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+
+        var change = async () => await CreateService(db, settings).ChangePasswordAsync(user.Id,
+            new BlogIt.Shared.DTOs.ChangePasswordRequest("OldPass1!", weak));
+
+        await change.Should().ThrowAsync<ArgumentException>()
+            .WithParameterName("request");
+        BCrypt.Net.BCrypt.Verify("OldPass1!", (await db.Users.FindAsync(user.Id))!.PasswordHash)
+            .Should().BeTrue("the stored hash must be untouched when the policy rejects the change");
+    }
+
+    [Fact]
+    public async Task ChangePasswordAsync_RejectsANewPasswordAboveTheMaximumLength()
+    {
+        var (db, settings) = CreateSubject();
+        var user = new AppUser
+        {
+            Username = "frank",
+            DisplayName = "Frank",
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword("OldPass1!")
+        };
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+
+        var change = async () => await CreateService(db, settings).ChangePasswordAsync(user.Id,
+            new BlogIt.Shared.DTOs.ChangePasswordRequest(
+                "OldPass1!",
+                "Aa1" + new string('x', BlogIt.Shared.Helpers.PasswordPolicy.MaxLength)));
+
+        await change.Should().ThrowAsync<ArgumentException>();
+    }
+
+    [Fact]
+    public async Task ChangePasswordAsync_AcceptsALongPassphrase()
+    {
+        // The cap is generous by design: capping at BCrypt's 72-byte ceiling would have locked out
+        // anyone already using a longer passphrase.
+        var (db, settings) = CreateSubject();
+        var user = new AppUser
+        {
+            Username = "grace",
+            DisplayName = "Grace",
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword("OldPass1!")
+        };
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+        // Deliberately past BCrypt's 72-byte ceiling: the policy must not be the thing that stops
+        // it, even though BCrypt itself will ignore the tail (see PasswordPolicy's remarks).
+        var passphrase = "Correct1-horse-battery-staple-and-then-some-more-words-for-good-measure-and-a-few-extra";
+        passphrase.Length.Should().BeGreaterThan(72);
+
+        var success = await CreateService(db, settings).ChangePasswordAsync(user.Id,
+            new BlogIt.Shared.DTOs.ChangePasswordRequest("OldPass1!", passphrase));
+
+        success.Should().BeTrue();
+    }
+
+    [Fact]
+    public void IAuthService_DoesNotExposeATokenMintingPrimitive()
+    {
+        // Finding #42: GenerateToken on the public interface let any host code that resolved
+        // IAuthService mint a valid token for an arbitrary user id. Nothing outside LoginAsync
+        // needs it, so it is no longer part of the contract.
+        typeof(IAuthService).GetMethods().Select(method => method.Name)
+            .Should().BeEquivalentTo(nameof(IAuthService.LoginAsync), nameof(IAuthService.ChangePasswordAsync));
+    }
+
+    private static AuthService CreateService(BlogItDbContext db, SettingsService settings) => new(db, settings);
 
     [Fact]
     public async Task ChangePasswordAsync_WithWrongCurrent_ReturnsFalse()
@@ -112,7 +221,7 @@ public class AuthServiceTests
 
         var service = new AuthService(db, settings);
         var success = await service.ChangePasswordAsync(user.Id,
-            new BlogIt.Shared.DTOs.ChangePasswordRequest("wrong", "new"));
+            new BlogIt.Shared.DTOs.ChangePasswordRequest("wrong", "NewPass1!"));
 
         success.Should().BeFalse();
     }

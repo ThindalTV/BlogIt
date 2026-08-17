@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Microsoft.AspNetCore.RateLimiting;
 using BlogIt.Shared.DTOs;
 using BlogIt.Shared.Helpers;
 using BlogIt.Services;
@@ -42,7 +43,12 @@ public static class AuthApi
                 return Results.BadRequest("Current password is incorrect.");
 
             return Results.Ok(new { message = "Password changed successfully." });
-        }).RequireAuthorization(BlogItDefaults.AdminAuthorizationPolicy);
+        })
+            .RequireAuthorization(BlogItDefaults.AdminAuthorizationPolicy)
+            // A valid token is not enough here: this endpoint takes the *current* password, so a
+            // stolen token could otherwise guess it as fast as the network allowed. The policy
+            // partitions on the token rather than the address for exactly that case.
+            .RequireRateLimiting(BlogItDefaults.AccountRateLimiterPolicy);
 
         return app;
     }

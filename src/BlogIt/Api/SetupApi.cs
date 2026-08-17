@@ -4,6 +4,7 @@ using BlogIt.Shared.DTOs;
 using BlogIt.Shared.Entities;
 using BlogIt.Shared.Helpers;
 using BlogIt.Services;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 
 namespace BlogIt.Api;
@@ -14,7 +15,11 @@ public static class SetupApi
     {
         var group = app.MapGroup("/setup")
             .WithTags("Setup")
-            .AllowAnonymous();
+            .AllowAnonymous()
+            // Both routes are anonymous and both hit the database. /status is also the liveness probe
+            // the admin clients use, so the limit is generous rather than tight — see
+            // BlogItRateLimiterPolicies.Setup.
+            .RequireRateLimiting(BlogItDefaults.SetupRateLimiterPolicy);
 
         group.MapGet("/status", async (BlogItDbContext db) =>
         {

@@ -11,7 +11,9 @@ After the application has been installed and its database migrations have run:
 
 1. Open `https://your-site/blogit/`.
 2. Create the first administrator account with a username, display name, and
-   password.
+   password. Passwords must be 8 to 128 characters and contain at least one
+   uppercase letter, one lowercase letter, and one digit. The same rules apply
+   everywhere a password is set.
 3. Enter the public site name, canonical site URL, description, and optional
    default Open Graph image URL.
 4. Select an AI provider. Enter its API key and, for an OpenAI-compatible
