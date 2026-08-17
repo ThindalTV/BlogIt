@@ -60,6 +60,15 @@ startup and nothing that can be configured in two places:
 For `github-copilot` the base URL is fixed to GitHub's Azure-hosted models endpoint and
 the Base URL setting is ignored.
 
+The Base URL must be an absolute `http(s)` URL, and by default it may not point at a
+loopback, link-local, or private address: the stored API key is sent to whatever it names,
+so anyone with blog admin credentials could otherwise turn it into a request against the
+cloud metadata service or an internal host. Both the settings route and this provider check
+it, the second so a value stored before the check existed is refused rather than used. To
+run a model on the machine or the private network, set
+`options.AllowPrivateAiEndpoints = true` in `AddBlogIt` — a host startup decision, not a
+portal setting.
+
 Because none of that is supplied at startup, `UseOpenAi()` cannot validate credentials
 the way `UseAzureStorage` validates a connection string. A missing or rejected key
 surfaces the first time an admin sends a message, as `400` carrying the reason.

@@ -50,6 +50,35 @@ Analytics Data client; see `docs/publishing.md`. Keeping it in a satellite is wh
 their credentials, endpoints, and model names from the per-site settings entered
 in the admin portal, so there is nothing to configure at startup.
 
+### Where the AI provider may be reached
+
+The AI base URL is a per-site setting, so anyone with blog admin credentials can
+change it, and the configured API key is sent to whatever it names. **By default
+BlogIt refuses a base URL on a loopback, link-local, or private address** — an
+absolute `http(s)` URL is required, and `http://169.254.169.254/`,
+`http://localhost:11434/v1`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`,
+`100.64.0.0/10`, IPv6 unique-local and link-local, and names ending in
+`.localhost`, `.local`, `.internal` or `.home.arpa` are all rejected. The check
+runs when the setting is saved and again when the client is built, so a value
+stored before this existed is caught too.
+
+If you run your own model on the machine or the private network, allow it in host
+startup:
+
+```csharp
+builder.Services.AddBlogIt(options =>
+{
+    options.AllowPrivateAiEndpoints = true; // e.g. Ollama on http://localhost:11434/v1
+    // ...
+});
+```
+
+That puts the decision with whoever deploys the application rather than whoever
+writes the blog posts. It is a guard on what can be configured, not a general SSRF
+defence: only address literals and those name suffixes are recognised, so a public
+DNS name that resolves into private space passes. Egress firewall rules are the
+answer to that, not a validator.
+
 ### Without them
 
 Leaving a satellite out is a supported deployment, not a broken one:
@@ -173,6 +202,40 @@ individually rather than moved; see
 Place forwarding, exception handling, HTTPS,
 and static files before `UseBlogIt`. Place host antiforgery after it, then call
 `MapBlogIt`.
+
+### Which URLs the blog's redirect table may claim
+
+`UseBlogIt` adds the redirect middleware ahead of your endpoints, and every
+authenticated blog user can add redirects. **By default there is no restriction on
+the source path**, so a blog author can create a redirect on `/login` or
+`/pricing`, shadow that page, and send visitors to an external URL — and a
+permanent one stays in browser caches after the row is deleted. BlogIt's own admin,
+API and media paths and the root documents it is still serving are always refused,
+but nothing else about your application is.
+
+Set `RedirectSourcePrefixes` to confine redirects to the URLs you have handed the
+blog:
+
+```csharp
+builder.Services.AddBlogIt(options =>
+{
+    options.RedirectSourcePrefixes = ["/blog", "/archive"];
+    // ...
+});
+```
+
+A source then has to equal a prefix or continue it after a `/`, so `/blog` and
+`/blog/2019/old-post` are allowed while `/login` and `/blogger/x` are refused with
+a `400`. The check also runs when a redirect is *served*, so setting this stops
+honouring rows that already exist — which is the point when a redirect on the
+host's login page is already in the table.
+
+The default is unrestricted, and deliberately so: a redirect source is a URL the
+site no longer serves, which is where the previous site put it rather than
+anywhere the blog owns, so a blog-only default would refuse the feature's main
+use and would break running deployments on upgrade. If your application has
+routes worth protecting from blog authors — and it does, if any authenticated blog
+user is not also a site operator — set the prefixes.
 
 ### If your application already has authentication
 

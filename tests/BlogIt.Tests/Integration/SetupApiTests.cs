@@ -175,6 +175,43 @@ public class SetupApiTests(BlogItSampleFactory factory) : IClassFixture<BlogItSa
         (await db.Users.CountAsync()).Should().Be(0);
     }
 
+    [Theory]
+    [InlineData("http://169.254.169.254/latest/meta-data/")]
+    [InlineData("http://localhost:11434/v1")]
+    [InlineData("not-a-url")]
+    public async Task Initialize_WithAPrivateAiBaseUrl_ReturnsValidationProblemAndCreatesNoUser(
+        string baseUrl)
+    {
+        // This route is anonymous, so it must not be the way around the AI endpoint policy the
+        // authenticated settings route enforces.
+        await using var freshFactory = new BlogItSampleFactory();
+        var client = freshFactory.CreateClient();
+
+        var request = new SetupInitializeRequest(
+            Username: "admin",
+            DisplayName: "Administrator",
+            Password: "AdminPass1!",
+            SiteName: "Test Blog",
+            SiteUrl: "https://test.com",
+            SiteDescription: "A test blog",
+            DefaultOgImage: null,
+            AiProvider: "openai-compatible",
+            AiApiKey: "test-key",
+            AiBaseUrl: baseUrl,
+            AiModel: null,
+            AiExportModel: null,
+            GoogleAnalyticsMeasurementId: null,
+            GoogleAnalyticsPropertyId: null,
+            GoogleAnalyticsCredentialsJson: null);
+
+        var response = await client.PostAsJsonAsync("/api/setup/initialize", request);
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        using var scope = freshFactory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<BlogIt.Shared.Data.BlogItDbContext>();
+        (await db.Users.CountAsync()).Should().Be(0);
+    }
+
     [Fact]
     public async Task Initialize_WhenAlreadySetup_ReturnsConflict()
     {
