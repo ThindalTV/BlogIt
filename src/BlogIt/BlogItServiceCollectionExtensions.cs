@@ -120,12 +120,10 @@ public static class BlogItServiceCollectionExtensions
 
         services.AddRateLimiter(options =>
         {
-            options.OnRejected = (context, cancellationToken) =>
-            {
-                context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
-                return ValueTask.CompletedTask;
-            };
-
+            // Deliberately not setting options.OnRejected: it is a single global property, so BlogIt
+            // and a host that also calls AddRateLimiter would overwrite each other depending only on
+            // registration order. Each BlogIt policy carries its own 429 handler instead.
+            //
             // Limits and partition keys live in BlogItRateLimiterPolicies rather than inline here:
             // RateLimiterOptions keeps its policy map internal to ASP.NET Core, so a limit
             // configured in this lambda is only observable by sending enough requests to trip it.

@@ -190,14 +190,56 @@ internal static class BlogItRateLimiterPolicies
     {
         foreach (var policyName in Names)
         {
-            // Both lookups run per request rather than being resolved once here, so the switch
-            // expressions above stay the single place each policy's limit and partitioning are
-            // stated — which is also what makes them assertable without sending traffic.
-            options.AddPolicy(policyName, httpContext =>
-                RateLimitPartition.GetFixedWindowLimiter(
-                    PartitionKey(policyName, httpContext),
-                    _ => Limits(policyName)));
+            options.AddPolicy(policyName, Create(policyName));
         }
+    }
+
+    /// <summary>The policy object registered for <paramref name="policyName"/>.</summary>
+    /// <exception cref="ArgumentOutOfRangeException">The name is not one of <see cref="Names"/>.</exception>
+    internal static IRateLimiterPolicy<string> Create(string policyName)
+    {
+        // Validate here rather than on first request: an unknown name would otherwise surface as a
+        // throwing partition resolver in the middleware.
+        _ = Limits(policyName);
+        return new Policy(policyName);
+    }
+
+    /// <summary>
+    /// One BlogIt policy, carrying its own rejection handler.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The rejection handler is per-policy rather than <c>RateLimiterOptions.OnRejected</c>, which is
+    /// a single global property: a host that also calls <c>AddRateLimiter</c> and sets its own
+    /// <c>OnRejected</c> would silently replace BlogIt's (or have its own replaced), depending only on
+    /// which registration ran last. Per-policy handlers are consulted for the endpoint's own policy,
+    /// so BlogIt keeps its <c>429</c> and the host keeps whatever it chose for its own policies.
+    /// </para>
+    /// <para>
+    /// Nothing here can make double-counting harmless when two rate limiter middlewares are in one
+    /// pipeline — that is what <see cref="BlogItPipelineOptions.AddRateLimiterMiddleware"/> is for. A
+    /// per-request "already counted" guard in <see cref="GetPartition"/> was implemented and rejected:
+    /// the framework invokes the partitioner more than once per request, so the guard turned every
+    /// limited request into a no-limiter partition and disabled rate limiting outright (caught by
+    /// <c>RateLimiterEnforcementTests</c>).
+    /// </para>
+    /// </remarks>
+    private sealed class Policy(string policyName) : IRateLimiterPolicy<string>
+    {
+        public Func<OnRejectedContext, CancellationToken, ValueTask>? OnRejected { get; } =
+            static (context, _) =>
+            {
+                context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+                return ValueTask.CompletedTask;
+            };
+
+        // Both lookups run per request rather than being resolved once in the constructor, so the
+        // switch expressions above stay the single place each policy's limit and partitioning are
+        // stated — which is also what makes them assertable without sending traffic.
+        public RateLimitPartition<string> GetPartition(HttpContext httpContext) =>
+            RateLimitPartition.GetFixedWindowLimiter(
+                PartitionKey(policyName, httpContext),
+                _ => Limits(policyName));
     }
 
     private static FixedWindowRateLimiterOptions Window(int permitLimit, TimeSpan window) =>
