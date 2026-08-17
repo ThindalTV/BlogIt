@@ -86,9 +86,16 @@ items, sitemap entries, and robots directives as data for the host's own
 document.
 
 `AddBlogIt` registers the package-owned `BlogIt.Jwt` scheme and `BlogIt.Admin`
-policy. Do not separately add authentication or authorization middleware for
-BlogIt. Put forwarding, errors, HTTPS, and static files before `UseBlogIt`;
+policy. Put forwarding, errors, HTTPS, and static files before `UseBlogIt`;
 place host antiforgery after it, then call `MapBlogIt`.
+
+An application that already has its own authentication keeps it: call
+`UseAuthentication`/`UseAuthorization` before `UseBlogIt` and BlogIt adds neither
+again. If the host adds them after `UseBlogIt`, or calls `UseRateLimiter` itself,
+opt out of the matching middleware — `UseBlogIt(pipeline => pipeline.AddRateLimiterMiddleware = false)`.
+BlogIt is single-instance: settings, redirects and preview tokens are per-process
+caches and the publication scheduler has no leader election. Both topics are
+covered in `docs/technical-guide.md`.
 
 ## Public views and providers
 

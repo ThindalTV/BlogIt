@@ -172,9 +172,67 @@ individually rather than moved; see
 
 Place forwarding, exception handling, HTTPS,
 and static files before `UseBlogIt`. Place host antiforgery after it, then call
-`MapBlogIt`. BlogIt registers and invokes its own `BlogIt.Jwt` authentication
-scheme and `BlogIt.Admin` policy; the host must not add duplicate authentication
-or authorization middleware specifically for BlogIt.
+`MapBlogIt`.
+
+### If your application already has authentication
+
+BlogIt registers its own `BlogIt.Jwt` authentication scheme and `BlogIt.Admin`
+policy, and that policy names its scheme explicitly, so BlogIt's bearer tokens
+are authenticated for BlogIt's endpoints by whichever authorization middleware is
+in the pipeline. Your own schemes and policies are untouched: BlogIt sets no
+default authenticate, challenge or sign-in scheme.
+
+One consequence to check, and it is ASP.NET Core's rule rather than BlogIt's:
+when an application has exactly one authentication scheme and no explicitly
+configured default, that single scheme is used as the default. Adding BlogIt adds
+a second scheme, so that automatic choice stops applying and `HttpContext.User`
+is left unset by `UseAuthentication`. If your host called `AddAuthentication()`
+with no scheme name, name your default explicitly —
+`AddAuthentication("YourScheme")`, or set `DefaultScheme` in its options — before
+adding BlogIt.
+
+Authentication, authorization and rate limiting are pipeline-wide middleware, so
+only one copy of each should be in the pipeline. `UseBlogIt` adds all three by
+default, which is what a host with no authenticated area of its own wants, and
+skips the two auth middlewares when it can see the host already added them:
+
+```csharp
+app.UseAuthentication();   // yours
+app.UseAuthorization();    // yours
+app.UseBlogIt();           // adds neither again
+```
+
+Detection works off the marks `UseAuthentication`/`UseAuthorization` leave on the
+pipeline, so it only sees calls made **before** `UseBlogIt`. Two cases it cannot
+see, both handled by opting out explicitly:
+
+```csharp
+app.UseBlogIt(pipeline =>
+{
+    // The host calls UseRateLimiter itself, anywhere in the pipeline.
+    // UseRateLimiter leaves no mark to detect, and two rate limiter middlewares
+    // charge two permits for one request — so a 10-attempt login limit starts
+    // rejecting at 5.
+    pipeline.AddRateLimiterMiddleware = false;
+    // The host adds its auth middleware after UseBlogIt.
+    pipeline.AddAuthenticationMiddleware = false;
+    pipeline.AddAuthorizationMiddleware = false;
+});
+app.UseAuthentication();
+app.UseAuthorization();
+```
+
+Opting out of the rate limiter middleware does not opt out of BlogIt's rate
+limits: the policies are attached to BlogIt's endpoints and are enforced by
+whichever rate limiter middleware runs. If you turn off the auth middlewares,
+your own `UseAuthentication`/`UseAuthorization` must still be in the pipeline
+before endpoint execution, or ASP.NET Core throws on the first request to a
+BlogIt endpoint that carries authorization metadata.
+
+If you also call `AddRateLimiter`, note that `OnRejected` on it is a single
+global property. BlogIt does not set it — each BlogIt policy carries its own
+`429` handler — so yours stays in force for your policies and BlogIt's rejections
+stay `429` regardless of registration order.
 
 `UseBlogIt` serves the packaged admin portal from the private
 `BlogItAdminAssets` folder next to the host assembly. Those assets ship
@@ -189,8 +247,10 @@ responses.
 
 ### Rate limits
 
-`UseBlogIt` installs `UseRateLimiter` and BlogIt attaches a fixed-window policy
-to every anonymous or credential-touching route. Exceeding one returns `429`.
+`UseBlogIt` installs `UseRateLimiter` unless you opt out (see
+[If your application already has authentication](#if-your-application-already-has-authentication))
+and BlogIt attaches a fixed-window policy to every anonymous or
+credential-touching route. Exceeding one returns `429`.
 The limits are not configurable today; they are per-partition, so one caller
 tripping a limit does not affect anyone else.
 
@@ -214,9 +274,73 @@ The authenticated read and update routes are deliberately not limited: they
 already require a valid admin token, and capping them would cap the admin UI's
 own paging.
 
-`MigrateBlogItAsync` applies the package's EF Core migrations. Run it before the
-application begins serving requests and use a database identity with schema
-change permission during deployment.
+### What `AddBlogIt` always registers
+
+Everything under `AdminPath`, `ApiPath` and `MediaPath`, the four root documents,
+and URL redirects are part of the engine and are always registered — there is no
+switch to leave the redirect table, the redirect middleware, or the
+`/api/redirects` routes out. The root documents are the exception: each of the
+four is switched off individually (see
+[Feeds, sitemap, and robots.txt](#feeds-sitemap-and-robotstxt)).
+
+AI and analytics are opt-in by installation instead. Their endpoints are always
+mapped, but with no satellite package registered they answer `400` with install
+instructions (AI) and `404 not configured` (analytics), and no provider services,
+credentials, or outbound calls exist. See
+[Optional satellite packages](#optional-satellite-packages).
+
+### Migrations
+
+`MigrateBlogItAsync` applies the package's EF Core migrations. It is a deployment
+step that the quick-start example happens to run at startup for convenience, and
+that convenience has two costs worth deciding about deliberately:
+
+- **Permissions.** Running it at startup means the application's own database
+  identity needs schema-modification rights for the whole life of the process,
+  not just during deployment. Prefer running migrations as a separate deployment
+  step under an identity that has those rights, and running the application under
+  one that does not.
+- **Concurrent starts.** EF Core migrations are not safe to apply from several
+  processes at once. If two instances start together — a rolling deployment, a
+  scale-out event, a container restart storm — they can race and one will fail on
+  a partially applied migration. One instance, or one deployment step, must own
+  it.
+
+Whichever you choose, it must complete before the application begins serving
+requests: BlogIt's endpoints assume their tables exist.
+
+## Deployment: BlogIt is single-instance today
+
+BlogIt is designed for one process serving a site. It runs behind a load balancer
+only if that balancer sends every request to one instance at a time
+(active/passive, or a single instance with restarts). Running two instances of the
+same BlogIt site concurrently produces wrong behaviour, not just reduced
+performance, and nothing in the engine detects it.
+
+What breaks, and why:
+
+| State | Where it lives | Effect with more than one instance |
+| --- | --- | --- |
+| Site settings | Whole-table snapshot in a singleton, no expiry, refreshed only by the instance that wrote | A setting changed on instance A is never seen by instance B until B restarts |
+| URL redirects | Same | A new or deleted redirect only takes effect on the instance that made the change |
+| Preview tokens | Process-local dictionary | A preview link issued by A returns `404` when the balancer sends the click to B |
+| Publication scheduling | Hosted service with a timer and no leader election | Every instance processes the same due rows |
+
+The sharpest case is rotating the JWT secret. The signing key is read through the
+same settings cache, so after a rotation on instance A, tokens A issues are
+rejected by B and tokens B issues are rejected by A — administrators are logged
+out at random until every instance has restarted. Rotate the secret with one
+instance running, or restart all instances immediately afterwards.
+
+This constraint is about instance count, not about the database. `UseAzureSql`
+and its retry-on-failure execution strategy are for surviving transient
+connection faults against a managed database, which a single instance needs as
+much as several would; they are not an indication that scale-out works.
+
+If you need real scale-out, the missing pieces are a distributed (or
+short-TTL) settings and redirect cache, a shared preview-token store, and leader
+election for the scheduler. None of them exist today, and BlogIt should not be
+deployed as if they did.
 
 ## The data model is part of the public API — on purpose
 
