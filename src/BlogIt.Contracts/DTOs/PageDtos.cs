@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace BlogIt.Shared.DTOs;
 
 public record PageDto(
@@ -24,14 +26,15 @@ public record PageDto(
     Guid ConcurrencyStamp = default
 );
 
+/// <remarks>See <see cref="CreateBlogPostRequest"/> for why these attributes are a subset.</remarks>
 public record CreatePageRequest(
-    string Title,
-    string Slug,
-    string Content,
-    string? SeoTitle,
-    string? SeoDescription,
-    string? SeoKeywords,
-    string? OgImageUrl,
+    [property: Required][property: StringLength(ContentLimits.TitleLength)] string Title,
+    [property: Required][property: StringLength(ContentLimits.SlugLength)] string Slug,
+    [property: Required] string Content,
+    [property: StringLength(SeoLimits.TitleLength)] string? SeoTitle,
+    [property: StringLength(SeoLimits.DescriptionLength)] string? SeoDescription,
+    [property: StringLength(SeoLimits.KeywordsLength)] string? SeoKeywords,
+    [property: StringLength(SeoLimits.OgImageUrlLength)] string? OgImageUrl,
     bool IsPublished,
     DateTime? ScheduledPublishAt = null,
     DateTime? ScheduledUnpublishAt = null
@@ -42,13 +45,13 @@ public record CreatePageRequest(
 /// fails closed — see <see cref="UpdateBlogPostRequest.ConcurrencyStamp"/> for the reasoning.
 /// </param>
 public record UpdatePageRequest(
-    string Title,
-    string Slug,
-    string Content,
-    string? SeoTitle,
-    string? SeoDescription,
-    string? SeoKeywords,
-    string? OgImageUrl,
+    [property: Required][property: StringLength(ContentLimits.TitleLength)] string Title,
+    [property: Required][property: StringLength(ContentLimits.SlugLength)] string Slug,
+    [property: Required] string Content,
+    [property: StringLength(SeoLimits.TitleLength)] string? SeoTitle,
+    [property: StringLength(SeoLimits.DescriptionLength)] string? SeoDescription,
+    [property: StringLength(SeoLimits.KeywordsLength)] string? SeoKeywords,
+    [property: StringLength(SeoLimits.OgImageUrlLength)] string? OgImageUrl,
     bool IsPublished,
     DateTime? ScheduledPublishAt = null,
     DateTime? ScheduledUnpublishAt = null,

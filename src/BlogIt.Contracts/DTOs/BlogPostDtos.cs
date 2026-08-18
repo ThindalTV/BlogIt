@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace BlogIt.Shared.DTOs;
 
 public record BlogPostSummaryDto(
@@ -48,18 +50,31 @@ public record BlogPostDetailDto(
     Guid ConcurrencyStamp = default
 );
 
+/// <remarks>
+/// The DataAnnotations attributes below are the client-facing half of rules the server enforces
+/// anyway. Every ceiling references a constant from this assembly rather than repeating a number, so
+/// there is one source of truth shared with the EF column width and the server-side check.
+/// <para>
+/// Deliberately incomplete: <c>Summary</c> and <c>Content</c> are <c>nvarchar(max)</c> so nothing
+/// bounds them, and the slug's character rules, the URL scheme check and the tag-name rules stay
+/// with <c>SlugHelper</c>, <c>UrlValidator</c> and <c>TextFieldValidator</c> in the engine —
+/// contracts cannot reference those without a circular dependency, and copying their numbers here
+/// would create a second source of truth that drifts. Passing these attributes is not a promise the
+/// server will accept the payload; a <c>400</c> is still the last word.
+/// </para>
+/// </remarks>
 public record CreateBlogPostRequest(
-    string Title,
-    string Summary,
+    [property: Required][property: StringLength(ContentLimits.TitleLength)] string Title,
+    [property: Required] string Summary,
     string? Content,
-    string? SeoTitle,
-    string? SeoDescription,
-    string? SeoKeywords,
-    string? OgImageUrl,
+    [property: StringLength(SeoLimits.TitleLength)] string? SeoTitle,
+    [property: StringLength(SeoLimits.DescriptionLength)] string? SeoDescription,
+    [property: StringLength(SeoLimits.KeywordsLength)] string? SeoKeywords,
+    [property: StringLength(SeoLimits.OgImageUrlLength)] string? OgImageUrl,
     IReadOnlyList<string> TagNames,
     DateTime? ScheduledPublishAt = null,
     DateTime? ScheduledUnpublishAt = null,
-    string? Slug = null
+    [property: StringLength(ContentLimits.SlugLength)] string? Slug = null
 );
 
 /// <param name="ConcurrencyStamp">
@@ -72,18 +87,19 @@ public record CreateBlogPostRequest(
 /// back; on a 409, re-read and let the user decide.
 /// </para>
 /// </param>
+/// <remarks>See <see cref="CreateBlogPostRequest"/> for why these attributes are a subset.</remarks>
 public record UpdateBlogPostRequest(
-    string Title,
-    string Summary,
+    [property: Required][property: StringLength(ContentLimits.TitleLength)] string Title,
+    [property: Required] string Summary,
     string? Content,
-    string? SeoTitle,
-    string? SeoDescription,
-    string? SeoKeywords,
-    string? OgImageUrl,
+    [property: StringLength(SeoLimits.TitleLength)] string? SeoTitle,
+    [property: StringLength(SeoLimits.DescriptionLength)] string? SeoDescription,
+    [property: StringLength(SeoLimits.KeywordsLength)] string? SeoKeywords,
+    [property: StringLength(SeoLimits.OgImageUrlLength)] string? OgImageUrl,
     IReadOnlyList<string> TagNames,
     DateTime? ScheduledPublishAt = null,
     DateTime? ScheduledUnpublishAt = null,
-    string? Slug = null,
+    [property: StringLength(ContentLimits.SlugLength)] string? Slug = null,
     Guid ConcurrencyStamp = default
 );
 

@@ -1,7 +1,16 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace BlogIt.Shared.DTOs;
 
-public record LoginRequest(string Username, string Password);
+public record LoginRequest(
+    [property: Required][property: StringLength(ContentLimits.UsernameLength)] string Username,
+    [property: Required] string Password);
 
 public record LoginResponse(string Token, string Username, string DisplayName, DateTime ExpiresAt);
 
-public record ChangePasswordRequest(string CurrentPassword, string NewPassword);
+/// <remarks>
+/// No length or complexity attribute on either password — see <see cref="CreateUserRequest"/>.
+/// </remarks>
+public record ChangePasswordRequest(
+    [property: Required] string CurrentPassword,
+    [property: Required] string NewPassword);

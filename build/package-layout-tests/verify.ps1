@@ -23,17 +23,21 @@ $packagesPath = Join-Path $artifacts "packages"
 $consumer = Join-Path $testRoot "Consumer\Consumer.csproj"
 $azureConsumer = Join-Path $testRoot "AzureConsumer\AzureConsumer.csproj"
 $aiAnalyticsConsumer = Join-Path $testRoot "AiAnalyticsConsumer\AiAnalyticsConsumer.csproj"
+$contractsConsumer = Join-Path $testRoot "ContractsConsumer\ContractsConsumer.csproj"
 $packageProject = Join-Path $repo "src\BlogIt\BlogIt.csproj"
+$contractsPackageProject = Join-Path $repo "src\BlogIt.Contracts\BlogIt.Contracts.csproj"
 $azurePackageProject = Join-Path $repo "src\BlogIt.AzureStorage\BlogIt.AzureStorage.csproj"
 $openAiPackageProject = Join-Path $repo "src\BlogIt.OpenAi\BlogIt.OpenAi.csproj"
 $analyticsPackageProject = Join-Path $repo "src\BlogIt.GoogleAnalytics\BlogIt.GoogleAnalytics.csproj"
 $consumerOutput = Join-Path $artifacts "consumer-publish"
 $version = $PackageVersion
 $packageName = "BlogIt.$version.nupkg"
+$contractsPackageName = "BlogIt.Contracts.$version.nupkg"
 $azurePackageName = "BlogIt.AzureStorage.$version.nupkg"
 $openAiPackageName = "BlogIt.OpenAi.$version.nupkg"
 $analyticsPackageName = "BlogIt.GoogleAnalytics.$version.nupkg"
 $symbolPackageName = "BlogIt.$version.snupkg"
+$contractsSymbolPackageName = "BlogIt.Contracts.$version.snupkg"
 $azureSymbolPackageName = "BlogIt.AzureStorage.$version.snupkg"
 $openAiSymbolPackageName = "BlogIt.OpenAi.$version.snupkg"
 $analyticsSymbolPackageName = "BlogIt.GoogleAnalytics.$version.snupkg"
@@ -111,10 +115,16 @@ function Get-PackageInspection {
             $reader.Dispose()
         }
 
+        # Read the namespace off the document instead of hardcoding one. NuGet picks the nuspec
+        # schema version per package from the metadata it actually emits: packages with dependency
+        # or framework-reference content get .../2013/05/nuspec.xsd, while a leaf package with
+        # neither gets .../2012/06/nuspec.xsd. This was pinned to the 2013/05 URI, which meant every
+        # SelectNodes below silently returned nothing for a 2012/06 package - the license assertion
+        # failed outright, but the dependency and framework-reference assertions would have passed
+        # for the wrong reason, reporting an empty set for a package that declared plenty. Found when
+        # BlogIt.Contracts became its own dependency-free package and hit the 2012/06 path.
         $namespace = [Xml.XmlNamespaceManager]::new($nuspec.NameTable)
-        $namespace.AddNamespace(
-            "n",
-            "http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd")
+        $namespace.AddNamespace("n", $nuspec.DocumentElement.NamespaceURI)
         $dependencies = @(
             $nuspec.SelectNodes("//n:dependency", $namespace) |
                 ForEach-Object {
@@ -362,7 +372,7 @@ function Invoke-ConsumerScenario {
         Assert-Status $contractAssembly 200 "$Name contracts assembly"
         if ($contractAssembly.Content.ReadAsStringAsync().GetAwaiter().GetResult().Trim() -ne
             "BlogIt.Contracts") {
-            throw "$Name did not load BlogIt.Contracts from the BlogIt package."
+            throw "$Name did not load BlogIt.Contracts as a transitive dependency of the BlogIt package."
         }
 
         $packageSurface = $client.GetAsync(
@@ -405,9 +415,9 @@ function Invoke-ConsumerScenario {
 # A floating version is re-resolved on every restore, so the same BlogIt source can pack
 # against different dependency builds - which silently contradicts <Deterministic>true</Deterministic>
 # and, for a preview wildcard, drags every consuming application onto preview dependencies.
-# Every project whose output reaches a consumer must pin exact versions: BlogIt and
-# BlogIt.AzureStorage because their nuspecs become the consumer's dependency floor, and
-# BlogIt.Admin and BlogIt.Contracts because their published output is packed verbatim.
+# Every project whose output reaches a consumer must pin exact versions: BlogIt,
+# BlogIt.Contracts and BlogIt.AzureStorage because their nuspecs become the consumer's
+# dependency floor, and BlogIt.Admin because its published output is packed verbatim.
 # Test, sample and consumer-fixture projects are deliberately not covered - nothing they
 # restore reaches a consumer. Checked before packing so this fails in seconds, not minutes.
 foreach ($shippedProject in @(
@@ -435,7 +445,9 @@ foreach ($generatedPath in @(
     (Join-Path $testRoot "AzureConsumer\bin"),
     (Join-Path $testRoot "AzureConsumer\obj"),
     (Join-Path $testRoot "AiAnalyticsConsumer\bin"),
-    (Join-Path $testRoot "AiAnalyticsConsumer\obj")
+    (Join-Path $testRoot "AiAnalyticsConsumer\obj"),
+    (Join-Path $testRoot "ContractsConsumer\bin"),
+    (Join-Path $testRoot "ContractsConsumer\obj")
 )) {
     Remove-Item $generatedPath -Recurse -Force -ErrorAction SilentlyContinue
 }
@@ -468,6 +480,13 @@ if (-not $SkipPack) {
         -o $feed `
         --nologo `
         "-p:PackageVersion=$version"
+    # Packed in its own right, not carried inside BlogIt: a client that only speaks to the API over
+    # HTTP has to be able to take the DTOs without EF Core, SqlClient and BCrypt coming with them.
+    Invoke-DotNet pack $contractsPackageProject `
+        -c Release `
+        -o $feed `
+        --nologo `
+        "-p:PackageVersion=$version"
     Invoke-DotNet pack $azurePackageProject `
         -c Release `
         -o $feed `
@@ -491,7 +510,12 @@ $producedPackages = @(
 )
 Assert-SameSet `
     -Actual @($producedPackages.Name) `
-    -Expected @($packageName, $azurePackageName, $openAiPackageName, $analyticsPackageName) `
+    -Expected @(
+        $packageName,
+        $contractsPackageName,
+        $azurePackageName,
+        $openAiPackageName,
+        $analyticsPackageName) `
     -Description "Produced nupkgs"
 $producedSymbolPackages = @(
     Get-ChildItem $feed -File |
@@ -501,6 +525,7 @@ Assert-SameSet `
     -Actual @($producedSymbolPackages.Name) `
     -Expected @(
         $symbolPackageName,
+        $contractsSymbolPackageName,
         $azureSymbolPackageName,
         $openAiSymbolPackageName,
         $analyticsSymbolPackageName) `
@@ -515,6 +540,7 @@ foreach ($symbolPackage in $producedSymbolPackages) {
 }
 
 $package = Get-Item (Join-Path $feed $packageName)
+$contractsPackage = Get-Item (Join-Path $feed $contractsPackageName)
 $azurePackage = Get-Item (Join-Path $feed $azurePackageName)
 $openAiPackage = Get-Item (Join-Path $feed $openAiPackageName)
 $analyticsPackage = Get-Item (Join-Path $feed $analyticsPackageName)
@@ -531,9 +557,17 @@ foreach ($satellite in @($azurePackage, $openAiPackage, $analyticsPackage)) {
         throw "$($satellite.Name) size is $([math]::Round($satellite.Length / 1KB, 2)) KB; expected at most 1 MB."
     }
 }
+# Contracts is a few dozen records and four constant classes over no dependencies. A tighter ceiling
+# than the satellites get because the whole claim of this package is that it is cheap to take: if it
+# ever grows past this, something with real weight has been moved into it and a client is paying for
+# the engine again by another route.
+if ($contractsPackage.Length -gt 200KB) {
+    throw "$($contractsPackage.Name) size is $([math]::Round($contractsPackage.Length / 1KB, 2)) KB; expected at most 200 KB."
+}
 
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $mainInspection = Get-PackageInspection $package
+$contractsInspection = Get-PackageInspection $contractsPackage
 $azureInspection = Get-PackageInspection $azurePackage
 $openAiInspection = Get-PackageInspection $openAiPackage
 $analyticsInspection = Get-PackageInspection $analyticsPackage
@@ -542,6 +576,10 @@ foreach ($symbolExpectation in @(
     @{
         Package = Get-Item (Join-Path $feed $symbolPackageName)
         Pdb = "lib/net10.0/BlogIt.pdb"
+    },
+    @{
+        Package = Get-Item (Join-Path $feed $contractsSymbolPackageName)
+        Pdb = "lib/net10.0/BlogIt.Contracts.pdb"
     },
     @{
         Package = Get-Item (Join-Path $feed $azureSymbolPackageName)
@@ -578,7 +616,6 @@ if ($mainInspection.Id -ne "BlogIt" -or $mainInspection.Version -ne $version) {
 foreach ($requiredEntry in @(
     "README.md",
     "lib/net10.0/BlogIt.dll",
-    "lib/net10.0/BlogIt.Contracts.dll",
     "buildTransitive/BlogIt.targets",
     "${adminAssetPrefix}index.html",
     "${adminAssetPrefix}_framework/blazor.webassembly.js"
@@ -587,11 +624,17 @@ foreach ($requiredEntry in @(
         throw "BlogIt package is missing $requiredEntry."
     }
 }
+# BlogIt.Contracts.dll is deliberately absent from this set. It used to be injected here by an
+# IncludeBlogItContractsInPackage target while its own project was IsPackable=false, which meant the
+# assembly shipped with no independent version and no way to take it on its own: writing a separate
+# client meant referencing all of BlogIt and restoring EF Core, SqlClient and BCrypt for a handful of
+# records. It is now its own package and an ordinary nuspec dependency, asserted below. Smuggling it
+# back in would give a consumer two copies of the same assembly from two sources, so this set is
+# exact rather than a contains-check.
 Assert-SameSet `
     -Actual @($mainInspection.EntryNames | Where-Object { $_ -Like "lib/*" }) `
     -Expected @(
         "lib/net10.0/BlogIt.dll",
-        "lib/net10.0/BlogIt.Contracts.dll",
         "lib/net10.0/BlogIt.runtimeconfig.json"
     ) `
     -Description "BlogIt library assets"
@@ -665,6 +708,11 @@ foreach ($dependency in $forbidden) {
 # stable build today cannot pass while still being floating tomorrow.
 $mainDependencies = [ordered]@{
     "BCrypt.Net-Next" = "4.2.0"
+    # Exact, and equal to this package's own version: the DTOs are the wire format both halves
+    # compile against, so an engine paired with a different contracts build is a silent
+    # serialisation mismatch. Falls out of the ProjectReference rather than being hand-written, but
+    # asserted here so a stray PrivateAssets="all" cannot quietly turn it back into a smuggled DLL.
+    "BlogIt.Contracts" = $version
     "Markdig" = "1.3.2"
     "Microsoft.AspNetCore.Authentication.JwtBearer" = "10.0.11"
     "Microsoft.EntityFrameworkCore" = "10.0.11"
@@ -758,8 +806,43 @@ foreach ($satellite in $satelliteExpectations) {
         -Description "$($satellite.Id) framework references"
 }
 
+# Contracts is held to a shape of its own rather than added to the satellite table above: a
+# satellite depends on the engine, and this deliberately does the opposite - the engine depends on
+# it. The assertions that matter are the empty dependency set and the empty framework reference set,
+# because those two together are the whole finding. A client that has to restore EF Core, SqlClient,
+# BCrypt or take a Microsoft.AspNetCore.App framework reference to deserialise a BlogPostDetailDto is
+# back where it started, and either of those creeping in would otherwise be invisible until someone
+# tried to consume the package from a console app or a MAUI target.
+if ($contractsInspection.Id -ne "BlogIt.Contracts" -or $contractsInspection.Version -ne $version) {
+    throw "Contracts package identity is '$($contractsInspection.Id) $($contractsInspection.Version)', expected 'BlogIt.Contracts $version'."
+}
+if ($contractsInspection.EntryNames -notcontains "README.md") {
+    throw "BlogIt.Contracts package is missing README.md."
+}
+Assert-SameSet `
+    -Actual @($contractsInspection.EntryNames | Where-Object { $_ -Like "lib/*" }) `
+    -Expected @("lib/net10.0/BlogIt.Contracts.dll") `
+    -Description "BlogIt.Contracts library assets"
+# Asserted with Assert-SameSet rather than Assert-PackageDependencies because the expectation is the
+# empty set, and that helper takes a dictionary of id-to-version whose Keys collection does not
+# survive being empty. The empty set is the whole point, so it gets its own line.
+Assert-SameSet `
+    -Actual @($contractsInspection.Dependencies | ForEach-Object Id) `
+    -Expected @() `
+    -Description "BlogIt.Contracts dependencies"
+Assert-SameSet `
+    -Actual @($contractsInspection.FrameworkReferences) `
+    -Expected @() `
+    -Description "BlogIt.Contracts framework references"
+if (@($contractsInspection.EntryNames | Where-Object {
+    $_ -Like "staticwebassets/*" -or $_ -Like "buildTransitive/*"
+}).Count -ne 0) {
+    throw "BlogIt.Contracts duplicates BlogIt admin or build-transitive assets."
+}
+
 foreach ($licensedPackage in @(
     $mainInspection,
+    $contractsInspection,
     $azureInspection,
     $openAiInspection,
     $analyticsInspection
@@ -767,11 +850,12 @@ foreach ($licensedPackage in @(
     Assert-PackageLicense -Inspection $licensedPackage -Expected "MIT"
 }
 
-# BlogIt.Contracts.dll is stamped too: it is not packable on its own but ships inside the BlogIt
-# package, so a stack trace crossing it has to identify the build like any other shipped assembly.
+# BlogIt.Contracts.dll is stamped from its own package now that it has one. It carried the stamp
+# while it was smuggled inside BlogIt for the same reason - a stack trace crossing it has to identify
+# the build - and the requirement only gets stronger now that a client can restore it independently.
 foreach ($stampedAssembly in @(
     @{ Package = $package; Entry = "lib/net10.0/BlogIt.dll" },
-    @{ Package = $package; Entry = "lib/net10.0/BlogIt.Contracts.dll" },
+    @{ Package = $contractsPackage; Entry = "lib/net10.0/BlogIt.Contracts.dll" },
     @{ Package = $azurePackage; Entry = "lib/net10.0/BlogIt.AzureStorage.dll" },
     @{ Package = $openAiPackage; Entry = "lib/net10.0/BlogIt.OpenAi.dll" },
     @{ Package = $analyticsPackage; Entry = "lib/net10.0/BlogIt.GoogleAnalytics.dll" }
@@ -785,10 +869,12 @@ foreach ($stampedAssembly in @(
 $consumerProjectText = Get-Content $consumer -Raw
 $azureConsumerProjectText = Get-Content $azureConsumer -Raw
 $aiAnalyticsConsumerProjectText = Get-Content $aiAnalyticsConsumer -Raw
+$contractsConsumerProjectText = Get-Content $contractsConsumer -Raw
 foreach ($projectText in @(
     $consumerProjectText,
     $azureConsumerProjectText,
-    $aiAnalyticsConsumerProjectText
+    $aiAnalyticsConsumerProjectText,
+    $contractsConsumerProjectText
 )) {
     if ($projectText -match "<ProjectReference") {
         throw "Clean package consumers must not contain source ProjectReferences."
@@ -807,12 +893,32 @@ if (($aiAnalyticsConsumerProjectText -notmatch 'PackageReference Include="BlogIt
     ($aiAnalyticsConsumerProjectText -match 'PackageReference Include="BlogIt"')) {
     throw "The AI/analytics consumer must reference only the two satellites and receive BlogIt transitively."
 }
+# The fixture that proves the finding is fixed. Its one PackageReference must be BlogIt.Contracts and
+# it must not name BlogIt or any satellite, because "a third-party client can reference contracts
+# alone" is exactly the claim, and a fixture that quietly acquired a BlogIt reference would still
+# compile while proving nothing.
+if (($contractsConsumerProjectText -notmatch 'PackageReference Include="BlogIt\.Contracts"') -or
+    ($contractsConsumerProjectText -match 'PackageReference Include="BlogIt"') -or
+    ($contractsConsumerProjectText -match 'PackageReference Include="BlogIt\.(Admin|AzureStorage|OpenAi|GoogleAnalytics)"')) {
+    throw "The contracts consumer must reference only the BlogIt.Contracts package."
+}
+# Not the web SDK either: a console or MAUI client is the case the contracts package exists for, and
+# Microsoft.NET.Sdk.Web would silently supply the ASP.NET Core framework reference that the empty
+# framework-reference assertion above is trying to prove the package does not need.
+if ($contractsConsumerProjectText -notmatch 'Sdk="Microsoft\.NET\.Sdk"') {
+    throw "The contracts consumer must build on the plain Microsoft.NET.Sdk, not the web SDK."
+}
 
 $restoreProperties = @(
     "-p:BlogItPackageVersion=$version",
     "-p:RestorePackagesPath=$packagesPath"
 )
-foreach ($consumerProject in @($consumer, $azureConsumer, $aiAnalyticsConsumer)) {
+foreach ($consumerProject in @(
+    $consumer,
+    $azureConsumer,
+    $aiAnalyticsConsumer,
+    $contractsConsumer
+)) {
     Invoke-DotNet restore $consumerProject `
         "-p:RestoreAdditionalProjectSources=$feed" `
         @restoreProperties `
@@ -823,6 +929,11 @@ foreach ($consumerProject in @($consumer, $azureConsumer, $aiAnalyticsConsumer))
 Invoke-DotNet build $consumer -c Release --no-restore --nologo @restoreProperties
 Invoke-DotNet build $azureConsumer -c Release --no-restore --nologo @restoreProperties
 Invoke-DotNet build $aiAnalyticsConsumer -c Release --no-restore --nologo @restoreProperties
+# Compiling is the assertion here: ClientUsage.cs names a DTO, a request record, the concurrency
+# stamp, BlogUrlHelper, SettingKeys, the bootstrap config, the length constants and the
+# DataAnnotations validator, all resolved from the contracts package alone. The fixture sets
+# TreatWarningsAsErrors so a type going missing or changing shape fails here.
+Invoke-DotNet build $contractsConsumer -c Release --no-restore --nologo @restoreProperties
 Invoke-DotNet publish $consumer `
     -c Release `
     --no-restore `
@@ -833,9 +944,13 @@ Invoke-DotNet publish $consumer `
 $consumerAssets = Get-Content (Join-Path $testRoot "Consumer\obj\project.assets.json") -Raw |
     ConvertFrom-Json
 $consumerLibraries = @($consumerAssets.libraries.PSObject.Properties.Name)
+# BlogIt.Contracts arrives here transitively, which is the other half of the packaging split: a host
+# that installs the engine alone must still get the DTOs without naming them, exactly as it did when
+# the assembly was smuggled into BlogIt's lib folder. Matched on BlogIt*/* rather than BlogIt/* so an
+# extra BlogIt.* package sneaking into this graph is a failure rather than an invisible pass.
 Assert-SameSet `
-    -Actual @($consumerLibraries | Where-Object { $_ -Like "BlogIt/*" }) `
-    -Expected @("BlogIt/$version") `
+    -Actual @($consumerLibraries | Where-Object { $_ -Like "BlogIt*/*" }) `
+    -Expected @("BlogIt/$version", "BlogIt.Contracts/$version") `
     -Description "Filesystem consumer BlogIt packages"
 
 # The whole point of the satellite split, measured on the real restore graph rather than inferred
@@ -875,6 +990,7 @@ Assert-SameSet `
     -Actual @($aiAnalyticsConsumerLibraries | Where-Object { $_ -Like "BlogIt*/*" }) `
     -Expected @(
         "BlogIt/$version",
+        "BlogIt.Contracts/$version",
         "BlogIt.OpenAi/$version",
         "BlogIt.GoogleAnalytics/$version") `
     -Description "AI/analytics consumer BlogIt packages"
@@ -895,14 +1011,57 @@ foreach ($assembly in @(
     }
 }
 
+# Finding #21, measured on the real restore graph rather than inferred from the nuspec: a client that
+# wants the DTOs gets the DTOs. Before the split BlogIt.Contracts.dll had IsPackable=false and was
+# injected into BlogIt's own lib folder, so this fixture could not have existed - the only way to
+# reach BlogPostDetailDto was a PackageReference to BlogIt, which drags in EF Core, SqlClient and
+# BCrypt. The exact-set assertion below is what proves that is over; the per-assembly output check
+# further down names the worst offenders so a regression reports which one came back.
+$contractsConsumerAssets = Get-Content (
+    Join-Path $testRoot "ContractsConsumer\obj\project.assets.json") -Raw |
+    ConvertFrom-Json
+$contractsConsumerLibraries = @($contractsConsumerAssets.libraries.PSObject.Properties.Name)
+Assert-SameSet `
+    -Actual @($contractsConsumerLibraries | Where-Object { $_ -Like "BlogIt*/*" }) `
+    -Expected @("BlogIt.Contracts/$version") `
+    -Description "Contracts consumer BlogIt packages"
+# The stronger form of the same claim: the contracts package has no dependencies at all, so this
+# restore graph should be exactly one library. Stated as an exact set rather than a "does not
+# contain EF Core" check, because the failure this guards against is any dependency being added to
+# contracts, not specifically a database one.
+Assert-SameSet `
+    -Actual $contractsConsumerLibraries `
+    -Expected @("BlogIt.Contracts/$version") `
+    -Description "Contracts consumer complete restore graph"
+$contractsConsumerOutput = Join-Path $testRoot "ContractsConsumer\bin\Release\net10.0"
+if (-not (Test-Path (Join-Path $contractsConsumerOutput "BlogIt.Contracts.dll") -PathType Leaf)) {
+    throw "Contracts package consumer output is missing BlogIt.Contracts.dll."
+}
+# The engine must not follow the DTOs into a client's output directory. This is what "smuggled" cost
+# a client in practice: 11 MB of engine and admin assets on disk to deserialise a few records.
+foreach ($unwantedAssembly in @(
+    "BlogIt.dll",
+    "Microsoft.EntityFrameworkCore.dll",
+    "Microsoft.Data.SqlClient.dll",
+    "BCrypt.Net-Next.dll"
+)) {
+    if (Test-Path (Join-Path $contractsConsumerOutput $unwantedAssembly) -PathType Leaf) {
+        throw "Contracts package consumer output contains $unwantedAssembly; the contracts package must not drag the engine into a client."
+    }
+}
+if (Test-Path (Join-Path $contractsConsumerOutput "BlogItAdminAssets")) {
+    throw "Contracts package consumer output contains the admin asset tree."
+}
+
 $azureConsumerAssets = Get-Content (Join-Path $testRoot "AzureConsumer\obj\project.assets.json") -Raw |
     ConvertFrom-Json
 $azureConsumerLibraries = @($azureConsumerAssets.libraries.PSObject.Properties.Name)
 Assert-SameSet `
-    -Actual @($azureConsumerLibraries | Where-Object {
-        $_ -Like "BlogIt/*" -or $_ -Like "BlogIt.AzureStorage/*"
-    }) `
-    -Expected @("BlogIt/$version", "BlogIt.AzureStorage/$version") `
+    -Actual @($azureConsumerLibraries | Where-Object { $_ -Like "BlogIt*/*" }) `
+    -Expected @(
+        "BlogIt/$version",
+        "BlogIt.Contracts/$version",
+        "BlogIt.AzureStorage/$version") `
     -Description "Azure consumer BlogIt packages"
 
 $azureConsumerOutput = Join-Path $testRoot "AzureConsumer\bin\Release\net10.0"
@@ -963,6 +1122,9 @@ foreach ($satellite in $satelliteExpectations) {
     $satelliteSizeKb = [math]::Round($satellite.Package.Length / 1KB, 2)
     Write-Host "PASS $($satellite.Package.Name): $satelliteSizeKb KB, one library asset, exact BlogIt $version dependency, MIT"
 }
+$contractsSizeKb = [math]::Round($contractsPackage.Length / 1KB, 2)
+Write-Host "PASS ${contractsPackageName}: $contractsSizeKb KB, one library asset, 0 dependencies, 0 framework references, MIT"
+Write-Host "PASS contracts-only client: plain Microsoft.NET.Sdk fixture compiled against BlogIt.Contracts alone, restore graph of exactly 1 library"
 Write-Host "PASS release stamping: AssemblyVersion/FileVersion/InformationalVersion track $version in 5 shipped assemblies"
 Write-Host "PASS package dependency boundaries and forbidden browser dependencies: 0"
 Write-Host "PASS BlogIt-only consumer restored 0 AI/analytics SDK libraries; satellite consumer restored both"
