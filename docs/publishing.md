@@ -13,6 +13,8 @@ checksum-verifies those exact artifacts. A release contains:
 - `BlogIt.OpenAi.<version>.snupkg`
 - `BlogIt.GoogleAnalytics.<version>.nupkg`
 - `BlogIt.GoogleAnalytics.<version>.snupkg`
+- `BlogIt.Contracts.<version>.nupkg`
+- `BlogIt.Contracts.<version>.snupkg`
 
 ## Version stamping
 
@@ -27,6 +29,88 @@ stamps of all five shipped assemblies against the packed version.
 `AssemblyVersion` and `FileVersion` carry the four-part numeric core, so
 `1.2.3-rc.1` stamps `1.2.3.0`. `InformationalVersion` keeps the full version and
 has the commit SHA appended by SourceLink.
+
+## BlogIt.Contracts is its own package
+
+`BlogIt.Contracts` packs and publishes independently, and `BlogIt` takes an
+exact-version dependency on it. It was previously `IsPackable=false`, with an
+`IncludeBlogItContractsInPackage` target injecting `BlogIt.Contracts.dll` into
+`BlogIt`'s own `lib` folder — so the assembly reached customers with no
+independent version and no way to take it alone. Anyone writing a separate
+client had to reference all of `BlogIt` and restore EF Core, SQL Server and
+BCrypt for a handful of records.
+
+It has **zero dependencies** and **no framework reference**, which is what makes
+it cheap to take from a console app, a MAUI app or another service.
+`verify.ps1` asserts both, plus that `BlogIt`'s `lib` folder no longer contains
+the assembly (two copies from two sources is worse than one smuggled copy), and
+builds a `ContractsConsumer` fixture on the plain `Microsoft.NET.Sdk` whose
+entire restore graph is that one library.
+
+Release it from the same tag as the engine, at the same version. The engine
+depends on it exactly because the DTOs are the wire format both halves
+serialise against, so a mismatched pair is a silent serialisation bug rather
+than a load failure.
+
+### Namespace and assembly name do not match, deliberately
+
+The package and assembly are `BlogIt.Contracts`; the namespaces are
+`BlogIt.Shared.*`, and `BlogIt.Shared.Helpers` spans this assembly (via
+`BlogUrlHelper`) and the engine (the other twelve helpers). This is a known
+wart, left alone on purpose:
+
+- Renaming the namespaces would touch nearly every file in the engine, the
+  Blazor admin, the MAUI admin, the sample and the tests, for a cosmetic gain
+  and a large rebase hazard against any in-flight work.
+- Renaming the *assembly* to `BlogIt.Shared` would leave the package id as the
+  odd one out, or force a third name into circulation.
+- A namespace spanning two assemblies is legal and common, and there is no type
+  collision between the two halves — the cost here is confusion, not breakage.
+
+Reconsider at the 1.0 cut, where a namespace change is a single documented
+breaking change rather than churn. Until then the mismatch is documented in the
+package README so a client author is not surprised by it.
+
+## Contract compatibility policy
+
+The contract records grow by appending parameters with defaults —
+`ScheduledPublishAt`, `ScheduleState`, `HasBeenPublished` and `ConcurrencyStamp`
+all arrived that way on `BlogPostSummaryDto`, `BlogPostDetailDto`, `PageDto`
+and the update requests. That is **source-compatible and binary-breaking**: a
+client compiled against the old record calls a constructor arity that no longer
+exists, and the failure is a runtime `MissingMethodException`, not a build
+error. Recompiling fixes it; that is the whole remedy.
+
+Nothing has been published yet, so there is no compatibility to preserve today.
+The policy exists so this stops being a hazard once something is:
+
+- **Before 1.0.** Appending defaulted parameters is allowed. `BlogIt.Contracts`
+  and `BlogIt` ship from the same tag at the same version, and the engine's
+  dependency is exact, so the pair is always recompiled together. Note the
+  appended parameter in the release notes; a client author reading them is the
+  only mitigation available.
+- **From 1.0 on.** Appending a parameter to a published record is a **minor**
+  version bump for `BlogIt.Contracts`, not a patch, and the release notes must
+  say so. Patches must be binary-compatible. Removing or reordering a
+  parameter, or changing its type, is a **major** bump.
+- **Prefer an init-only property** to a new positional parameter for anything
+  optional. `public Guid ConcurrencyStamp { get; init; }` on the record body
+  adds no constructor overload, so it is binary-compatible in both directions
+  and object initialisers keep working. The positional list should hold only
+  what a caller must always supply.
+- **Never reuse a position.** If a parameter is dropped, later parameters keep
+  their positions; a positional call that silently binds to a different meaning
+  is worse than a `MissingMethodException`.
+- **Call these records with named arguments.** The `ContractsConsumer` fixture
+  does, which is why it keeps compiling as parameters are appended. Positional
+  construction of a long record is what turns an append into a caller-side
+  surprise.
+
+No tooling enforces this. A real binary-compatibility gate needs a published
+baseline package to diff against, and there is none yet; adding one before the
+first release would assert against a moving target. Revisit when 1.0 ships —
+at that point a package-validation baseline (`PackageValidationBaselineVersion`)
+becomes the right mechanism and can be wired into `verify.ps1`.
 
 ## BlogIt.GoogleAnalytics releases as a prerelease
 

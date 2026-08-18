@@ -100,6 +100,16 @@ jobs:
             "-p:PackageVersion=$env:PACKAGE_VERSION"
           if ($LASTEXITCODE -ne 0) { throw "Packing BlogIt failed." }
 
+          # Packed in its own right, not carried inside BlogIt. verify.ps1 below asserts that
+          # BlogIt's lib folder does not contain BlogIt.Contracts.dll, so skipping this step would
+          # produce an engine package whose contracts dependency cannot be resolved from the feed.
+          dotnet pack src/BlogIt.Contracts/BlogIt.Contracts.csproj `
+            --configuration Release `
+            --no-restore `
+            --output $env:PACKAGE_FEED `
+            "-p:PackageVersion=$env:PACKAGE_VERSION"
+          if ($LASTEXITCODE -ne 0) { throw "Packing BlogIt.Contracts failed." }
+
           dotnet pack src/BlogIt.AzureStorage/BlogIt.AzureStorage.csproj `
             --configuration Release `
             --no-restore `
@@ -159,14 +169,14 @@ jobs:
               Where-Object Extension -In @(".nupkg", ".snupkg") |
               Sort-Object Name
           )
-          # BlogIt plus its three satellites: AzureStorage, OpenAi, GoogleAnalytics.
+          # BlogIt, its three satellites (AzureStorage, OpenAi, GoogleAnalytics) and Contracts.
           # verify.ps1 asserts their exact names; this only guards against a pack step
           # being added or silently skipped without the release list being updated.
-          if (@($packages | Where-Object Extension -EQ ".nupkg").Count -ne 4) {
-            throw "Expected exactly four validated nupkgs."
+          if (@($packages | Where-Object Extension -EQ ".nupkg").Count -ne 5) {
+            throw "Expected exactly five validated nupkgs."
           }
-          if (@($packages | Where-Object Extension -EQ ".snupkg").Count -ne 4) {
-            throw "Expected exactly four validated snupkgs."
+          if (@($packages | Where-Object Extension -EQ ".snupkg").Count -ne 5) {
+            throw "Expected exactly five validated snupkgs."
           }
           $checksums = @(
             $packages | ForEach-Object {

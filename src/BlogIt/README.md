@@ -116,6 +116,13 @@ leaving `IAiService` and `IAnalyticsService` unresolvable. Registering your own
 `IAiService` or `IAnalyticsService` before `AddBlogIt` wins over both a satellite
 package and those fallbacks.
 
-This package contains the server, browser-safe contracts, private admin assets,
-and build-transitive asset wiring. There are no separate `BlogIt.Contracts` or
-`BlogIt.Admin` packages.
+This package contains the server, private admin assets, and build-transitive
+asset wiring. There is no separate `BlogIt.Admin` package — those assets are
+private to this one.
+
+The browser-safe contracts are a separate package, `BlogIt.Contracts`, which
+this one depends on at the exact matching version. Installing `BlogIt` gets you
+the DTOs transitively, so hosts need not reference it. Reference it **directly
+and alone** only when writing a client — a console tool, a MAUI app, another
+service — which then gets the request and response records, the setting keys and
+the length limits without EF Core, SQL Server or BCrypt coming with them.

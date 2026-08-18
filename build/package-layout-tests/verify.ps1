@@ -415,9 +415,9 @@ function Invoke-ConsumerScenario {
 # A floating version is re-resolved on every restore, so the same BlogIt source can pack
 # against different dependency builds - which silently contradicts <Deterministic>true</Deterministic>
 # and, for a preview wildcard, drags every consuming application onto preview dependencies.
-# Every project whose output reaches a consumer must pin exact versions: BlogIt and
-# BlogIt.AzureStorage because their nuspecs become the consumer's dependency floor, and
-# BlogIt.Admin and BlogIt.Contracts because their published output is packed verbatim.
+# Every project whose output reaches a consumer must pin exact versions: BlogIt,
+# BlogIt.Contracts and BlogIt.AzureStorage because their nuspecs become the consumer's
+# dependency floor, and BlogIt.Admin because its published output is packed verbatim.
 # Test, sample and consumer-fixture projects are deliberately not covered - nothing they
 # restore reaches a consumer. Checked before packing so this fails in seconds, not minutes.
 foreach ($shippedProject in @(
