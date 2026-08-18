@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <BlogItPackageVersion Condition="'$(BlogItPackageVersion)' == ''">0.0.1-local</BlogItPackageVersion>
+    <!--
+      Warnings as errors so an unused-using or nullability warning in ClientUsage.cs fails the
+      harness: this fixture's whole job is to prove the contracts surface compiles cleanly on its
+      own, and a warning here is the first sign a type it needs has gone missing or changed shape.
+    -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!--
+      A class library does not copy its package dependencies to bin/ by default, so without this the
+      output directory holds only ContractsConsumer.dll and verify.ps1's "the engine must not follow
+      the DTOs into a client's output" check would be asserting over an empty set - passing whatever
+      the package contained. Turning it on makes bin/ the real deployed closure of a client that
+      references contracts alone, which is the thing worth inspecting.
+    -->
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      Deliberately a plain class library, not Microsoft.NET.Sdk.Web: a third-party client is a
+      console app, a MAUI app or another service, not necessarily an ASP.NET Core host. Building
+      without the web SDK proves the contracts package carries no hidden framework requirement.
+
+      BlogIt.Contracts and nothing else. This single reference is the finding: before the split a
+      client author who wanted these DTOs had to reference the whole BlogIt package and restore
+      EF Core, SqlClient and BCrypt to get them. verify.ps1 asserts on the restore graph that none
+      of that arrives here.
+    -->
+    <PackageReference Include="BlogIt.Contracts" Version="$(BlogItPackageVersion)" />
+  </ItemGroup>
+
+</Project>

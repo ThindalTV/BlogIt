@@ -24,16 +24,17 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\BlogIt\BlogIt.csproj" />
     <!--
-      Source builds need the contracts assembly as a compile reference for the DTOs and entities
-      IAiService trades in; BlogIt marks its own contracts reference PrivateAssets="all", so it does
-      not flow here. PrivateAssets="all" again so this does not become a nuspec dependency on an
-      unpublished package: the BlogIt package ships BlogIt.Contracts.dll beside BlogIt.dll in its
-      own lib folder, which is where a consumer of this package resolves it from.
+      No contracts reference of its own any more. This used to carry an explicit
+      PrivateAssets="all" ProjectReference to BlogIt.Contracts, because BlogIt marked its own
+      contracts reference private and so the DTOs and entities IAiService trades in did not flow
+      here. Now that BlogIt.Contracts is a package in its own right and BlogIt depends on it
+      publicly, it arrives transitively through this one reference - in source builds as a compile
+      reference and in package builds as a transitive nuspec dependency. Re-adding it would make
+      this satellite pin the contracts version independently of the engine, which is exactly the
+      mismatched pair the exact BlogIt dependency exists to prevent.
     -->
-    <ProjectReference Include="..\BlogIt.Contracts\BlogIt.Contracts.csproj"
-                      PrivateAssets="all" />
+    <ProjectReference Include="..\BlogIt\BlogIt.csproj" />
   </ItemGroup>
 
   <ItemGroup>

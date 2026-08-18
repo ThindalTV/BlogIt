@@ -33,15 +33,23 @@
     <AdminBuildRoot>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\$(BaseIntermediateOutputPath)admin-build\'))</AdminBuildRoot>
     <AdminPublishDir>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\$(BaseIntermediateOutputPath)admin-publish\$(Configuration)\'))\</AdminPublishDir>
     <AdminAssetsDir>$(AdminPublishDir)wwwroot\blogit\</AdminAssetsDir>
-    <TargetsForTfmSpecificBuildOutput>$(TargetsForTfmSpecificBuildOutput);IncludeBlogItContractsInPackage</TargetsForTfmSpecificBuildOutput>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\BlogIt.Admin\BlogIt.Admin.csproj"
                       ReferenceOutputAssembly="false"
                       PrivateAssets="all" />
-    <ProjectReference Include="..\BlogIt.Contracts\BlogIt.Contracts.csproj"
-                      PrivateAssets="all" />
+    <!--
+      No PrivateAssets here, deliberately: this has to become a real nuspec dependency on
+      BlogIt.Contracts rather than a private reference whose DLL gets injected into this package's own
+      lib folder. It was the latter, which left the contracts assembly with no independent version and
+      no way for a client to take it alone. Packing it separately also means the reference flows
+      transitively, so the satellites no longer need a contracts reference of their own.
+      The exact version pairing (nuspec dependency equal to this package's version) is what NuGet
+      writes for a ProjectReference and what verify.ps1 asserts literally - the DTOs are the wire
+      format both halves serialise against, so a mismatched pair is a silent serialisation bug.
+    -->
+    <ProjectReference Include="..\BlogIt.Contracts\BlogIt.Contracts.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -146,13 +154,6 @@
       <None Include="@(_BlogItAdminPackageAsset)"
             Pack="true"
             PackagePath="staticwebassets\BlogItAdminAssets\%(_BlogItAdminPackageAsset.RecursiveDir)%(_BlogItAdminPackageAsset.Filename)%(_BlogItAdminPackageAsset.Extension)" />
-    </ItemGroup>
-  </Target>
-
-  <Target Name="IncludeBlogItContractsInPackage"
-          DependsOnTargets="BuildOnlySettings;ResolveReferences">
-    <ItemGroup>
-      <BuildOutputInPackage Include="$(TargetDir)BlogIt.Contracts.dll" />
     </ItemGroup>
   </Target>
 

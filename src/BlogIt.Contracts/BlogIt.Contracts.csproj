@@ -6,15 +6,48 @@
     <Nullable>enable</Nullable>
     <AssemblyName>BlogIt.Contracts</AssemblyName>
     <PackageId>BlogIt.Contracts</PackageId>
-    <IsPackable>false</IsPackable>
-    <Description>Browser-safe contracts shared by BlogIt clients and the server.</Description>
+    <!--
+      Packable in its own right. It was IsPackable=false, with BlogIt.dll's package carrying
+      BlogIt.Contracts.dll beside it via an IncludeBlogItContractsInPackage target, which meant the
+      assembly reached customers with no independent version and no way to take it alone: writing a
+      separate client - a console tool, a MAUI app, another service - meant a PackageReference to
+      BlogIt and restoring EF Core, SqlClient and BCrypt for a handful of records.
+      The alternative of keeping it unpackable and telling client authors to copy the DTOs was
+      rejected: a copied DTO is a second wire format that drifts the moment a parameter is appended,
+      and the appending is exactly what this project does. Two packages with one version is the
+      cheaper contract to keep honest.
+      build/package-layout-tests/verify.ps1 asserts the resulting shape: one library asset, zero
+      dependencies, zero framework references, and a fixture on the plain Microsoft.NET.Sdk that
+      compiles against this package and nothing else.
+    -->
+    <IsPackable>true</IsPackable>
+    <Authors>ThindalTV</Authors>
+    <Description>Browser-safe contracts shared by BlogIt clients and the server: the admin API's request and response records, well-known setting keys, the length limits the server enforces, and the public URL helper. No dependencies - reference this instead of the BlogIt engine when writing a client.</Description>
+    <PackageTags>aspnetcore;blog;cms;dto;contracts;api-client</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <!-- Matches LICENSE.txt in the repository root; see src/BlogIt/BlogIt.csproj for why. -->
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+    <RepositoryType>git</RepositoryType>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+    <DebugType>portable</DebugType>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
   </PropertyGroup>
 
+  <ItemGroup>
+    <None Include="README.md"
+          Pack="true"
+          PackagePath="\" />
+  </ItemGroup>
+
   <!--
-    Not packable on its own, but BlogIt.dll's package carries BlogIt.Contracts.dll beside it (see
-    IncludeBlogItContractsInPackage in src/BlogIt/BlogIt.csproj), so it reaches customers and has to
-    carry the release stamp for the same reason: a stack trace crossing this assembly must identify
-    the build. Imported last so a Version or VersionPrefix set above is visible to it.
+    Carries the release stamp for the same reason every shipped assembly does: a stack trace crossing
+    this assembly must identify the build. Imported last so a Version or VersionPrefix set above is
+    visible to it.
   -->
   <Import Project="..\..\build\BlogIt.Versioning.props" />
 
