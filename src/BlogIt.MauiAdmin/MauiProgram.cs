@@ -1,6 +1,6 @@
-using BlogIt.MauiAdmin.Core.Navigation;
 using BlogIt.MauiAdmin.Core.Sites;
 using BlogIt.MauiAdmin.Services;
+using BlogIt.MauiAdmin.Views.Navigation;
 using BlogIt.MauiAdmin.ViewModels.Account;
 using BlogIt.MauiAdmin.ViewModels.Ai;
 using BlogIt.MauiAdmin.ViewModels.Dashboard;
@@ -36,9 +36,11 @@ public static class MauiProgram
         // {DataTemplate} and route factory both construct pages via
         // Activator.CreateInstance) — only ViewModels are registered here, and each
         // page's parameterless constructor pulls its ViewModel via ServiceHelper.
-        // Resolves a destination to a route that exists in the Shell actually loaded — see
-        // DestinationRouter for why a literal "//route" is not safe across layouts.
-        builder.Services.AddSingleton(new DestinationRouter(AppLayout.ShellLayout));
+        // The current navigation layout, and the one Shell that reacts to it. The Shell is
+        // transient rather than a singleton so a second window gets its own; AppLayout is shared,
+        // because window width is the same question for all of them.
+        builder.Services.AddSingleton<AppLayout>();
+        builder.Services.AddTransient<AppShell>();
         builder.Services.AddSingleton<ISecureStore, MauiSecureStore>();
         builder.Services.AddSingleton<SiteProfileStore>();
         builder.Services.AddSingleton<SiteProfileService>();
@@ -47,6 +49,7 @@ public static class MauiProgram
         builder.Services.AddHttpClient("BlogIt").AddHttpMessageHandler<ActiveSiteHttpMessageHandler>();
         builder.Services.AddSingleton<MauiApiClient>();
         builder.Services.AddSingleton<SiteProbeService>();
+        builder.Services.AddSingleton<SiteActivator>();
         builder.Services.AddSingleton<IMediaCaptureService, MediaCaptureService>();
 
         // ── Sites (Phase 1) ─────────────────────────────────────────────

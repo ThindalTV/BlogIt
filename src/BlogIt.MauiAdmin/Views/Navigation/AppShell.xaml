@@ -11,11 +11,28 @@
        xmlns:settings="clr-namespace:BlogIt.MauiAdmin.Views.Settings"
        xmlns:account="clr-namespace:BlogIt.MauiAdmin.Views.Account"
        xmlns:sites="clr-namespace:BlogIt.MauiAdmin.Views.Sites"
-       x:Class="BlogIt.MauiAdmin.Views.Navigation.CompactShell"
-       FlyoutBehavior="Flyout"
+       x:Class="BlogIt.MauiAdmin.Views.Navigation.AppShell"
        Title="BlogIt Admin">
-    <!-- Tablet / MacCatalyst: full flat item list in a hamburger-triggered slide-out,
-         same grouping as the reference Blazor admin's sidebar. -->
+    <!--
+        The one Shell, at every window size on every platform.
+
+        There used to be three — a phone TabBar, a tablet flyout and a locked desktop rail — chosen
+        once at startup from DeviceInfo. That could not answer a fold: swapping Window.Page to a
+        different Shell mid-session tears down the navigation stack and every live page, so an
+        unfolding device would have lost a half-written post. Here the page tree never changes;
+        only FlyoutBehavior does, from AppShell.xaml.cs on the window's own SizeChanged. State
+        survives because nothing is rebuilt.
+
+        Every destination is a top-level FlyoutItem, which is what makes //route resolve
+        identically at every size. See AppDestination.ShellRoute for why a second, layout-specific
+        route is a mistake this app has already made once.
+    -->
+    <Shell.FlyoutHeader>
+        <ContentView Padding="16,20,16,12">
+            <sites:SiteSwitcherView />
+        </ContentView>
+    </Shell.FlyoutHeader>
+
     <FlyoutItem Title="Dashboard" Route="dashboard">
         <ShellContent ContentTemplate="{DataTemplate dashboard:DashboardPage}" />
     </FlyoutItem>
@@ -28,13 +45,16 @@
     <FlyoutItem Title="Media" Route="media">
         <ShellContent ContentTemplate="{DataTemplate media:MediaListPage}" />
     </FlyoutItem>
+
     <FlyoutItem Title="AI" Route="ai">
         <ShellContent ContentTemplate="{DataTemplate ai:ConversationListPage}" />
     </FlyoutItem>
     <FlyoutItem Title="Redirects" Route="redirects">
         <ShellContent ContentTemplate="{DataTemplate redirects:RedirectListPage}" />
     </FlyoutItem>
+
     <MenuItem Text="―" IsEnabled="False" />
+
     <FlyoutItem Title="Users" Route="users">
         <ShellContent ContentTemplate="{DataTemplate users:UserListPage}" />
     </FlyoutItem>

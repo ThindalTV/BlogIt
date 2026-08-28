@@ -5,16 +5,23 @@ using FluentAssertions;
 namespace BlogIt.Tests.Unit;
 
 /// <summary>
-/// Guards the phone client's navigation, which was entirely broken: MorePage navigated to
-/// <c>//ai</c>, <c>//settings</c>, <c>//sites</c> and the rest, but absolute Shell routes only
-/// resolve within the current Shell's own hierarchy, and PhoneShell's TabBar contains none of
-/// those destinations. Every item on the More tab threw at runtime, which meant a phone user
-/// could not reach site management at all — no way to add, switch or sign in to a second blog.
+/// Guards the client's navigation, which has been broken in this codebase twice over.
 ///
-/// The Shells and the More menu are XAML and MAUI-typed code, so they are asserted against
-/// their source text here. That is coarse, but it is the level at which this bug lived: the
-/// catalog, the Shell and the menu each looked reasonable alone and only disagreed with each
-/// other.
+/// First by disagreement: there were three Shells, and MorePage navigated to <c>//ai</c>,
+/// <c>//settings</c>, <c>//sites</c> and the rest, but absolute Shell routes only resolve within
+/// the current Shell's own hierarchy and the phone Shell's TabBar contained none of those
+/// destinations. Every item on the More tab threw at runtime, so a phone user could not reach site
+/// management at all — no way to add, switch or sign in to a second blog.
+///
+/// Then by rigidity: which of the three Shells you got was decided once per process from
+/// DeviceInfo, so a foldable opened mid-session kept the layout of a shut phone, and no window
+/// resize changed anything.
+///
+/// Both are answered by one Shell that declares every destination and re-decides only its
+/// FlyoutBehavior as the window changes width. These tests hold that shape in place. The Shell is
+/// XAML and its layout code is MAUI-typed, so they are asserted against source text — coarse, but
+/// it is the level at which both bugs lived: the catalog, the Shell and the menu each looked
+/// reasonable alone and only disagreed with each other.
 /// </summary>
 public class MauiNavigationTests
 {
@@ -22,110 +29,90 @@ public class MauiNavigationTests
         File.ReadAllText(RepoLayout.Combine([.. new[] { "src", "BlogIt.MauiAdmin" }, .. parts]));
 
     private static string AppRoutes => MauiSource("AppRoutes.cs");
-    private static string PhoneShell => MauiSource("Views", "Navigation", "PhoneShell.xaml");
-    private static string CompactShell => MauiSource("Views", "Navigation", "CompactShell.xaml");
-    private static string DesktopShell => MauiSource("Views", "Navigation", "DesktopShell.xaml");
-    private static string MorePage => MauiSource("Views", "More", "MorePage.xaml.cs");
-    private static string MorePageMarkup => MauiSource("Views", "More", "MorePage.xaml");
+    private static string AppShellMarkup => MauiSource("Views", "Navigation", "AppShell.xaml");
+    private static string AppShellCode => MauiSource("Views", "Navigation", "AppShell.xaml.cs");
+
+    private static string NavigationDirectory =>
+        RepoLayout.Combine("src", "BlogIt.MauiAdmin", "Views", "Navigation");
 
     [Fact]
-    public void EverySecondaryDestinationIsReachableFromThePhone()
+    public void ThereIsExactlyOneShell()
     {
-        var routes = AppRoutes;
+        var shells = Directory.GetFiles(NavigationDirectory, "*Shell.xaml")
+            .Select(Path.GetFileName)
+            .ToArray();
 
-        routes.Should().Contain("PhoneRoute",
-            "the phone reaches the secondary destinations through registered routes, and those " +
-            "registrations must be driven by the catalog rather than a hand-maintained list");
-
-        foreach (var destination in AppNavigation.Secondary)
-            routes.Should().Contain($"[\"{destination.Key}\"] = typeof({destination.PageTypeName})",
-                $"{destination.PhoneRoute} must resolve to a page, or tapping {destination.Label} " +
-                "on the More tab throws instead of navigating");
+        shells.Should().BeEquivalentTo(["AppShell.xaml"],
+            "a second Shell means a layout the app can only reach by being restarted into it — " +
+            "swapping Window.Page mid-session tears down the navigation stack and every live page, " +
+            "which is exactly the half-written post an unfolding device must not lose");
     }
 
     [Fact]
-    public void MorePageNeverUsesAbsoluteRoutesThePhoneShellDoesNotDeclare()
+    public void EveryDestinationIsATopLevelItemInTheShell()
     {
-        var more = MorePage;
-        var phoneShell = PhoneShell;
-
-        foreach (var destination in AppNavigation.Secondary)
-        {
-            phoneShell.Should().NotContain($"Route=\"{destination.Key}\"",
-                $"{destination.Label} is not a phone tab — if it becomes one, this test and MorePage should change together");
-
-            more.Should().NotContain($"\"{destination.ShellRoute}\"",
-                $"{destination.ShellRoute} cannot resolve on the phone Shell, which does not contain that route; " +
-                $"MorePage must navigate the registered route {destination.PhoneRoute} instead");
-
-        }
-
-        more.Should().Contain("RouteTo",
-            "MorePage must resolve routes through DestinationRouter rather than hard-coding them, " +
-            "so the phone and flyout layouts cannot drift apart again");
-    }
-
-    [Fact]
-    public void PhoneTabBarCarriesEveryPrimaryDestinationPlusMore()
-    {
-        var phoneShell = PhoneShell;
-
-        foreach (var destination in AppNavigation.Primary)
-            phoneShell.Should().Contain($"Route=\"{destination.Key}\"",
-                $"{destination.Label} is a daily-operations screen and must stay one tap away on a phone");
-
-        phoneShell.Should().Contain($"Route=\"{AppNavigation.MoreTabRoute}\"",
-            "the More tab is what makes the secondary destinations reachable on a phone");
-    }
-
-    [Fact]
-    public void FlyoutShellsDeclareEveryDestinationAsTopLevel()
-    {
-        foreach (var shell in new[] { CompactShell, DesktopShell })
-            foreach (var destination in AppNavigation.All)
-                shell.Should().Contain($"Route=\"{destination.Key}\"",
-                    $"the flyout shells list {destination.Label} directly rather than behind a More tab");
-    }
-
-    [Fact]
-    public void PhoneRoutesSecondaryDestinationsThroughTheMoreTabAndPrimariesDirectly()
-    {
-        var phone = new DestinationRouter(ShellLayout.Phone);
-
-        phone.RouteTo("sites").Should().Be("more/sites",
-            "Sites is not a phone tab, so it must be pushed as a registered route");
-        phone.RouteTo("settings").Should().Be("more/settings");
-        phone.RouteTo("dashboard").Should().Be("//dashboard",
-            "the primary destinations are real tabs on the phone Shell, so absolute routing works");
-    }
-
-    [Fact]
-    public void FlyoutLayoutsRouteEveryDestinationAbsolutely()
-    {
-        var flyout = new DestinationRouter(ShellLayout.Flyout);
+        var shell = AppShellMarkup;
 
         foreach (var destination in AppNavigation.All)
-            flyout.RouteTo(destination.Key).Should().Be($"//{destination.Key}",
-                "every destination is a top-level flyout item outside the phone layout");
+        {
+            shell.Should().Contain($"Route=\"{destination.Key}\"",
+                $"{destination.Label} must be declared in the Shell, or //{destination.Key} cannot resolve");
+
+            // Matches "{DataTemplate dashboard:DashboardPage}" without pinning the xmlns prefix.
+            shell.Should().Contain($":{destination.PageTypeName}}}",
+                $"{destination.Label}'s route must resolve to a page — a route with nothing behind it " +
+                "throws on navigation rather than going missing quietly");
+        }
+    }
+
+    [Fact]
+    public void NoDestinationCarriesALayoutSpecificRoute()
+    {
+        foreach (var destination in AppNavigation.All)
+            AppNavigation.RouteTo(destination.Key).Should().Be($"//{destination.Key}",
+                "one Shell declaring everything means one route per destination; a second, " +
+                "layout-specific route is what left the phone's More menu dead");
+
+        AppShellMarkup.Should().NotContain("more/",
+            "the More tab existed only because the phone Shell could not hold every destination");
+        AppRoutes.Should().NotContain("more/",
+            "no destination needs registering under a phone-only route any more");
     }
 
     [Fact]
     public void RoutingToAnUnknownDestinationFailsLoudly()
     {
-        var act = () => new DestinationRouter(ShellLayout.Phone).RouteTo("nonsense");
+        var act = () => AppNavigation.RouteTo("nonsense");
 
         act.Should().Throw<ArgumentOutOfRangeException>(
             "a typo in a destination key should fail at the call site, not navigate nowhere");
     }
 
     [Fact]
-    public void SiteSwitchingIsReachableOnThePhone()
+    public void TheShellTakesItsLayoutFromTheWindowWidthRatherThanAConstant()
     {
-        MorePageMarkup.Should().Contain("SiteSwitcherView",
-            "the phone Shell has no flyout, so the More tab is where switching between blogs has to live");
+        AppShellMarkup.Should().NotContain("FlyoutBehavior=",
+            "a FlyoutBehavior fixed in markup cannot respond to a fold; AppShell.xaml.cs sets it");
 
-        MauiSource("ViewModels", "Sites", "SiteSwitcherViewModel.cs").Should().NotContain("\"//sites\"",
-            "Manage Sites must route through DestinationRouter — //sites throws on the phone Shell");
+        var code = AppShellCode;
+        code.Should().Contain("FlyoutBehavior",
+            "changing FlyoutBehavior on the live Shell is what re-lays-out the app without rebuilding it");
+        code.Should().Contain("ModeChanged",
+            "the Shell must react to layout changes, not only read the mode once at construction");
+        code.Should().Contain("SizeChanged",
+            "something has to notice the window changed width — that is the signal a fold produces");
+    }
+
+    [Fact]
+    public void SiteSwitchingIsReachableAtEveryWindowSize()
+    {
+        AppShellMarkup.Should().Contain("SiteSwitcherView",
+            "the switcher lives in the one Shell's flyout header so every platform has it — it used " +
+            "to be declared only in the desktop Shell, leaving tablets and macOS without it");
+
+        MauiSource("ViewModels", "Sites", "SiteSwitcherViewModel.cs").Should().Contain("ActivateAsync",
+            "switching must go through the shared activation path, or a site whose session has " +
+            "expired lands on a dashboard that only 401s");
     }
 
     [Fact]

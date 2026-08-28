@@ -20,28 +20,13 @@ public partial class App : Application
         });
     }
 
-    protected override Window CreateWindow(IActivationState? activationState)
-    {
-        Microsoft.Maui.Controls.Shell shell = AppLayout.Mode switch
-        {
-            LayoutMode.DesktopWide => new DesktopShell(),
-            LayoutMode.Compact => new CompactShell(),
-            _ => new PhoneShell(),
-        };
-
-        var window = new Window(shell) { Title = "BlogIt Admin" };
-
-        if (AppLayout.Mode == LayoutMode.DesktopWide)
-        {
-            // Enforce "wide, non-responsive" — a persistent nav rail, not a
-            // reflowing phone-style layout that could get squeezed into a broken
-            // in-between state.
-            window.Width = 1280;
-            window.Height = 800;
-            window.MinimumWidth = 1000;
-            window.MinimumHeight = 700;
-        }
-
-        return window;
-    }
+    /// <remarks>
+    /// One Shell for every platform and every window size. The layout it presents is its own
+    /// business, re-decided from its width as that changes — see <see cref="AppShell"/>. Nothing
+    /// here inspects the device, and no window size is imposed: the window used to be clamped to a
+    /// 1000-unit minimum so it could not reach a layout the app had no answer for, which is a
+    /// constraint the adaptive Shell removes the need for.
+    /// </remarks>
+    protected override Window CreateWindow(IActivationState? activationState) =>
+        new(ServiceHelper.GetRequiredService<AppShell>()) { Title = "BlogIt Admin" };
 }

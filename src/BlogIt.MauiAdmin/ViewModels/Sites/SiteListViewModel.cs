@@ -9,7 +9,7 @@ namespace BlogIt.MauiAdmin.ViewModels.Sites;
 
 public partial class SiteListViewModel(
     SiteProfileService profileService,
-    SiteProbeService probeService,
+    SiteActivator activator,
     IDialogService dialogService) : ObservableObject
 {
     public ObservableCollection<SiteProfile> Sites { get; } = [];
@@ -35,36 +35,16 @@ public partial class SiteListViewModel(
     [RelayCommand]
     private async Task EditAsync(SiteProfile site) => await Shell.Current.GoToAsync($"sites/add?id={site.Id}");
 
+    /// <summary>Shares its activation path with the site switcher — see <see cref="SiteActivator"/>
+    /// for why that is one implementation and not two.</summary>
     [RelayCommand]
     private async Task ActivateAsync(SiteProfile site)
     {
-        if (site.IsTokenValid)
-        {
-            await profileService.SetActiveAsync(site.Id);
-            await Shell.Current.GoToAsync("//dashboard");
-            return;
-        }
-
-        // Setup-complete/incomplete is never trusted from a cached flag — re-probe
-        // live every time a not-signed-in site is tapped, since setup could have
-        // been finished out-of-band since the site was added.
         IsBusy = true;
         ErrorMessage = null;
         try
         {
-            var result = await probeService.ProbeAsync(site.BaseUri, site.ApiPath);
-            switch (result.Status)
-            {
-                case SiteProbeStatus.ReachableSetupComplete:
-                    await Shell.Current.GoToAsync($"sites/login?id={site.Id}");
-                    break;
-                case SiteProbeStatus.ReachableSetupIncomplete:
-                    await Shell.Current.GoToAsync($"sites/setup-required?id={site.Id}");
-                    break;
-                default:
-                    await dialogService.AlertAsync("Can't reach this site", "Check the domain, port, and your connection, then try again.");
-                    break;
-            }
+            await activator.ActivateAsync(site);
         }
         finally
         {

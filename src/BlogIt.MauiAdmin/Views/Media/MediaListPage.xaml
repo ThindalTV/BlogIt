@@ -5,7 +5,7 @@
              x:Class="BlogIt.MauiAdmin.Views.Media.MediaListPage"
              x:DataType="vm:MediaListViewModel"
              Title="Media">
-    <Grid RowDefinitions="Auto,Auto,*,Auto,Auto" Padding="16" RowSpacing="10">
+    <Grid RowDefinitions="Auto,Auto,*,Auto,Auto,Auto,Auto,Auto" Padding="16" RowSpacing="10">
         <SearchBar Grid.Row="0" Placeholder="Search media" Text="{Binding SearchText}" SearchCommand="{Binding SearchCommand}" />
 
         <FlexLayout Grid.Row="1" Wrap="Wrap" JustifyContent="Start">
@@ -51,7 +51,10 @@
             <Button Grid.Column="2" Text="Next ▶" Command="{Binding NextPageCommand}" />
         </Grid>
 
-        <VerticalStackLayout Grid.Row="4" Spacing="4" IsVisible="{Binding SelectedItem, Converter={StaticResource IsNotNullOrEmptyConverter}}">
+        <!-- IsNotNullConverter, not IsNotNullOrEmptyConverter: SelectedItem is a MediaItemRow, and
+             the string-only converter's "value as string" was null for every one of them. This
+             panel is the only route to Copy URL and Delete, so both were unreachable. -->
+        <VerticalStackLayout Grid.Row="4" Spacing="4" IsVisible="{Binding SelectedItem, Converter={StaticResource IsNotNullConverter}}">
             <Label Text="{Binding SelectedItem.Title}" FontAttributes="Bold" />
             <Label Text="{Binding SelectedItem.FileName}" FontSize="12" TextColor="Gray" />
             <HorizontalStackLayout Spacing="8">
@@ -60,8 +63,11 @@
             </HorizontalStackLayout>
         </VerticalStackLayout>
 
-        <Label Grid.Row="4" Text="{Binding StatusMessage}" TextColor="Green" IsVisible="{Binding StatusMessage, Converter={StaticResource IsNotNullOrEmptyConverter}}" />
-        <Label Grid.Row="4" Text="{Binding ErrorMessage}" TextColor="Red" IsVisible="{Binding ErrorMessage, Converter={StaticResource IsNotNullOrEmptyConverter}}" />
-        <ActivityIndicator Grid.Row="4" IsRunning="{Binding IsBusy}" IsVisible="{Binding IsBusy}" />
+        <!-- Own rows. These four used to share row 4 and drew on top of each other whenever more
+             than one was visible — an upload's "Uploaded." landing across the selected item's
+             filename, with the spinner over both. -->
+        <Label Grid.Row="5" Text="{Binding StatusMessage}" TextColor="Green" IsVisible="{Binding StatusMessage, Converter={StaticResource IsNotNullOrEmptyConverter}}" />
+        <Label Grid.Row="6" Text="{Binding ErrorMessage}" TextColor="Red" IsVisible="{Binding ErrorMessage, Converter={StaticResource IsNotNullOrEmptyConverter}}" />
+        <ActivityIndicator Grid.Row="7" IsRunning="{Binding IsBusy}" IsVisible="{Binding IsBusy}" />
     </Grid>
 </ContentPage>

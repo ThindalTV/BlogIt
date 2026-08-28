@@ -13,25 +13,16 @@ namespace BlogIt.MauiAdmin.Core.Navigation;
 public sealed record AppDestination(string Key, string Label, string PageTypeName)
 {
     /// <summary>
-    /// The absolute route used by shells that expose this destination as a top-level item
-    /// (the desktop nav rail and the compact flyout), e.g. <c>//settings</c>.
-    /// </summary>
-    public string ShellRoute => $"//{Key}";
-
-    /// <summary>
-    /// The route used on phones, where this destination is not part of the Shell hierarchy and
-    /// is reached from the More tab instead.
+    /// The absolute route for this destination, e.g. <c>//settings</c>.
     /// </summary>
     /// <remarks>
-    /// Prefixed rather than reusing <see cref="Key"/> so that registering it globally cannot
-    /// collide with the identically-named <c>FlyoutItem</c> routes the other two shells declare
-    /// for the same destination.
-    /// <para>
-    /// This exists because absolute <c>//route</c> navigation only resolves against the current
-    /// Shell's own hierarchy. The phone Shell's TabBar holds five items and none of the
-    /// secondary destinations, so <c>//settings</c> and friends threw at runtime there — the
-    /// entire More menu was dead, taking multi-site management with it.
-    /// </para>
+    /// There is exactly one of these because there is exactly one Shell, and every destination is
+    /// a top-level item in it at every window size. That is a deliberate constraint rather than an
+    /// incidental one: destinations used to carry a second, phone-only route, because the phone
+    /// Shell's tab bar held five items and an absolute <c>//settings</c> could not resolve against
+    /// a hierarchy that did not contain it. Every item on the phone's More menu threw at runtime,
+    /// which took site management — and so multi-blog use — with it. Keeping one route per
+    /// destination means that class of drift cannot come back.
     /// </remarks>
-    public string PhoneRoute => $"more/{Key}";
+    public string ShellRoute => $"//{Key}";
 }

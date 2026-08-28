@@ -1,15 +1,14 @@
 namespace BlogIt.MauiAdmin.Core.Navigation;
 
 /// <summary>
-/// The single source of truth for what the admin client can navigate to. The three Shells and
-/// the More menu are all expected to agree with this catalog, and
-/// <c>BlogIt.Tests.Unit.MauiNavigationTests</c> asserts that they do.
+/// The single source of truth for what the admin client can navigate to. <c>AppShell.xaml</c> is
+/// expected to agree with this catalog, and <c>BlogIt.Tests.Unit.MauiNavigationTests</c> asserts
+/// that it does.
 /// </summary>
 public static class AppNavigation
 {
     /// <summary>
-    /// Destinations every layout shows as a first-class item — the phone tab bar's first four
-    /// tabs, and the top of the flyout everywhere else. These are the daily-operations screens.
+    /// The daily-operations screens. Listed first in the navigation menu at every window size.
     /// </summary>
     public static IReadOnlyList<AppDestination> Primary { get; } =
     [
@@ -20,8 +19,7 @@ public static class AppNavigation
     ];
 
     /// <summary>
-    /// Destinations the flyout shells list directly, and the phone reaches through its More tab
-    /// because a ten-item bottom bar is not viable.
+    /// Everything else: reached from the same menu, below a separator.
     /// </summary>
     public static IReadOnlyList<AppDestination> Secondary { get; } =
     [
@@ -35,12 +33,10 @@ public static class AppNavigation
 
     public static IEnumerable<AppDestination> All => [.. Primary, .. Secondary];
 
-    /// <summary>The phone tab bar: the four primary destinations plus the More tab itself.</summary>
-    public const string MoreTabRoute = "more";
-
     /// <summary>
-    /// Detail pages pushed onto a navigation stack from a list, rather than selected from a menu.
-    /// Registered globally, so they resolve the same way in every Shell.
+    /// Detail pages pushed onto a navigation stack from a list, rather than selected from the
+    /// menu. These are the only routes that need registering with <c>Routing.RegisterRoute</c> —
+    /// every destination in the catalog is declared in the Shell itself.
     /// </summary>
     public static IReadOnlyList<string> DetailRoutes { get; } =
     [
@@ -54,14 +50,11 @@ public static class AppNavigation
         "sites/setup-required",
     ];
 
-    /// <summary>
-    /// Every route that must be registered with <c>Routing.RegisterRoute</c>: the detail pages,
-    /// plus the phone-only route for each secondary destination.
-    /// </summary>
-    public static IEnumerable<string> RoutesRequiringRegistration =>
-        [.. DetailRoutes, .. Secondary.Select(d => d.PhoneRoute)];
-
     public static AppDestination Find(string key) =>
         All.FirstOrDefault(d => d.Key == key)
         ?? throw new ArgumentOutOfRangeException(nameof(key), key, "Unknown navigation destination.");
+
+    /// <summary>The absolute route to <paramref name="key"/>, validated against the catalog.</summary>
+    /// <exception cref="ArgumentOutOfRangeException">The key is not a known destination.</exception>
+    public static string RouteTo(string key) => Find(key).ShellRoute;
 }
