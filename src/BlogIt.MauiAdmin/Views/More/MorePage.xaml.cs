@@ -1,21 +1,17 @@
+using BlogIt.MauiAdmin.Core.Navigation;
+using BlogIt.MauiAdmin.Services;
+
 namespace BlogIt.MauiAdmin.Views.More;
 
-/// <summary>Flat menu shown as the phone tab bar's 5th tab, since a 10-item bottom
-/// bar isn't viable on a phone. Routes to the same top-level Shell routes the
-/// compact/desktop flyout exposes directly.</summary>
+/// <summary>Flat menu shown as the phone tab bar's 5th tab, since a 10-item bottom bar isn't
+/// viable on a phone. Also hosts the site switcher (see MorePage.xaml), because the phone
+/// Shell has no flyout to pin it to.</summary>
 public partial class MorePage : ContentPage
 {
-    private static readonly Dictionary<string, string> Routes = new()
-    {
-        ["AI"] = "//ai",
-        ["Redirects"] = "//redirects",
-        ["Users"] = "//users",
-        ["Settings"] = "//settings",
-        ["My Account"] = "//account",
-        ["Sites"] = "//sites",
-    };
+    private readonly DestinationRouter _router = ServiceHelper.GetRequiredService<DestinationRouter>();
 
-    public List<string> Items { get; } = [.. Routes.Keys];
+    /// <summary>Menu labels in catalog order, translated back to a route on tap.</summary>
+    public List<string> Items { get; } = [.. AppNavigation.Secondary.Select(d => d.Label)];
 
     public MorePage()
     {
@@ -25,7 +21,13 @@ public partial class MorePage : ContentPage
 
     private async void OnItemTapped(object? sender, TappedEventArgs e)
     {
-        if (e.Parameter is string label && Routes.TryGetValue(label, out var route))
-            await Shell.Current.GoToAsync(route);
+        if (e.Parameter is not string label) return;
+
+        var destination = AppNavigation.Secondary.FirstOrDefault(d => d.Label == label);
+        if (destination is null) return;
+
+        // Routed rather than hard-coded: an absolute //route to any of these throws on the
+        // phone Shell, whose hierarchy contains only the five tabs.
+        await Shell.Current.GoToAsync(_router.RouteTo(destination.Key));
     }
 }

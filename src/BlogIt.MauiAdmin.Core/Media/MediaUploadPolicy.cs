@@ -1,4 +1,4 @@
-namespace BlogIt.MauiAdmin.Services;
+namespace BlogIt.MauiAdmin.Core.Media;
 
 /// <summary>
 /// Client-side extension allow-list + size cap applied before every upload. The

@@ -30,7 +30,7 @@ public partial class SettingsViewModel(MauiApiClient apiClient) : ObservableObje
     [ObservableProperty] private string aiExportModel = string.Empty;
 
     // Analytics — CredentialsJson has the same blank-unless-retyped rule as AiApiKey.
-    [ObservableProperty] private string gaMeasurementId = string.Empty;
+    [ObservableProperty] private string gtmContainerId = string.Empty;
     [ObservableProperty] private string gaPropertyId = string.Empty;
     [ObservableProperty] private string gaCredentialsJson = string.Empty;
 
@@ -63,7 +63,7 @@ public partial class SettingsViewModel(MauiApiClient apiClient) : ObservableObje
             AiExportModel = Get(settings, SettingKeys.AiExportModel);
             // AiApiKey deliberately left blank — never populated from the redacted "***".
 
-            GaMeasurementId = Get(settings, SettingKeys.GoogleAnalyticsMeasurementId);
+            GtmContainerId = Get(settings, SettingKeys.GoogleTagManagerContainerId);
             GaPropertyId = Get(settings, SettingKeys.GoogleAnalyticsPropertyId);
             // GaCredentialsJson deliberately left blank, same reason as AiApiKey.
 
@@ -106,7 +106,7 @@ public partial class SettingsViewModel(MauiApiClient apiClient) : ObservableObje
             AiModel: AiModel,
             AiExportModel: AiExportModel,
             AiApiKey: string.IsNullOrWhiteSpace(AiApiKey) ? null : AiApiKey,
-            GoogleAnalyticsMeasurementId: GaMeasurementId,
+            GoogleTagManagerContainerId: GtmContainerId,
             GoogleAnalyticsPropertyId: GaPropertyId,
             GoogleAnalyticsCredentialsJson: string.IsNullOrWhiteSpace(GaCredentialsJson) ? null : GaCredentialsJson,
             JwtExpiryMinutes: jwtMinutes);

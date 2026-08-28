@@ -1,3 +1,5 @@
+using BlogIt.MauiAdmin.Core.Navigation;
+using BlogIt.MauiAdmin.Core.Sites;
 using BlogIt.MauiAdmin.Services;
 using BlogIt.MauiAdmin.ViewModels.Account;
 using BlogIt.MauiAdmin.ViewModels.Ai;
@@ -34,6 +36,11 @@ public static class MauiProgram
         // {DataTemplate} and route factory both construct pages via
         // Activator.CreateInstance) — only ViewModels are registered here, and each
         // page's parameterless constructor pulls its ViewModel via ServiceHelper.
+        // Resolves a destination to a route that exists in the Shell actually loaded — see
+        // DestinationRouter for why a literal "//route" is not safe across layouts.
+        builder.Services.AddSingleton(new DestinationRouter(AppLayout.ShellLayout));
+        builder.Services.AddSingleton<ISecureStore, MauiSecureStore>();
+        builder.Services.AddSingleton<SiteProfileStore>();
         builder.Services.AddSingleton<SiteProfileService>();
         builder.Services.AddSingleton<IDialogService, DialogService>();
         builder.Services.AddTransient<ActiveSiteHttpMessageHandler>();

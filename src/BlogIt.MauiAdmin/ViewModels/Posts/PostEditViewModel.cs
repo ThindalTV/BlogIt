@@ -1,3 +1,5 @@
+using BlogIt.MauiAdmin.Core.Media;
+using BlogIt.MauiAdmin.Core.Publishing;
 using BlogIt.MauiAdmin.Services;
 using BlogIt.Shared.DTOs;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -44,6 +46,27 @@ public partial class PostEditViewModel(MauiApiClient apiClient, SiteProfileServi
 
     public bool IsNew => _id is null;
 
+    /// <summary>
+    /// Whether a publish date can be set. Deliberately not tied to <see cref="SlugLocked"/>:
+    /// taking a post offline and scheduling it to return is a supported flow, and the server
+    /// republishes it while keeping the original PublishedAt so its URL does not move.
+    /// </summary>
+    public bool CanSchedulePublish => PublishingRules.CanSchedulePublish(IsPublished, HasBeenPublished);
+
+    public bool CanScheduleUnpublish => PublishingRules.CanScheduleUnpublish(IsPublished, SchedulePublishEnabled);
+
+    partial void OnIsPublishedChanged(bool value)
+    {
+        OnPropertyChanged(nameof(CanSchedulePublish));
+        OnPropertyChanged(nameof(CanScheduleUnpublish));
+
+        // A post that just went live cannot also be waiting to go live.
+        if (value) SchedulePublishEnabled = false;
+    }
+
+    partial void OnSchedulePublishEnabledChanged(bool value) =>
+        OnPropertyChanged(nameof(CanScheduleUnpublish));
+
     public void ApplyQueryAttributes(IDictionary<string, object> query)
     {
         if (query.TryGetValue("id", out var idObj) && idObj is string idStr && Guid.TryParse(idStr, out var id))
@@ -79,19 +102,17 @@ public partial class PostEditViewModel(MauiApiClient apiClient, SiteProfileServi
             IsPublished = post.IsPublished;
             HasBeenPublished = post.HasBeenPublished;
 
-            if (post.ScheduledPublishAt is { } spa)
+            if (ScheduleFields.FromUtc(post.ScheduledPublishAt) is { } publishAt)
             {
                 SchedulePublishEnabled = true;
-                var local = DateTime.SpecifyKind(spa, DateTimeKind.Utc).ToLocalTime();
-                SchedulePublishDate = local.Date;
-                SchedulePublishTime = local.TimeOfDay;
+                SchedulePublishDate = publishAt.Date;
+                SchedulePublishTime = publishAt.Time;
             }
-            if (post.ScheduledUnpublishAt is { } sua)
+            if (ScheduleFields.FromUtc(post.ScheduledUnpublishAt) is { } unpublishAt)
             {
                 ScheduleUnpublishEnabled = true;
-                var local = DateTime.SpecifyKind(sua, DateTimeKind.Utc).ToLocalTime();
-                ScheduleUnpublishDate = local.Date;
-                ScheduleUnpublishTime = local.TimeOfDay;
+                ScheduleUnpublishDate = unpublishAt.Date;
+                ScheduleUnpublishTime = unpublishAt.Time;
             }
 
             OnPropertyChanged(nameof(IsNew));
@@ -102,12 +123,6 @@ public partial class PostEditViewModel(MauiApiClient apiClient, SiteProfileServi
         }
     }
 
-    private static DateTime? CombineToUtc(bool enabled, DateTime date, TimeSpan time)
-    {
-        if (!enabled) return null;
-        var local = DateTime.SpecifyKind(date.Date + time, DateTimeKind.Local);
-        return local.ToUniversalTime();
-    }
 
     private List<string> GetTags() =>
         [.. TagsText.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];
@@ -121,8 +136,8 @@ public partial class PostEditViewModel(MauiApiClient apiClient, SiteProfileServi
             return false;
         }
 
-        var publishAt = CombineToUtc(SchedulePublishEnabled, SchedulePublishDate, SchedulePublishTime);
-        var unpublishAt = CombineToUtc(ScheduleUnpublishEnabled, ScheduleUnpublishDate, ScheduleUnpublishTime);
+        var publishAt = ScheduleFields.ToUtc(SchedulePublishEnabled, SchedulePublishDate, SchedulePublishTime);
+        var unpublishAt = ScheduleFields.ToUtc(ScheduleUnpublishEnabled, ScheduleUnpublishDate, ScheduleUnpublishTime);
         var scheduleError = PublicationSchedule.Validate(publishAt, unpublishAt);
         if (scheduleError is not null)
         {
@@ -150,8 +165,8 @@ public partial class PostEditViewModel(MauiApiClient apiClient, SiteProfileServi
     private async Task<bool> PersistAsync()
     {
         StatusMessage = null;
-        var publishAt = CombineToUtc(SchedulePublishEnabled, SchedulePublishDate, SchedulePublishTime);
-        var unpublishAt = CombineToUtc(ScheduleUnpublishEnabled, ScheduleUnpublishDate, ScheduleUnpublishTime);
+        var publishAt = ScheduleFields.ToUtc(SchedulePublishEnabled, SchedulePublishDate, SchedulePublishTime);
+        var unpublishAt = ScheduleFields.ToUtc(ScheduleUnpublishEnabled, ScheduleUnpublishDate, ScheduleUnpublishTime);
         var tags = GetTags();
 
         if (_id is null)
@@ -290,15 +305,12 @@ public partial class PostEditViewModel(MauiApiClient apiClient, SiteProfileServi
         await Shell.Current.GoToAsync("..");
     }
 
-    /// <summary>Inserts a Markdown reference to the given media item at the given
-    /// cursor position (relative paths, matching how the server-rendered content
-    /// resolves media links against the public site root).</summary>
+    /// <summary>Inserts a Markdown reference to the given media item at the given cursor
+    /// position. Relative paths, matching how the server-rendered content resolves media links
+    /// against the public site root.</summary>
     public void InsertMediaMarkdown(MediaFileDto media, int cursorPosition)
     {
-        var isImage = media.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase);
-        var markdown = isImage ? $"![{media.Title}]({media.PublicPath})" : $"[{media.Title}]({media.PublicPath})";
-
-        var pos = Math.Clamp(cursorPosition, 0, Content.Length);
-        Content = Content.Insert(pos, markdown);
+        var markdown = MediaMarkdown.ForMedia(media.Title, media.PublicPath, media.ContentType);
+        Content = MediaMarkdown.InsertAt(Content, markdown, cursorPosition);
     }
 }

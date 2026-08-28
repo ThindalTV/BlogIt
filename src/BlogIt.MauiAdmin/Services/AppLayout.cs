@@ -1,3 +1,5 @@
+using BlogIt.MauiAdmin.Core.Navigation;
+
 namespace BlogIt.MauiAdmin.Services;
 
 public enum LayoutMode { Phone, Compact, DesktopWide }
@@ -13,4 +15,11 @@ public static class AppLayout
         DeviceInfo.Platform == DevicePlatform.WinUI ? LayoutMode.DesktopWide
         : DeviceInfo.Idiom == DeviceIdiom.Phone ? LayoutMode.Phone
         : LayoutMode.Compact; // Tablet, MacCatalyst, Unknown
+
+    /// <summary>
+    /// Which Shell family <see cref="Mode"/> produces, as the navigation layer sees it: only
+    /// the phone layout hides destinations behind a More tab, so only it needs different routes.
+    /// </summary>
+    public static ShellLayout ShellLayout =>
+        Mode == LayoutMode.Phone ? Core.Navigation.ShellLayout.Phone : Core.Navigation.ShellLayout.Flyout;
 }

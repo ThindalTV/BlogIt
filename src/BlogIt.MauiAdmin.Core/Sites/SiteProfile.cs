@@ -1,9 +1,9 @@
-namespace BlogIt.MauiAdmin.Models;
+namespace BlogIt.MauiAdmin.Core.Sites;
 
 /// <summary>Represents a saved site connection: a domain (+ optional port), independent
 /// of any URL string, since the Add-Blog form only ever collects a domain and port.
 /// The JWT itself is never stored on this object — it lives in SecureStorage keyed by
-/// <see cref="Id"/> (see <see cref="Services.SiteProfileService"/>) so that a decrypt
+/// <see cref="Id"/> (see <see cref="SiteProfileStore"/>) so that a decrypt
 /// failure for one site can't take down every site's session.</summary>
 public class SiteProfile
 {
@@ -26,14 +26,14 @@ public class SiteProfile
 
     public string? Username { get; set; }
     public string? DisplayName { get; set; }
-    public DateTime? TokenExpiresAt { get; set; }
+    public DateTimeOffset? TokenExpiresAt { get; set; }
 
     /// <summary>Metadata flag only — whether a JWT is currently stored in SecureStorage
     /// for this site. The actual token is never serialized onto this object.</summary>
     public bool HasStoredToken { get; set; }
 
     public bool IsTokenValid =>
-        HasStoredToken && TokenExpiresAt is { } exp && exp > DateTime.UtcNow.AddMinutes(1);
+        HasStoredToken && TokenExpiresAt is { } exp && exp > DateTimeOffset.UtcNow.AddMinutes(1);
 
     public string ApiPath => string.IsNullOrWhiteSpace(ApiPathOverride) ? "/api" : ApiPathOverride!;
 

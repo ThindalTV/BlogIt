@@ -7,6 +7,7 @@
     <Application.Resources>
         <ResourceDictionary>
             <converters:BoolToTextConverter x:Key="BoolToTextConverter" />
+            <converters:BoolToColorConverter x:Key="BoolToColorConverter" />
             <converters:InvertedBoolConverter x:Key="InvertedBoolConverter" />
             <converters:IsNotNullOrEmptyConverter x:Key="IsNotNullOrEmptyConverter" />
             <converters:IsNotNullConverter x:Key="IsNotNullConverter" />

@@ -1,18 +1,28 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:sites="clr-namespace:BlogIt.MauiAdmin.Views.Sites"
              x:Class="BlogIt.MauiAdmin.Views.More.MorePage"
              Title="More">
-    <CollectionView ItemsSource="{Binding Items}" Margin="0,8,0,0">
-        <CollectionView.ItemTemplate>
-            <DataTemplate x:DataType="x:String">
-                <Grid Padding="16,14">
-                    <Label Text="{Binding .}" FontSize="16" VerticalOptions="Center" />
-                    <Grid.GestureRecognizers>
-                        <TapGestureRecognizer Tapped="OnItemTapped" CommandParameter="{Binding .}" />
-                    </Grid.GestureRecognizers>
-                </Grid>
-            </DataTemplate>
-        </CollectionView.ItemTemplate>
-    </CollectionView>
+    <!-- The site switcher is pinned above the menu rather than tucked into the Sites screen:
+         the phone Shell has no flyout to host it, and switching blogs is a daily operation for
+         anyone running more than one, not a settings-level chore. -->
+    <Grid RowDefinitions="Auto,Auto,*">
+        <sites:SiteSwitcherView x:Name="SiteSwitcher" Grid.Row="0" Padding="16,20,16,12" />
+
+        <BoxView Grid.Row="1" HeightRequest="1" Opacity="0.2" BackgroundColor="Gray" />
+
+        <CollectionView Grid.Row="2" ItemsSource="{Binding Items}" Margin="0,8,0,0">
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="x:String">
+                    <Grid Padding="16,14">
+                        <Label Text="{Binding .}" FontSize="16" VerticalOptions="Center" />
+                        <Grid.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnItemTapped" CommandParameter="{Binding .}" />
+                        </Grid.GestureRecognizers>
+                    </Grid>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+    </Grid>
 </ContentPage>

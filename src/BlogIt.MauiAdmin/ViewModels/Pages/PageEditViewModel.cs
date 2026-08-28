@@ -1,3 +1,5 @@
+using BlogIt.MauiAdmin.Core.Media;
+using BlogIt.MauiAdmin.Core.Publishing;
 using BlogIt.MauiAdmin.Services;
 using BlogIt.Shared.DTOs;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -39,6 +41,44 @@ public partial class PageEditViewModel(MauiApiClient apiClient, SiteProfileServi
 
     public bool IsNew => _id is null;
 
+    /// <summary>See PostEditViewModel: scheduling availability follows publication state, not
+    /// the slug lock, so an unpublished page can be scheduled to go live again.</summary>
+    public bool CanSchedulePublish => PublishingRules.CanSchedulePublish(IsPublished, SlugLocked);
+
+    public bool CanScheduleUnpublish => PublishingRules.CanScheduleUnpublish(IsPublished, SchedulePublishEnabled);
+
+    partial void OnIsPublishedChanged(bool value)
+    {
+        OnPropertyChanged(nameof(CanSchedulePublish));
+        OnPropertyChanged(nameof(CanScheduleUnpublish));
+        if (value) SchedulePublishEnabled = false;
+    }
+
+    partial void OnSchedulePublishEnabledChanged(bool value) =>
+        OnPropertyChanged(nameof(CanScheduleUnpublish));
+
+    /// <summary>Clears both scheduled times on the server. The posts editor has always had this;
+    /// pages could be given a schedule with no way to take one back off short of editing the
+    /// dates into the past.</summary>
+    [RelayCommand]
+    private async Task CancelScheduleAsync()
+    {
+        if (_id is null)
+        {
+            SchedulePublishEnabled = false;
+            ScheduleUnpublishEnabled = false;
+            return;
+        }
+
+        var result = await apiClient.UpdatePageScheduleAsync(_id.Value, new(null, null));
+        if (!result.Success) { ErrorMessage = result.Error!.Message; return; }
+
+        ApplyServerState(result.Value!);
+        SchedulePublishEnabled = false;
+        ScheduleUnpublishEnabled = false;
+        StatusMessage = "Schedule cleared.";
+    }
+
     public void ApplyQueryAttributes(IDictionary<string, object> query)
     {
         if (query.TryGetValue("id", out var idObj) && idObj is string idStr && Guid.TryParse(idStr, out var id))
@@ -68,19 +108,17 @@ public partial class PageEditViewModel(MauiApiClient apiClient, SiteProfileServi
             IsPublished = page.IsPublished;
             _wasPublishedOnLoad = page.IsPublished;
 
-            if (page.ScheduledPublishAt is { } spa)
+            if (ScheduleFields.FromUtc(page.ScheduledPublishAt) is { } publishAt)
             {
                 SchedulePublishEnabled = true;
-                var local = DateTime.SpecifyKind(spa, DateTimeKind.Utc).ToLocalTime();
-                SchedulePublishDate = local.Date;
-                SchedulePublishTime = local.TimeOfDay;
+                SchedulePublishDate = publishAt.Date;
+                SchedulePublishTime = publishAt.Time;
             }
-            if (page.ScheduledUnpublishAt is { } sua)
+            if (ScheduleFields.FromUtc(page.ScheduledUnpublishAt) is { } unpublishAt)
             {
                 ScheduleUnpublishEnabled = true;
-                var local = DateTime.SpecifyKind(sua, DateTimeKind.Utc).ToLocalTime();
-                ScheduleUnpublishDate = local.Date;
-                ScheduleUnpublishTime = local.TimeOfDay;
+                ScheduleUnpublishDate = unpublishAt.Date;
+                ScheduleUnpublishTime = unpublishAt.Time;
             }
 
             OnPropertyChanged(nameof(IsNew));
@@ -91,12 +129,6 @@ public partial class PageEditViewModel(MauiApiClient apiClient, SiteProfileServi
         }
     }
 
-    private static DateTime? CombineToUtc(bool enabled, DateTime date, TimeSpan time)
-    {
-        if (!enabled) return null;
-        var local = DateTime.SpecifyKind(date.Date + time, DateTimeKind.Local);
-        return local.ToUniversalTime();
-    }
 
     private bool Validate()
     {
@@ -112,8 +144,8 @@ public partial class PageEditViewModel(MauiApiClient apiClient, SiteProfileServi
             return false;
         }
 
-        var publishAt = CombineToUtc(SchedulePublishEnabled, SchedulePublishDate, SchedulePublishTime);
-        var unpublishAt = CombineToUtc(ScheduleUnpublishEnabled, ScheduleUnpublishDate, ScheduleUnpublishTime);
+        var publishAt = ScheduleFields.ToUtc(SchedulePublishEnabled, SchedulePublishDate, SchedulePublishTime);
+        var unpublishAt = ScheduleFields.ToUtc(ScheduleUnpublishEnabled, ScheduleUnpublishDate, ScheduleUnpublishTime);
         var scheduleError = PublicationSchedule.Validate(publishAt, unpublishAt);
         if (scheduleError is not null)
         {
@@ -144,8 +176,8 @@ public partial class PageEditViewModel(MauiApiClient apiClient, SiteProfileServi
         StatusMessage = null;
         try
         {
-            var publishAt = CombineToUtc(SchedulePublishEnabled, SchedulePublishDate, SchedulePublishTime);
-            var unpublishAt = CombineToUtc(ScheduleUnpublishEnabled, ScheduleUnpublishDate, ScheduleUnpublishTime);
+            var publishAt = ScheduleFields.ToUtc(SchedulePublishEnabled, SchedulePublishDate, SchedulePublishTime);
+            var unpublishAt = ScheduleFields.ToUtc(ScheduleUnpublishEnabled, ScheduleUnpublishDate, ScheduleUnpublishTime);
 
             if (_id is null)
             {
@@ -224,15 +256,12 @@ public partial class PageEditViewModel(MauiApiClient apiClient, SiteProfileServi
         await Shell.Current.GoToAsync("..");
     }
 
-    /// <summary>Inserts a Markdown reference to the given media item at the given
-    /// cursor position (relative paths, matching how the server-rendered content
-    /// resolves media links against the public site root).</summary>
+    /// <summary>Inserts a Markdown reference to the given media item at the given cursor
+    /// position. Relative paths, matching how the server-rendered content resolves media links
+    /// against the public site root.</summary>
     public void InsertMediaMarkdown(MediaFileDto media, int cursorPosition)
     {
-        var isImage = media.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase);
-        var markdown = isImage ? $"![{media.Title}]({media.PublicPath})" : $"[{media.Title}]({media.PublicPath})";
-
-        var pos = Math.Clamp(cursorPosition, 0, Content.Length);
-        Content = Content.Insert(pos, markdown);
+        var markdown = MediaMarkdown.ForMedia(media.Title, media.PublicPath, media.ContentType);
+        Content = MediaMarkdown.InsertAt(Content, markdown, cursorPosition);
     }
 }

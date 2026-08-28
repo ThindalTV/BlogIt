@@ -78,6 +78,7 @@
 
     <ItemGroup>
       <ProjectReference Include="..\BlogIt.Contracts\BlogIt.Contracts.csproj" />
+      <ProjectReference Include="..\BlogIt.MauiAdmin.Core\BlogIt.MauiAdmin.Core.csproj" />
     </ItemGroup>
 
 </Project>
