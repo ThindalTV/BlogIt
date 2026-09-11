@@ -1,6 +1,7 @@
 using BlogIt.Shared.Data;
 using BlogIt.Shared.DTOs;
 using BlogIt.Shared.Entities;
+using BlogIt.Shared.Helpers;
 using Microsoft.EntityFrameworkCore;
 
 namespace BlogIt.Services;
@@ -12,14 +13,39 @@ public interface IUrlRedirectService
     Task<UrlRedirectDto?> CreateAsync(string sourcePath, string targetUrl, bool isPermanent);
     Task<UrlRedirectDto?> UpdateAsync(Guid id, string sourcePath, string targetUrl, bool isPermanent);
     Task<bool> DeleteAsync(Guid id);
-    Task UpsertAutomaticAsync(string sourcePath, string targetUrl);
 }
 
-public sealed class UrlRedirectService(IDbContextFactory<BlogItDbContext> dbContextFactory)
-    : IUrlRedirectService
+public sealed class UrlRedirectService : IUrlRedirectService
 {
+    /// <summary>
+    /// How long a cached redirect table is served before it is reloaded.
+    /// </summary>
+    /// <remarks>
+    /// Same reasoning as <see cref="SettingsService"/>: the cache was previously refreshed only by
+    /// the instance that wrote it, so a redirect added on one instance never took effect on any
+    /// other. Matches that service's interval so the two behave alike.
+    /// </remarks>
+    private static readonly TimeSpan CacheLifetime = TimeSpan.FromSeconds(30);
+
+    private readonly IDbContextFactory<BlogItDbContext> dbContextFactory;
+    private readonly TimeProvider timeProvider;
     private readonly SemaphoreSlim cacheLock = new(1, 1);
     private volatile IReadOnlyDictionary<string, UrlRedirectDto>? cache;
+    private long cacheLoadedAt;
+
+    public UrlRedirectService(IDbContextFactory<BlogItDbContext> dbContextFactory)
+        : this(dbContextFactory, TimeProvider.System)
+    {
+    }
+
+    /// <param name="timeProvider">Clock used to expire the cache.</param>
+    public UrlRedirectService(
+        IDbContextFactory<BlogItDbContext> dbContextFactory,
+        TimeProvider timeProvider)
+    {
+        this.dbContextFactory = dbContextFactory;
+        this.timeProvider = timeProvider;
+    }
 
     public async Task<UrlRedirectDto?> FindAsync(string sourcePath)
     {
@@ -56,6 +82,7 @@ public sealed class UrlRedirectService(IDbContextFactory<BlogItDbContext> dbCont
             db.UrlRedirects.Add(entity);
             await db.SaveChangesAsync();
             cache = await LoadCacheAsync(db);
+            MarkLoaded();
             return ToDto(entity);
         }
         finally
@@ -87,6 +114,7 @@ public sealed class UrlRedirectService(IDbContextFactory<BlogItDbContext> dbCont
             entity.UpdatedAt = DateTime.UtcNow;
             await db.SaveChangesAsync();
             cache = await LoadCacheAsync(db);
+            MarkLoaded();
             return ToDto(entity);
         }
         finally
@@ -108,44 +136,8 @@ public sealed class UrlRedirectService(IDbContextFactory<BlogItDbContext> dbCont
             db.UrlRedirects.Remove(entity);
             await db.SaveChangesAsync();
             cache = await LoadCacheAsync(db);
+            MarkLoaded();
             return true;
-        }
-        finally
-        {
-            cacheLock.Release();
-        }
-    }
-
-    public async Task UpsertAutomaticAsync(string sourcePath, string targetUrl)
-    {
-        if (sourcePath.Equals(targetUrl, StringComparison.OrdinalIgnoreCase))
-            return;
-
-        await cacheLock.WaitAsync();
-        try
-        {
-            await using var db = await dbContextFactory.CreateDbContextAsync();
-            var entity = await db.UrlRedirects
-                .FirstOrDefaultAsync(item => item.SourcePath == sourcePath);
-            if (entity is null)
-            {
-                db.UrlRedirects.Add(new UrlRedirect
-                {
-                    SourcePath = sourcePath,
-                    TargetUrl = targetUrl,
-                    IsPermanent = true,
-                    IsAutomatic = true
-                });
-            }
-            else if (entity.IsAutomatic)
-            {
-                entity.TargetUrl = targetUrl;
-                entity.IsPermanent = true;
-                entity.UpdatedAt = DateTime.UtcNow;
-            }
-
-            await db.SaveChangesAsync();
-            cache = await LoadCacheAsync(db);
         }
         finally
         {
@@ -155,16 +147,18 @@ public sealed class UrlRedirectService(IDbContextFactory<BlogItDbContext> dbCont
 
     private async Task<IReadOnlyDictionary<string, UrlRedirectDto>> GetCacheAsync()
     {
-        if (cache is not null)
-            return cache;
+        var snapshot = cache;
+        if (snapshot is not null && !IsStale())
+            return snapshot;
 
         await cacheLock.WaitAsync();
         try
         {
-            if (cache is null)
+            if (cache is null || IsStale())
             {
                 await using var db = await dbContextFactory.CreateDbContextAsync();
                 cache = await LoadCacheAsync(db);
+                MarkLoaded();
             }
             return cache;
         }
@@ -173,6 +167,12 @@ public sealed class UrlRedirectService(IDbContextFactory<BlogItDbContext> dbCont
             cacheLock.Release();
         }
     }
+
+    private bool IsStale() =>
+        timeProvider.GetElapsedTime(Interlocked.Read(ref cacheLoadedAt)) > CacheLifetime;
+
+    private void MarkLoaded() =>
+        Interlocked.Exchange(ref cacheLoadedAt, timeProvider.GetTimestamp());
 
     private static async Task<Dictionary<string, UrlRedirectDto>> LoadCacheAsync(
         BlogItDbContext db)
@@ -191,6 +191,6 @@ public sealed class UrlRedirectService(IDbContextFactory<BlogItDbContext> dbCont
         item.TargetUrl,
         item.IsPermanent,
         item.IsAutomatic,
-        item.CreatedAt,
-        item.UpdatedAt);
+        UtcTimestamp.ToOffset(item.CreatedAt),
+        UtcTimestamp.ToOffset(item.UpdatedAt));
 }

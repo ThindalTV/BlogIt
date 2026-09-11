@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Tests for the MAUI admin client. Targets plain net10.0 and references BlogIt.MauiAdmin.Core
+    rather than BlogIt.MauiAdmin: the app itself only builds under the maui workloads, so its
+    logic lives in Core precisely so it can be covered here. Assertions about the XAML Shells and
+    MAUI-typed code read those files as source text.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="FluentAssertions" Version="8.10.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="Moq" Version="4.20.72" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\BlogIt.Contracts\BlogIt.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\BlogIt.MauiAdmin.Core\BlogIt.MauiAdmin.Core.csproj" />
+    <!-- For the shared test helpers (RepoLayout). Referenced tests are not re-run: the runner
+         only discovers tests in the assembly it is given. -->
+    <ProjectReference Include="..\BlogIt.Tests.Shared\BlogIt.Tests.Shared.csproj" />
+  </ItemGroup>
+
+</Project>

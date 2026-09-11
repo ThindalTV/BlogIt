@@ -34,7 +34,8 @@ public static class FeedsApi
                 // Same policy as /sitemap.xml. These are cheaper — capped at FeedService.MaxItems —
                 // but they are the same kind of route: anonymous, crawler-facing, and backed by a
                 // query. Sharing one bucket keeps the root documents consistent.
-                .RequireRateLimiting(BlogItDefaults.RootDocumentRateLimiterPolicy);
+                .RequireRateLimiting(BlogItDefaults.RootDocumentRateLimiterPolicy)
+                .WithMetadata(new BlogItEndpointMetadata(nameof(BlogItOptions.ServeRssFeed)));
         }
 
         if (options.ServeAtomFeed)
@@ -43,7 +44,8 @@ public static class FeedsApi
                 .AllowAnonymous()
                 .WithName(BlogItEndpointNames.AtomFeed)
                 .Produces(StatusCodes.Status200OK, contentType: AtomContentType)
-                .RequireRateLimiting(BlogItDefaults.RootDocumentRateLimiterPolicy);
+                .RequireRateLimiting(BlogItDefaults.RootDocumentRateLimiterPolicy)
+                .WithMetadata(new BlogItEndpointMetadata(nameof(BlogItOptions.ServeAtomFeed)));
         }
 
         return app;

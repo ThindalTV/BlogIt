@@ -45,9 +45,12 @@
       lib folder. It was the latter, which left the contracts assembly with no independent version and
       no way for a client to take it alone. Packing it separately also means the reference flows
       transitively, so the satellites no longer need a contracts reference of their own.
-      The exact version pairing (nuspec dependency equal to this package's version) is what NuGet
-      writes for a ProjectReference and what verify.ps1 asserts literally - the DTOs are the wire
-      format both halves serialise against, so a mismatched pair is a silent serialisation bug.
+      The DTOs are the wire format both halves serialise against, so a mismatched pair is a silent
+      serialisation bug. Note that NuGet does NOT give you that pairing on its own: what it writes
+      for a ProjectReference is version="1.4.2", which resolves as a minimum, so an engine and a
+      contracts build one version apart used to restore together without a warning.
+      build/BlogIt.Versioning.props rewrites it to the bracketed range [1.4.2] that actually pins
+      it, and verify.ps1 asserts the brackets.
     -->
     <ProjectReference Include="..\BlogIt.Contracts\BlogIt.Contracts.csproj" />
   </ItemGroup>

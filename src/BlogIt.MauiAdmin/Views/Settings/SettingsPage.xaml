@@ -34,8 +34,8 @@
             <Entry Text="{Binding AiExportModel}" />
 
             <Label Text="Analytics" FontSize="16" FontAttributes="Bold" Margin="0,16,0,0" />
-            <Label Text="Measurement ID" FontSize="12" />
-            <Entry Text="{Binding GaMeasurementId}" />
+            <Label Text="Container ID (Google Tag Manager)" FontSize="12" />
+            <Entry Text="{Binding GtmContainerId}" Placeholder="GTM-XXXXXXX" />
             <Label Text="Property ID" FontSize="12" />
             <Entry Text="{Binding GaPropertyId}" />
             <Label Text="Service Account Credentials JSON (leave blank to keep current)" FontSize="12" />

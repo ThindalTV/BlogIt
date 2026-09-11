@@ -125,5 +125,6 @@ public static class UsersApi
         return Results.NoContent();
     }
 
-    private static AppUserDto ToDto(AppUser u) => new(u.Id, u.Username, u.DisplayName, u.CreatedAt);
+    private static AppUserDto ToDto(AppUser u) =>
+        new(u.Id, u.Username, u.DisplayName, UtcTimestamp.ToOffset(u.CreatedAt));
 }

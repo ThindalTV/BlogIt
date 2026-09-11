@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using BlogIt.MauiAdmin.Core.Sites;
 using BlogIt.MauiAdmin.Models;
 using BlogIt.Shared.DTOs;
 
@@ -102,8 +103,8 @@ public class MauiApiClient(IHttpClientFactory httpClientFactory, SiteProfileServ
     public Task<ApiResult<PreviewLinkResponse>> CreatePostPreviewAsync(Guid id) => PostAsync<PreviewLinkResponse>($"previews/posts/{id}", null);
 
     // ── Pages ───────────────────────────────────────────────────────────
-    public Task<ApiResult<PagedResult<PageDto>>> GetPagesAsync(string? q = null, int page = 1, int pageSize = 20) =>
-        GetAsync<PagedResult<PageDto>>($"pages?q={Uri.EscapeDataString(q ?? "")}&page={page}&pageSize={pageSize}");
+    public Task<ApiResult<PagedResult<PageDto>>> GetPagesAsync(string? q = null, int page = 1, int pageSize = 20, string status = "all") =>
+        GetAsync<PagedResult<PageDto>>($"pages?q={Uri.EscapeDataString(q ?? "")}&status={Uri.EscapeDataString(status)}&page={page}&pageSize={pageSize}");
 
     public Task<ApiResult<PageDto>> GetPageAsync(Guid id) => GetAsync<PageDto>($"pages/{id}");
 

@@ -1,0 +1,40 @@
+@namespace BlogIt.Components.Shared
+@implements IDisposable
+@inject IBlogItHeadRegistry Registry
+
+@*
+    The single <HeadContent> for the page. Render this once — a layout is the natural place, so every
+    page gets it without having to remember. Everything else contributes through <BlogItHeadTags>.
+*@
+
+<HeadContent>
+    @foreach (var slot in snapshot)
+    {
+        @slot.Content
+    }
+</HeadContent>
+
+@code {
+    // Iterated from a snapshot: contributors register during their own render, which can happen
+    // while this foreach is running, and mutating the registry's list mid-enumeration would throw.
+    private BlogItHeadSlot[] snapshot = [];
+
+    protected override void OnInitialized()
+    {
+        Registry.Changed += OnRegistryChanged;
+        snapshot = [.. Registry.Slots];
+    }
+
+    // Contributors are free to register after this component has already rendered — a page's
+    // components initialize in their own order, and any of them may await settings first. Blazor
+    // resolves that for the head section the same way it does for any late <HeadContent>: the
+    // render pass is not finished until the queue is quiescent, so re-rendering here folds the new
+    // tags into the response before it is written.
+    private void OnRegistryChanged()
+    {
+        snapshot = [.. Registry.Slots];
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose() => Registry.Changed -= OnRegistryChanged;
+}

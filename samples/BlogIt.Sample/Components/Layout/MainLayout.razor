@@ -1,6 +1,10 @@
 @inherits LayoutComponentBase
 @inject BlogIt.Services.ISettingsService SettingsService
 
+@* The one head outlet for every public page. Components contribute through <BlogItHeadTags>
+   rather than <HeadContent> so their tags combine instead of overwriting each other. *@
+<BlogItHeadOutlet />
+
 <header class="site-header">
     <div class="container">
         <a class="site-title" href="/">@siteName</a>

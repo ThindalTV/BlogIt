@@ -95,9 +95,15 @@ internal sealed class FileSystemMediaStorage : IBlogItMediaStorage
     private static void ValidateStorageKey(string storageKey)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(storageKey);
+        // Both separators are rejected on every platform, rather than whichever ones the running
+        // platform happens to use. On Unix, Path.DirectorySeparatorChar and its alt are both '/',
+        // so a key containing a backslash passed this check and Path.GetFileName left it untouched
+        // — the guard silently did nothing on the platform most deployments run on. It would also
+        // have written a file whose name becomes a traversal the moment the same store is read on
+        // Windows.
         if (storageKey is "." or ".."
             || storageKey != Path.GetFileName(storageKey)
-            || storageKey.IndexOfAny([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar]) >= 0)
+            || storageKey.IndexOfAny(['/', '\\']) >= 0)
         {
             throw new ArgumentException(
                 "The BlogIt media storage key must be a single file-name segment.",

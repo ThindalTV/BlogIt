@@ -28,7 +28,7 @@
                 <Label Text="No posts found." HorizontalOptions="Center" Margin="0,32,0,0" />
             </CollectionView.EmptyView>
             <CollectionView.ItemTemplate>
-                <DataTemplate x:DataType="dtos:BlogPostSummaryDto">
+                <DataTemplate x:DataType="vm:PostRow">
                     <Grid Padding="8" ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">
                         <Grid.GestureRecognizers>
                             <TapGestureRecognizer
@@ -36,8 +36,11 @@
                                 CommandParameter="{Binding .}" />
                         </Grid.GestureRecognizers>
                         <Label Grid.Row="0" Grid.Column="0" Text="{Binding Title}" FontAttributes="Bold" LineBreakMode="TailTruncation" />
-                        <Label Grid.Row="1" Grid.Column="0" TextColor="Gray" FontSize="12"
-                               Text="{Binding IsPublished, Converter={StaticResource BoolToTextConverter}, ConverterParameter='Published|Draft'}" />
+                        <!-- The full status, not just Published/Draft: a post queued for Friday
+                             used to be indistinguishable from one nobody intends to publish. -->
+                        <Label Grid.Row="1" Grid.Column="0" FontSize="12"
+                               TextColor="{Binding IsScheduled, Converter={StaticResource BoolToColorConverter}, ConverterParameter='DarkOrange|Gray'}"
+                               Text="{Binding StatusText}" />
                         <HorizontalStackLayout Grid.Row="0" Grid.RowSpan="2" Grid.Column="1" Spacing="4">
                             <Button Text="Preview" FontSize="11"
                                     Command="{Binding Source={RelativeSource AncestorType={x:Type vm:PostListViewModel}}, Path=PreviewCommand}"
@@ -47,6 +50,9 @@
                                     CommandParameter="{Binding .}" />
                             <Button Text="Unpublish" FontSize="11" IsVisible="{Binding IsPublished}"
                                     Command="{Binding Source={RelativeSource AncestorType={x:Type vm:PostListViewModel}}, Path=UnpublishCommand}"
+                                    CommandParameter="{Binding .}" />
+                            <Button Text="Clear Schedule" FontSize="11" IsVisible="{Binding HasSchedule}"
+                                    Command="{Binding Source={RelativeSource AncestorType={x:Type vm:PostListViewModel}}, Path=CancelScheduleCommand}"
                                     CommandParameter="{Binding .}" />
                             <Button Text="Delete" FontSize="11"
                                     Command="{Binding Source={RelativeSource AncestorType={x:Type vm:PostListViewModel}}, Path=DeleteCommand}"

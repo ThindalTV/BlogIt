@@ -1,0 +1,41 @@
+@namespace BlogIt.Components.Shared
+@implements IDisposable
+@inject IBlogItHeadRegistry Registry
+
+@*
+    Drop-in replacement for <HeadContent>, and the reason to prefer it: two <HeadContent> blocks on
+    one page do not combine — the last one to render wins and the other's tags never reach the
+    browser. This registers its markup with the request's IBlogItHeadRegistry instead, and renders
+    nothing itself; BlogItHeadOutlet emits every registration together inside one real <HeadContent>.
+*@
+
+@code {
+    /// <summary>The head markup to contribute — <c>meta</c>, <c>link</c> or <c>script</c> elements.</summary>
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private readonly BlogItHeadSlot slot = new();
+    private bool registered;
+
+    protected override void OnParametersSet()
+    {
+        slot.Content = ChildContent;
+
+        // Registered once and then rewritten in place. Adding on every OnParametersSet would append
+        // a duplicate entry per re-render.
+        if (!registered)
+        {
+            Registry.Add(slot);
+            registered = true;
+        }
+        else
+        {
+            Registry.NotifyChanged();
+        }
+    }
+
+    public void Dispose()
+    {
+        if (registered)
+            Registry.Remove(slot);
+    }
+}

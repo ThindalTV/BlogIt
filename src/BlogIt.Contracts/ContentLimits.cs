@@ -43,6 +43,17 @@ public static class ContentLimits
     /// <summary>MIME type recorded for an upload, as the browser reported it.</summary>
     public const int ContentTypeLength = 200;
 
+    /// <summary>Default ceiling on a media upload, in bytes (50 MiB).</summary>
+    /// <remarks>
+    /// One number for both halves of the upload, because they used to disagree: the admin portal
+    /// let the user pick a file up to 50 MB while the server rejected anything over Kestrel's 30 MB
+    /// default, so a file in between was chosen, uploaded, and then failed with an empty response
+    /// the portal could not explain. Hosts override the server side with
+    /// <c>BlogItOptions.MaxMediaUploadBytes</c>; lowering it is safe, since the server then answers
+    /// with a clear 413 naming the real limit.
+    /// </remarks>
+    public const long MediaUploadBytes = 50L * 1024 * 1024;
+
     /// <summary>
     /// Tag display name. Bounds the tag's slug too, since slugifying never lengthens a string.
     /// </summary>

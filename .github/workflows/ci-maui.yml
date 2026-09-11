@@ -1,0 +1,93 @@
+name: CI — MAUI Admin
+
+# The MAUI admin client is built separately from the web CI because it needs the
+# maui-android workload, which takes minutes to restore. Only changes that can actually
+# affect it trigger this job; BlogIt.Contracts is shared with the web side, so it triggers
+# both workflows.
+#
+# Linux builds the android TFM only — BlogIt.MauiAdmin.csproj conditions the iOS and
+# macCatalyst TFMs off on non-Windows/non-macOS hosts, so nothing is silently skipped here
+# that this runner could have built.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/BlogIt.MauiAdmin/**"
+      - "src/BlogIt.MauiAdmin.Core/**"
+      - "tests/BlogIt.Tests.MAUI/**"
+      - "tests/BlogIt.Tests.Shared/**"
+      - "src/BlogIt.Contracts/**"
+      - "BlogIt.slnx"
+      - "Directory.Build.props"
+      - "Directory.Packages.props"
+      - ".github/workflows/ci-maui.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/BlogIt.MauiAdmin/**"
+      - "src/BlogIt.MauiAdmin.Core/**"
+      - "tests/BlogIt.Tests.MAUI/**"
+      - "tests/BlogIt.Tests.Shared/**"
+      - "src/BlogIt.Contracts/**"
+      - "BlogIt.slnx"
+      - "Directory.Build.props"
+      - "Directory.Packages.props"
+      - ".github/workflows/ci-maui.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build MAUI admin
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: "10.0.x"
+          dotnet-quality: "preview"
+
+      - name: Install MAUI android workload
+        run: dotnet workload install maui-android --skip-sign-check
+
+      - name: Restore dependencies
+        run: dotnet restore src/BlogIt.MauiAdmin/BlogIt.MauiAdmin.csproj --property:Configuration=Release
+
+      - name: Build MAUI admin
+        run: >-
+          dotnet build src/BlogIt.MauiAdmin/BlogIt.MauiAdmin.csproj
+          --no-restore
+          --configuration Release
+
+      # Both test projects are plain net10.0 and need no workload: the client's testable logic
+      # lives in BlogIt.MauiAdmin.Core precisely so it can be covered by an ordinary test run.
+      - name: Run MAUI tests
+        run: >-
+          dotnet test tests/BlogIt.Tests.MAUI/BlogIt.Tests.MAUI.csproj
+          --configuration Release
+          --verbosity normal
+          --logger "trx;LogFileName=test-results-maui.trx"
+          --results-directory artifacts/test-results
+
+      - name: Run shared tests
+        run: >-
+          dotnet test tests/BlogIt.Tests.Shared/BlogIt.Tests.Shared.csproj
+          --configuration Release
+          --verbosity normal
+          --logger "trx;LogFileName=test-results-shared.trx"
+          --results-directory artifacts/test-results
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: test-results-maui
+          path: artifacts/test-results/*.trx
+          if-no-files-found: warn
+          retention-days: 7

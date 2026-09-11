@@ -52,6 +52,21 @@ depends on it exactly because the DTOs are the wire format both halves
 serialise against, so a mismatched pair is a silent serialisation bug rather
 than a load failure.
 
+"Exactly" means a bracketed range — `[1.2.3]`, not `1.2.3`. NuGet writes the
+latter for a `ProjectReference`, and it resolves as a *minimum*, so before this
+was fixed the exactness the comments claimed was never enforced: `BlogIt` 1.3.0
+alongside `BlogIt.Contracts` 1.2.0 satisfied `>= 1.2.0` and restored without a
+warning, and pinning them the other way round silently lifted `BlogIt` instead.
+The `BlogItPinSiblingPackageVersions` target in `build/BlogIt.Versioning.props`
+rewrites every BlogIt-to-BlogIt dependency to a bracketed range, and `verify.ps1`
+asserts the brackets. Third-party dependencies are untouched.
+
+The trade is real and worth restating: an exact range means a consumer cannot take
+a `BlogIt` patch without matching satellite builds, and no third-party package
+could ever depend on `BlogIt` alongside a different patch. That is acceptable for
+five packages from one vendor released from one tag, which is the stated policy
+above. Revisit it if BlogIt grows a third-party ecosystem.
+
 ### Namespace and assembly name do not match, deliberately
 
 The package and assembly are `BlogIt.Contracts`; the namespaces are
@@ -112,6 +127,51 @@ first release would assert against a moving target. Revisit when 1.0 ships —
 at that point a package-validation baseline (`PackageValidationBaselineVersion`)
 becomes the right mechanism and can be wired into `verify.ps1`.
 
+## Referencing the packages from a host
+
+The packages move in lock-step, so a consumer needs one place to say which
+version it is on. Use central package management in the consuming repository —
+a `Directory.Packages.props` beside the solution:
+
+```xml
+<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <BlogItVersion>1.2.3</BlogItVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageVersion Include="BlogIt" Version="$(BlogItVersion)" />
+    <PackageVersion Include="BlogIt.AzureStorage" Version="$(BlogItVersion)" />
+  </ItemGroup>
+</Project>
+```
+
+Individual projects then reference `BlogIt` with no version attribute, and an
+upgrade is one edit.
+
+**BlogIt cannot ship that property itself, and should not try.** It is the
+obvious idea and it does not work: NuGet reads `PackageReference` versions during
+restore, from an evaluation whose only knowledge of BlogIt comes from the
+*previous* restore's generated imports. A package's own `buildTransitive` props
+and targets are not on disk until after resolution has finished. So on a clean
+clone, in CI, or after `--force`, the property would be empty and every reference
+would resolve to the lowest version on the feed; and even in the steady state it
+is circular, since the only source of the value is a restore that has already
+resolved. Import position does not help — `.props` and `.targets` are both
+products of the restore they would be trying to influence. Recording that here so
+the idea does not get re-proposed; it is the same service the note about rejecting
+a repo-root `Directory.Build.props` does in `build/BlogIt.Versioning.props`.
+
+A metapackage was considered and rejected for a different reason: it would have to
+depend on `BlogIt.GoogleAnalytics`, which is prerelease-only (see below), so it
+could never ship stable — and it would make the full dependency graph the
+recommended install for hosts that want the engine and one storage provider,
+undoing the point of the satellite split.
+
+The engine-side half of this problem is solved instead by the bracketed exact
+ranges described above: a mismatched pair now fails restore rather than resolving
+silently.
+
 ## BlogIt.GoogleAnalytics releases as a prerelease
 
 `BlogIt.GoogleAnalytics` depends on `Google.Analytics.Data.V1Beta`, and Google
@@ -155,6 +215,14 @@ and `GITHUB_TOKEN` as the API key. Its `packages: write` permission is already
 scoped to the publish job.
 
 ## Publish
+
+Before tagging, add a `CHANGELOG.md` entry for the release, calling out any
+contract change and what a client has to do about it. Nothing enforces the
+compatibility policy above — there is no analyzer and no package-validation
+baseline yet — so release notes are the only thing standing between a
+binary-breaking contract change and a client that discovers it at runtime. The
+file is created by the first tagged release; there is nothing true to put in it
+before then.
 
 After the license preflight, create and push a SemVer tag to an already
 configured remote:

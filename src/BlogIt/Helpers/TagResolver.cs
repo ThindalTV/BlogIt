@@ -25,12 +25,18 @@ public static class TagResolver
         }
     }
 
+    /// <param name="tagNames">
+    /// The requested tag names, or <see langword="null"/> for a post with no tags. Nullable to match
+    /// <c>CreateBlogPostRequest.TagNames</c>, which a client may legitimately omit: this parameter
+    /// was non-nullable while the JSON binder happily supplied null for an absent property, so every
+    /// such request died here with an <c>ArgumentNullException</c> surfaced as a 500.
+    /// </param>
     public static async Task<ICollection<Tag>> ResolveAsync(
         BlogItDbContext db,
-        IEnumerable<string> tagNames,
+        IEnumerable<string>? tagNames,
         CancellationToken cancellationToken = default)
     {
-        var requested = tagNames
+        var requested = (tagNames ?? [])
             .Where(name => !string.IsNullOrWhiteSpace(name))
             // SlugifyOrFallback, not Slugify: a name written only in Cyrillic, CJK or punctuation
             // slugifies to nothing, and this used to drop it — the post saved, the tag never

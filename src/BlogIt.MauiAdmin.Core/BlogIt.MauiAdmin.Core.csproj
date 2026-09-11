@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    UI-agnostic half of the MAUI admin client: navigation catalog, site-profile handling and
+    the other rules that are worth testing. Plain net10.0 with no MAUI dependency on purpose —
+    the MAUI app itself only builds under the maui-android/ios workloads, so anything living
+    there cannot be covered by the ordinary test run. Logic belongs here; XAML, Shell
+    navigation and platform services stay in BlogIt.MauiAdmin.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+</Project>

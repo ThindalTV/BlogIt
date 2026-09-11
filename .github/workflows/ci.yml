@@ -1,10 +1,45 @@
 name: CI — Build & Test
 
+# Web/server side of the product. The MAUI admin is built by ci-maui.yml instead: it needs
+# the maui-android workload, which costs minutes this job should not pay on every change.
+# BlogIt.Contracts is shared, so it triggers both workflows.
 on:
   push:
     branches: [main]
+    paths:
+      - "src/BlogIt/**"
+      - "src/BlogIt.Admin/**"
+      - "src/BlogIt.AzureStorage/**"
+      - "src/BlogIt.GoogleAnalytics/**"
+      - "src/BlogIt.OpenAi/**"
+      - "src/BlogIt.Contracts/**"
+      - "samples/**"
+      - "tests/BlogIt.Tests.Web/**"
+      - "tests/BlogIt.Tests.Shared/**"
+      - "build/**"
+      - "BlogIt.slnx"
+      - "BlogIt.Web.slnx"
+      - "Directory.Build.props"
+      - "Directory.Packages.props"
+      - ".github/workflows/ci.yml"
   pull_request:
     branches: [main]
+    paths:
+      - "src/BlogIt/**"
+      - "src/BlogIt.Admin/**"
+      - "src/BlogIt.AzureStorage/**"
+      - "src/BlogIt.GoogleAnalytics/**"
+      - "src/BlogIt.OpenAi/**"
+      - "src/BlogIt.Contracts/**"
+      - "samples/**"
+      - "tests/BlogIt.Tests.Web/**"
+      - "tests/BlogIt.Tests.Shared/**"
+      - "build/**"
+      - "BlogIt.slnx"
+      - "BlogIt.Web.slnx"
+      - "Directory.Build.props"
+      - "Directory.Packages.props"
+      - ".github/workflows/ci.yml"
 
 permissions:
   contents: read
@@ -17,33 +52,43 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup .NET 10
-        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: "10.0.x"
           dotnet-quality: "preview"
 
       - name: Restore dependencies
-        run: dotnet restore BlogIt.slnx --property:Configuration=Release
+        run: dotnet restore BlogIt.Web.slnx --property:Configuration=Release
 
       - name: Build solution
-        run: dotnet build BlogIt.slnx --no-restore --configuration Release
+        run: dotnet build BlogIt.Web.slnx --no-restore --configuration Release
 
-      - name: Run tests
+      - name: Run shared tests
         run: >-
-          dotnet test tests/BlogIt.Tests/BlogIt.Tests.csproj
+          dotnet test tests/BlogIt.Tests.Shared/BlogIt.Tests.Shared.csproj
           --no-build
           --no-restore
           --configuration Release
           --verbosity normal
-          --logger "trx;LogFileName=test-results.trx"
+          --logger "trx;LogFileName=test-results-shared.trx"
+          --results-directory artifacts/test-results
+
+      - name: Run web tests
+        run: >-
+          dotnet test tests/BlogIt.Tests.Web/BlogIt.Tests.Web.csproj
+          --no-build
+          --no-restore
+          --configuration Release
+          --verbosity normal
+          --logger "trx;LogFileName=test-results-web.trx"
           --results-directory artifacts/test-results
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: test-results
           path: artifacts/test-results/*.trx

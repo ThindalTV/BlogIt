@@ -27,7 +27,7 @@ public record SiteSettingsUpdateRequest(
     string? AiModel = null,
     string? AiExportModel = null,
     string? AiApiKey = null,
-    string? GoogleAnalyticsMeasurementId = null,
+    string? GoogleTagManagerContainerId = null,
     string? GoogleAnalyticsPropertyId = null,
     string? GoogleAnalyticsCredentialsJson = null,
     int? JwtExpiryMinutes = null);

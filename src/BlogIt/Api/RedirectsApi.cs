@@ -115,7 +115,13 @@ internal static class RedirectPathValidator
             return false;
         }
 
-        if (Uri.TryCreate(targetUrl, UriKind.Absolute, out var absoluteTarget))
+        // A rooted target is a local path, decided before the absolute-URI probe rather than by it.
+        // On Unix, Uri.TryCreate parses "/somewhere" as an absolute file:// URI, so that probe used
+        // to succeed with scheme "file" and every internal redirect was rejected as "External
+        // targets must use HTTP or HTTPS" — meaning local redirects, the feature's main use, did
+        // not work at all on Linux while passing every test on Windows.
+        if (!targetUrl.StartsWith('/')
+            && Uri.TryCreate(targetUrl, UriKind.Absolute, out var absoluteTarget))
         {
             if (absoluteTarget.Scheme is not ("http" or "https"))
             {

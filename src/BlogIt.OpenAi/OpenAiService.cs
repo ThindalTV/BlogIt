@@ -54,7 +54,11 @@ internal sealed class OpenAiService(
     private async Task<(ChatClient chat, ChatClient export)> BuildClientsAsync()
     {
         var provider = (await settings.GetAsync(SettingKeys.AiProvider) ?? "openai-compatible").Trim().ToLowerInvariant();
-        var apiKey = await settings.GetAsync(SettingKeys.AiApiKey)
+        // NullIfWhiteSpace, not a bare null check: a key that is not set is stored as null, but a
+        // key the operator cleared is stored as an empty string, and both mean "no credential".
+        // Without this, an empty key was handed to the provider and came back as a 401 the operator
+        // had to interpret, instead of the message naming the actual problem.
+        var apiKey = NullIfWhiteSpace(await settings.GetAsync(SettingKeys.AiApiKey))
             ?? throw new InvalidOperationException("AI API key is not configured.");
         var chatModel = NullIfWhiteSpace(await settings.GetAsync(SettingKeys.AiModel));
         var exportModel = NullIfWhiteSpace(await settings.GetAsync(SettingKeys.AiExportModel));

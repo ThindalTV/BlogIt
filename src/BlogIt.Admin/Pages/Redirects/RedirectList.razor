@@ -64,7 +64,6 @@ else
                 <th>Source</th>
                 <th>Target</th>
                 <th>Type</th>
-                <th>Origin</th>
                 <th>Actions</th>
             </tr>
         </thead>
@@ -75,11 +74,6 @@ else
                     <td><code>@redirect.SourcePath</code></td>
                     <td class="redirect-target"><code>@redirect.TargetUrl</code></td>
                     <td>@(redirect.IsPermanent ? "301" : "302")</td>
-                    <td>
-                        <span class="badge @(redirect.IsAutomatic ? "badge-published" : "badge-draft")">
-                            @(redirect.IsAutomatic ? "Automatic" : "Manual")
-                        </span>
-                    </td>
                     <td class="actions">
                         <button class="btn btn-sm btn-secondary" @onclick="() => BeginEdit(redirect)">Edit</button>
                         <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDelete(redirect)">Delete</button>

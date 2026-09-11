@@ -1,140 +1,48 @@
-using System.Text.Json;
-using BlogIt.MauiAdmin.Models;
+using BlogIt.MauiAdmin.Core.Sites;
 
 namespace BlogIt.MauiAdmin.Services;
 
 /// <summary>
-/// Manages the list of site profiles and which one is currently active. Profile
-/// metadata (host/port/username/etc., never a secret) is persisted as one JSON blob in
-/// SecureStorage. The JWT itself lives in a separate per-site SecureStorage key
-/// ("blogit_jwt_{id}") so that a corrupted/invalidated secret for one site can't wipe
-/// every other site's session the way a single shared blob would.
+/// The app's site-profile store, bound to MAUI's SecureStorage. All of the actual rules live in
+/// <see cref="SiteProfileStore"/> so they can be tested without a device; this type exists to
+/// supply the platform storage and to keep the name the rest of the app already injects.
 /// </summary>
-public class SiteProfileService
+public class SiteProfileService(SiteProfileStore store)
 {
-    private const string ProfilesKey = "blogit_site_profiles";
-    private const string ActiveIdKey = "blogit_active_site_id";
-    private static string TokenKey(string profileId) => $"blogit_jwt_{profileId}";
-
-    private List<SiteProfile> _profiles = [];
-    private string? _activeSiteId;
-    private bool _loaded;
-
-    public event Action? OnChanged;
-
-    public async Task LoadAsync()
+    public event Action? OnChanged
     {
-        if (_loaded) return;
-
-        try
-        {
-            var json = await SecureStorage.GetAsync(ProfilesKey);
-            if (!string.IsNullOrEmpty(json))
-                _profiles = JsonSerializer.Deserialize<List<SiteProfile>>(json) ?? [];
-
-            _activeSiteId = await SecureStorage.GetAsync(ActiveIdKey);
-        }
-        catch
-        {
-            _profiles = [];
-        }
-
-        _loaded = true;
+        add => store.OnChanged += value;
+        remove => store.OnChanged -= value;
     }
 
-    public async Task<List<SiteProfile>> GetProfilesAsync()
-    {
-        await LoadAsync();
-        return _profiles;
-    }
+    public Task LoadAsync() => store.LoadAsync();
 
-    public async Task<SiteProfile?> GetActiveProfileAsync()
-    {
-        await LoadAsync();
-        return _profiles.FirstOrDefault(p => p.Id == _activeSiteId)
-            ?? _profiles.FirstOrDefault();
-    }
+    public Task<List<SiteProfile>> GetProfilesAsync() => store.GetProfilesAsync();
 
-    public async Task AddOrUpdateProfileAsync(SiteProfile profile)
-    {
-        await LoadAsync();
-        var existing = _profiles.FirstOrDefault(p => p.Id == profile.Id);
-        if (existing is not null)
-            _profiles.Remove(existing);
-        _profiles.Add(profile);
-        await PersistAsync();
+    public Task<SiteProfile?> GetActiveProfileAsync() => store.GetActiveProfileAsync();
 
-        // Auto-activate if it's the first profile
-        if (_profiles.Count == 1)
-            await SetActiveAsync(profile.Id);
-    }
+    public Task AddOrUpdateProfileAsync(SiteProfile profile) => store.AddOrUpdateProfileAsync(profile);
 
-    public async Task SetActiveAsync(string profileId)
-    {
-        _activeSiteId = profileId;
-        await SecureStorage.SetAsync(ActiveIdKey, profileId);
-        OnChanged?.Invoke();
-    }
+    public Task SetActiveAsync(string profileId) => store.SetActiveAsync(profileId);
 
-    public async Task DeleteProfileAsync(string profileId)
-    {
-        await LoadAsync();
-        _profiles.RemoveAll(p => p.Id == profileId);
-        SecureStorage.Remove(TokenKey(profileId));
+    public Task DeleteProfileAsync(string profileId) => store.DeleteProfileAsync(profileId);
 
-        if (_activeSiteId == profileId)
-        {
-            _activeSiteId = _profiles.FirstOrDefault()?.Id;
-            if (_activeSiteId is not null)
-                await SecureStorage.SetAsync(ActiveIdKey, _activeSiteId);
-            else
-                SecureStorage.Remove(ActiveIdKey);
-        }
-        await PersistAsync();
-        OnChanged?.Invoke();
-    }
+    public Task SaveTokenAsync(string profileId, string token, DateTimeOffset expiresAt,
+        string username, string displayName) =>
+        store.SaveTokenAsync(profileId, token, expiresAt, username, displayName);
 
-    public async Task SaveTokenAsync(string profileId, string token, DateTime expiresAt,
-        string username, string displayName)
-    {
-        await LoadAsync();
-        var profile = _profiles.FirstOrDefault(p => p.Id == profileId);
-        if (profile is null) return;
+    public Task<string?> GetTokenAsync(string profileId) => store.GetTokenAsync(profileId);
 
-        await SecureStorage.SetAsync(TokenKey(profileId), token);
+    public Task ClearTokenAsync(string profileId) => store.ClearTokenAsync(profileId);
+}
 
-        profile.HasStoredToken = true;
-        profile.TokenExpiresAt = expiresAt;
-        profile.Username = username;
-        profile.DisplayName = displayName;
-        await PersistAsync();
-        OnChanged?.Invoke();
-    }
+/// <summary>MAUI SecureStorage behind the store's seam — keychain on iOS/macOS, KeyStore on
+/// Android, DPAPI-backed storage on Windows.</summary>
+public sealed class MauiSecureStore : ISecureStore
+{
+    public Task<string?> GetAsync(string key) => SecureStorage.GetAsync(key);
 
-    public async Task<string?> GetTokenAsync(string profileId)
-    {
-        await LoadAsync();
-        var profile = _profiles.FirstOrDefault(p => p.Id == profileId);
-        if (profile is null || !profile.HasStoredToken) return null;
-        return await SecureStorage.GetAsync(TokenKey(profileId));
-    }
+    public Task SetAsync(string key, string value) => SecureStorage.SetAsync(key, value);
 
-    public async Task ClearTokenAsync(string profileId)
-    {
-        await LoadAsync();
-        var profile = _profiles.FirstOrDefault(p => p.Id == profileId);
-        if (profile is null) return;
-
-        SecureStorage.Remove(TokenKey(profileId));
-        profile.HasStoredToken = false;
-        profile.TokenExpiresAt = null;
-        await PersistAsync();
-        OnChanged?.Invoke();
-    }
-
-    private async Task PersistAsync()
-    {
-        var json = JsonSerializer.Serialize(_profiles);
-        await SecureStorage.SetAsync(ProfilesKey, json);
-    }
+    public void Remove(string key) => SecureStorage.Remove(key);
 }

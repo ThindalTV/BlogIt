@@ -9,16 +9,16 @@
 {
     @if (isPreview)
     {
-        <HeadContent>
+        <BlogItHeadTags>
             <meta name="robots" content="noindex,nofollow" />
-        </HeadContent>
+        </BlogItHeadTags>
         <div class="draft-preview-banner" role="status">
             <strong>DRAFT PREVIEW</strong>
             <span>This single-use preview does not publish the post.</span>
         </div>
     }
-    <SeoHead Title="@(post.SeoTitle ?? post.Title)"
-             Description="@(post.SeoDescription ?? post.Summary)"
+    <SeoHead Title="@(OptionalText.FirstPresent(post.SeoTitle, post.Title))"
+             Description="@(OptionalText.FirstPresent(post.SeoDescription, post.Summary))"
              Keywords="@post.SeoKeywords"
              OgImage="@post.OgImageUrl"
              CanonicalUrl="@($"{siteUrl}{BlogUrlHelper.GetPostPath(post.Slug, post.PublishedAt, post.CreatedAt)}")"

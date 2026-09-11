@@ -1,11 +1,6 @@
-using BlogIt.Shared;
-using BlogIt.Shared.Data;
 using BlogIt.Shared.DTOs;
-using BlogIt.Shared.Entities;
-using BlogIt.Shared.Helpers;
 using BlogIt.Services;
 using Microsoft.AspNetCore.RateLimiting;
-using Microsoft.EntityFrameworkCore;
 
 namespace BlogIt.Api;
 
@@ -21,124 +16,26 @@ public static class SetupApi
             // BlogItRateLimiterPolicies.Setup.
             .RequireRateLimiting(BlogItDefaults.SetupRateLimiterPolicy);
 
-        group.MapGet("/status", async (BlogItDbContext db) =>
-        {
-            var hasUser = await db.Users.AnyAsync();
-            var isComplete = hasUser;
-            return Results.Ok(new SetupStatusResponse(isComplete));
-        });
+        group.MapGet("/status", async (ISetupService setup) =>
+            Results.Ok(new SetupStatusResponse(await setup.IsCompleteAsync())));
 
+        // Deliberately thin. Everything this route used to do inline now lives in ISetupService, so
+        // that the programmatic InitializeBlogItAsync entry point cannot validate differently, skip
+        // the setup lock, or write settings in a different order. There is one implementation and
+        // this is a translation of its result into status codes.
         group.MapPost("/initialize", async (
             SetupInitializeRequest request,
-            BlogItDbContext db,
-            ISettingsService settings,
-            BlogItOptions options) =>
+            ISetupService setup) =>
         {
-            if (await db.Users.AnyAsync())
-                return Results.Conflict("Setup has already been completed.");
-
-            if (!UrlValidator.IsValidAbsoluteHttpUrl(request.SiteUrl))
+            var result = await setup.InitializeAsync(request);
+            return result.Outcome switch
             {
-                return Results.ValidationProblem(new Dictionary<string, string[]>
-                {
-                    ["siteUrl"] = ["Site URL must be an absolute http:// or https:// URL."]
-                });
-            }
-
-            // The same AI endpoint policy the authenticated settings route applies. This route is
-            // anonymous — it is how an unclaimed site gets claimed — so it is the last place that
-            // should be a way around it.
-            if (SiteSettingsValidator.Validate(
-                    new SiteSettingsUpdateRequest(AiBaseUrl: request.AiBaseUrl),
-                    options.AllowPrivateAiEndpoints)
-                is { Count: > 0 } aiErrors)
-            {
-                return Results.ValidationProblem(aiErrors);
-            }
-
-            if (PasswordPolicy.Validate(request.Password) is string passwordError)
-            {
-                return Results.ValidationProblem(new Dictionary<string, string[]>
-                {
-                    ["password"] = [passwordError]
-                });
-            }
-
-            // Same two fields UsersApi validates, and it matters more here: this is the account the
-            // site owner is locked out of if it is written wrong, and there is no second admin to
-            // fix it with.
-            if (AccountFieldValidator.Validate(request.Username, request.DisplayName)
-                is { Count: > 0 } accountErrors)
-            {
-                return Results.ValidationProblem(accountErrors);
-            }
-
-            // Guards against two concurrent /setup/initialize requests both passing the
-            // AnyAsync() check above before either commits: SetupLock.Id is a fixed value (1),
-            // so at most one of two racing inserts can win the SaveChangesAsync call below — the
-            // loser hits a primary key violation there, and (on a real relational provider —
-            // SQL Server, Azure SQL) its AppUser insert rolls back with it as part of the same
-            // implicit transaction. Added before the AppUser below so the lock claim is settled
-            // first if the two ever need to be split into separate calls later.
-            db.SetupLocks.Add(new SetupLock());
-
-            var user = new AppUser
-            {
-                Username = request.Username,
-                DisplayName = request.DisplayName,
-                PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password)
+                SetupOutcome.AlreadyComplete =>
+                    Results.Conflict("Setup has already been completed."),
+                SetupOutcome.ValidationFailed =>
+                    Results.ValidationProblem(result.Errors!),
+                _ => Results.Ok(new { message = "Setup complete." })
             };
-            db.Users.Add(user);
-
-            var settingsToSave = new Dictionary<string, string>
-            {
-                [SettingKeys.SiteName] = request.SiteName,
-                [SettingKeys.SiteUrl] = request.SiteUrl,
-                [SettingKeys.SiteDescription] = request.SiteDescription,
-                [SettingKeys.AiProvider] = request.AiProvider,
-                [SettingKeys.AiApiKey] = request.AiApiKey,
-                [SettingKeys.JwtSecret] = JwtSecretGenerator.Generate(),
-                [SettingKeys.JwtExpiryMinutes] = "1440",
-                [SettingKeys.SetupComplete] = "true"
-            };
-
-            if (!string.IsNullOrWhiteSpace(request.AiBaseUrl))
-                settingsToSave[SettingKeys.AiBaseUrl] = request.AiBaseUrl;
-
-            if (!string.IsNullOrWhiteSpace(request.AiModel))
-                settingsToSave[SettingKeys.AiModel] = request.AiModel;
-
-            if (!string.IsNullOrWhiteSpace(request.AiExportModel))
-                settingsToSave[SettingKeys.AiExportModel] = request.AiExportModel;
-
-            if (!string.IsNullOrWhiteSpace(request.DefaultOgImage))
-                settingsToSave[SettingKeys.DefaultOgImage] = request.DefaultOgImage;
-
-            if (!string.IsNullOrWhiteSpace(request.GoogleAnalyticsMeasurementId))
-                settingsToSave[SettingKeys.GoogleAnalyticsMeasurementId] = request.GoogleAnalyticsMeasurementId;
-
-            if (!string.IsNullOrWhiteSpace(request.GoogleAnalyticsPropertyId))
-                settingsToSave[SettingKeys.GoogleAnalyticsPropertyId] = request.GoogleAnalyticsPropertyId;
-
-            if (!string.IsNullOrWhiteSpace(request.GoogleAnalyticsCredentialsJson))
-                settingsToSave[SettingKeys.GoogleAnalyticsCredentialsJson] = request.GoogleAnalyticsCredentialsJson;
-
-            try
-            {
-                await db.SaveChangesAsync();
-            }
-            catch (Exception ex) when (ex is DbUpdateException or ArgumentException)
-            {
-                // A concurrent request already won the SetupLock insert. Real relational
-                // providers (SQL Server, Azure SQL) throw DbUpdateException for the resulting
-                // PK violation; EF Core's InMemory provider (used in tests) throws a bare
-                // ArgumentException for the same duplicate-key case instead of wrapping it.
-                return Results.Conflict("Setup has already been completed.");
-            }
-
-            await settings.SetManyAsync(settingsToSave);
-
-            return Results.Ok(new { message = "Setup complete." });
         });
 
         return app;

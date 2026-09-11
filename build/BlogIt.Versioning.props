@@ -54,4 +54,32 @@
     <InformationalVersion>$(_BlogItVersionSource)</InformationalVersion>
   </PropertyGroup>
 
+  <!--
+    Turns the nuspec dependency on a sibling BlogIt package into an exact range.
+
+    NuGet writes a ProjectReference's version as `version="1.4.2"`, which reads as *at least* 1.4.2,
+    not exactly it. The five packages ship from one tag at one version and are compiled against each
+    other's internals-adjacent surface, so a mismatched pair is a silent problem in both directions:
+    BlogIt 1.3.0 with BlogIt.OpenAi 1.2.0 satisfies ">= 1.2.0" and restores without a word, and
+    BlogIt 1.2.0 with BlogIt.OpenAi 1.3.0 quietly lifts BlogIt to 1.3.0 instead. Both comments in
+    BlogIt.csproj and verify.ps1 already claimed this was exact; this is what makes it true.
+
+    The trade, and it is a real one: an exact range means no third-party package can ever depend on
+    BlogIt alongside a consumer's own reference to a different patch, and a consumer cannot take a
+    BlogIt hotfix without matching satellite builds. That is acceptable for a single-vendor set that
+    releases together and is stated policy in docs/publishing.md; revisit it if BlogIt ever grows a
+    third-party ecosystem.
+
+    A Target in a .props file is fine — targets are order-independent, unlike properties.
+  -->
+  <Target Name="BlogItPinSiblingPackageVersions"
+          AfterTargets="_GetProjectReferenceVersions">
+    <ItemGroup>
+      <_ProjectReferencesWithVersions
+          Condition="$([System.String]::Copy('%(Identity)').Contains('BlogIt'))">
+        <ProjectVersion>[%(_ProjectReferencesWithVersions.ProjectVersion)]</ProjectVersion>
+      </_ProjectReferencesWithVersions>
+    </ItemGroup>
+  </Target>
+
 </Project>

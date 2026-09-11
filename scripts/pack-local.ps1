@@ -48,12 +48,28 @@ Set-Content -Path $counterFile -Value $counter -NoNewline
 $packageVersion = "$BaseVersion-local.$counter"
 Write-Host "Packing BlogIt as $packageVersion ..." -ForegroundColor Cyan
 
+# Discovered rather than hardcoded: a fixed list here silently fell behind the moment a new
+# shippable project appeared - BlogIt.Contracts was packed by .github/workflows/release.yml and
+# missing locally, so local testing exercised a package set customers never get. Every project
+# meant for the feed declares <IsPackable>true</IsPackable> in its own csproj, so that is the
+# source of truth; anything else (BlogIt.Admin, BlogIt.MauiAdmin.Core) says false, and the MAUI
+# app never sets it and is skipped for the same reason release.yml builds only BlogIt.Web.slnx.
+$srcRoot = Join-Path $PSScriptRoot "..\src"
 $projects = @(
-    (Join-Path $PSScriptRoot "..\src\BlogIt\BlogIt.csproj"),
-    (Join-Path $PSScriptRoot "..\src\BlogIt.AzureStorage\BlogIt.AzureStorage.csproj"),
-    (Join-Path $PSScriptRoot "..\src\BlogIt.OpenAi\BlogIt.OpenAi.csproj"),
-    (Join-Path $PSScriptRoot "..\src\BlogIt.GoogleAnalytics\BlogIt.GoogleAnalytics.csproj")
+    Get-ChildItem -Path $srcRoot -Filter *.csproj -Recurse -Depth 1 |
+        Where-Object {
+            (Get-Content $_.FullName -Raw) -match '<IsPackable>\s*true\s*</IsPackable>'
+        } |
+        Sort-Object Name |
+        ForEach-Object { $_.FullName }
 )
+
+if ($projects.Count -eq 0) {
+    throw "No packable projects found under $srcRoot - expected at least BlogIt.csproj."
+}
+
+Write-Host "Packing $($projects.Count) project(s):" -ForegroundColor Cyan
+$projects | ForEach-Object { Write-Host "  $([IO.Path]::GetFileNameWithoutExtension($_))" }
 
 foreach ($project in $projects) {
     & dotnet pack $project -c Release -o $OutputPath -p:PackageVersion=$packageVersion

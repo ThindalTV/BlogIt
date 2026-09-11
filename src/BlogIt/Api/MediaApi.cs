@@ -5,6 +5,7 @@ using BlogIt.Shared.Entities;
 using BlogIt.Shared.Helpers;
 using BlogIt.Services;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using System.Security.Claims;
 
 namespace BlogIt.Api;
@@ -13,12 +14,25 @@ public static class MediaApi
 {
     public static IEndpointRouteBuilder MapMediaApi(this IEndpointRouteBuilder app)
     {
+        // Resolved rather than taken as a parameter so the public signature stays as it was.
+        var options = app.ServiceProvider.GetRequiredService<BlogItOptions>();
+
         var group = app.MapGroup("/media")
             .WithTags("Media")
             .RequireAuthorization(BlogItDefaults.AdminAuthorizationPolicy);
 
         group.MapGet("/", GetMedia);
-        group.MapPost("/upload", UploadMedia).DisableAntiforgery();
+        group.MapPost("/upload", UploadMedia)
+            .DisableAntiforgery()
+            // The upload endpoint carries its own body-size limit rather than inheriting the
+            // server's. Routing applies this to the request after matching and before the body is
+            // read, so it governs in both directions: a host with a small global limit does not
+            // silently cap the blog, and a host with a large one does not let BlogIt's own ceiling
+            // be bypassed.
+            .WithMetadata(new BlogItRequestSizeLimit(options.MaxMediaUploadBytes))
+            // The handler reads the form itself, so the IFormFile parameter that would normally
+            // describe this endpoint is gone. Declared explicitly to keep the OpenAPI shape.
+            .Accepts<IFormFile>("multipart/form-data");
         group.MapDelete("/{id:guid}", DeleteMedia);
 
         return app;
@@ -49,8 +63,15 @@ public static class MediaApi
         return Results.Ok(new PagedResult<MediaFileDto>(items.Select(ToDto).ToList(), total, page, pageSize));
     }
 
+    /// <remarks>
+    /// Takes the raw <see cref="HttpRequest"/> and reads the form itself rather than binding an
+    /// <c>IFormFile</c> parameter. Binding reads the body, so an oversize upload used to fail
+    /// <em>inside</em> binding — before this method ran — and every carefully worded validation
+    /// response below was unreachable. What the portal got was a bare 413 with no body, which it
+    /// could only report as an unexplained failure. Reading the form here puts the failure somewhere
+    /// a <c>catch</c> can reach it and turn it into an answer that names the limit.
+    /// </remarks>
     private static async Task<IResult> UploadMedia(
-        IFormFile file,
         HttpRequest request,
         BlogItDbContext db,
         IBlogItMediaStorage mediaStorage,
@@ -59,7 +80,37 @@ public static class MediaApi
     {
         var uploaderId = Guid.Parse(user.FindFirstValue("sub") ?? user.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
-        var title = request.Form.TryGetValue("title", out var titleVal) && !string.IsNullOrWhiteSpace(titleVal)
+        IFormCollection form;
+        try
+        {
+            form = await request.ReadFormAsync(request.HttpContext.RequestAborted);
+        }
+        catch (BadHttpRequestException ex)
+            when (ex.StatusCode == StatusCodes.Status413PayloadTooLarge)
+        {
+            // The server enforced the endpoint's size metadata and stopped reading. Translated here
+            // so the response is BlogIt's, not an empty framework 413.
+            return TooLarge(options);
+        }
+
+        if (form.Files.Count == 0)
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["file"] = ["A file is required."]
+            });
+        }
+
+        var file = form.Files[0];
+
+        // Checked again on the file itself, because the endpoint's size metadata is only as good as
+        // the server implementing it — and not every server does. This makes the limit BlogIt's own
+        // guarantee rather than a property of the deployment, and it measures the file rather than
+        // the request, so multipart framing cannot push a file that is within the limit over it.
+        if (file.Length > options.MaxMediaUploadBytes)
+            return TooLarge(options);
+
+        var title = form.TryGetValue("title", out var titleVal) && !string.IsNullOrWhiteSpace(titleVal)
             ? titleVal.ToString()
             : Path.GetFileNameWithoutExtension(file.FileName);
 
@@ -163,9 +214,32 @@ public static class MediaApi
         return Results.NoContent();
     }
 
+    /// <summary>
+    /// The response for an upload that exceeds <see cref="BlogItOptions.MaxMediaUploadBytes"/>.
+    /// </summary>
+    /// <remarks>
+    /// Carries <c>maxBytes</c> as well as prose so the admin portal can say what the ceiling is
+    /// rather than only that one was hit.
+    /// </remarks>
+    private static IResult TooLarge(BlogItOptions options) => Results.Json(
+        new
+        {
+            title = "Upload too large.",
+            status = StatusCodes.Status413PayloadTooLarge,
+            detail =
+                $"The file exceeds the {Megabytes(options.MaxMediaUploadBytes)} MB upload limit. "
+                + "Raise BlogItOptions.MaxMediaUploadBytes, and raise any reverse-proxy or IIS "
+                + "body-size limit to match.",
+            maxBytes = options.MaxMediaUploadBytes
+        },
+        statusCode: StatusCodes.Status413PayloadTooLarge);
+
+    /// <summary>Whole megabytes, for a limit stated in a message a person reads.</summary>
+    private static long Megabytes(long bytes) => bytes / (1024 * 1024);
+
     private static MediaFileDto ToDto(MediaFile m) => new(
         m.Id, m.Title, m.FileName, m.ContentType, m.PublicPath,
-        m.SizeBytes, m.UploadedAt,
+        m.SizeBytes, UtcTimestamp.ToOffset(m.UploadedAt),
         m.UploadedByUser?.DisplayName ?? string.Empty
     );
 }

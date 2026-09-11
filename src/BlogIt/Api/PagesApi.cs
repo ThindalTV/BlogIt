@@ -28,6 +28,7 @@ public static class PagesApi
     private static async Task<IResult> GetPages(
         BlogItDbContext db,
         string? q,
+        string status = "all",
         int page = 1,
         int pageSize = 20)
     {
@@ -37,6 +38,20 @@ public static class PagesApi
 
         if (!string.IsNullOrWhiteSpace(q))
             query = query.Where(p => p.Title.Contains(q) || p.Slug.Contains(q));
+
+        // Same vocabulary as the posts endpoint, deliberately: both feed the same admin list
+        // screens, and an unrecognised value falls through to "everything" rather than erroring,
+        // so a client sending a status this version does not know still gets a usable list.
+        //
+        // Also deliberately not WherePublished(): see the note at the same point in PostsApi. This
+        // is an editorial facet for the admin list, not the rule for what a visitor may see.
+        query = status switch
+        {
+            "published" => query.Where(p => p.IsPublished),
+            "draft" => query.Where(p => !p.IsPublished),
+            "scheduled" => query.Where(p => p.ScheduledPublishAt != null || p.ScheduledUnpublishAt != null),
+            _ => query
+        };
 
         var total = await query.CountAsync();
         var items = await query
@@ -93,9 +108,11 @@ public static class PagesApi
             OgImageUrl = req.OgImageUrl,
             IsPublished = req.IsPublished,
             HasBeenPublished = req.IsPublished,
-            ScheduledPublishAt = req.IsPublished ? null : req.ScheduledPublishAt,
-            ScheduledUnpublishAt =
-                req.IsPublished || req.ScheduledPublishAt.HasValue ? req.ScheduledUnpublishAt : null,
+            ScheduledPublishAt =
+                req.IsPublished ? null : UtcTimestamp.ToStorage(req.ScheduledPublishAt),
+            ScheduledUnpublishAt = req.IsPublished || req.ScheduledPublishAt.HasValue
+                ? UtcTimestamp.ToStorage(req.ScheduledUnpublishAt)
+                : null,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow,
         };
@@ -157,9 +174,11 @@ public static class PagesApi
         page.OgImageUrl = req.OgImageUrl;
         page.IsPublished = req.IsPublished;
         page.HasBeenPublished |= req.IsPublished;
-        page.ScheduledPublishAt = req.IsPublished ? null : req.ScheduledPublishAt;
-        page.ScheduledUnpublishAt =
-            req.IsPublished || req.ScheduledPublishAt.HasValue ? req.ScheduledUnpublishAt : null;
+        page.ScheduledPublishAt =
+            req.IsPublished ? null : UtcTimestamp.ToStorage(req.ScheduledPublishAt);
+        page.ScheduledUnpublishAt = req.IsPublished || req.ScheduledPublishAt.HasValue
+            ? UtcTimestamp.ToStorage(req.ScheduledUnpublishAt)
+            : null;
         page.UpdatedAt = DateTime.UtcNow;
 
         if (await db.TrySaveAsync() is IResult conflict)
@@ -189,9 +208,11 @@ public static class PagesApi
         var page = await db.Pages.FindAsync(id);
         if (page is null) return Results.NotFound();
 
-        page.ScheduledPublishAt = page.IsPublished ? null : req.ScheduledPublishAt;
-        page.ScheduledUnpublishAt =
-            page.IsPublished || req.ScheduledPublishAt.HasValue ? req.ScheduledUnpublishAt : null;
+        page.ScheduledPublishAt =
+            page.IsPublished ? null : UtcTimestamp.ToStorage(req.ScheduledPublishAt);
+        page.ScheduledUnpublishAt = page.IsPublished || req.ScheduledPublishAt.HasValue
+            ? UtcTimestamp.ToStorage(req.ScheduledUnpublishAt)
+            : null;
         page.UpdatedAt = DateTime.UtcNow;
         if (await db.TrySaveAsync() is IResult conflict)
             return conflict;
@@ -200,10 +221,15 @@ public static class PagesApi
 
     private static PageDto ToDto(Page p) => new(
         p.Id, p.Title, p.Slug, p.Content, p.IsPublished,
-        p.CreatedAt, p.UpdatedAt,
+        UtcTimestamp.ToOffset(p.CreatedAt),
+        UtcTimestamp.ToOffset(p.UpdatedAt),
         p.SeoTitle, p.SeoDescription, p.SeoKeywords, p.OgImageUrl,
-        p.ScheduledPublishAt, p.ScheduledUnpublishAt,
-        PublicationSchedule.GetState(p.IsPublished, p.ScheduledPublishAt, p.ScheduledUnpublishAt),
+        UtcTimestamp.ToOffset(p.ScheduledPublishAt),
+        UtcTimestamp.ToOffset(p.ScheduledUnpublishAt),
+        PublicationSchedule.GetState(
+            p.IsPublished,
+            UtcTimestamp.ToOffset(p.ScheduledPublishAt),
+            UtcTimestamp.ToOffset(p.ScheduledUnpublishAt)),
         p.HasBeenPublished,
         p.ConcurrencyStamp
     );

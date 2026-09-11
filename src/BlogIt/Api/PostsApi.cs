@@ -45,6 +45,11 @@ public static class PostsApi
         if (!string.IsNullOrWhiteSpace(q))
             query = query.Where(p => p.Title.Contains(q) || p.Summary.Contains(q));
 
+        // Deliberately NOT WherePublished(), even though "published" is the same word. That
+        // extension is visitor visibility — the flag *and* a publication instant — and this is an
+        // editorial facet over the flag alone. A post flagged published with no PublishedAt is a
+        // data anomaly, and it has to stay listed and editable here, because this is the only screen
+        // that can fix it. Filtering it out would make it invisible everywhere at once.
         query = status switch
         {
             "published" => query.Where(p => p.IsPublished),
@@ -109,8 +114,10 @@ public static class PostsApi
             SeoDescription = req.SeoDescription,
             SeoKeywords = req.SeoKeywords,
             OgImageUrl = req.OgImageUrl,
-            ScheduledPublishAt = req.ScheduledPublishAt,
-            ScheduledUnpublishAt = req.ScheduledPublishAt.HasValue ? req.ScheduledUnpublishAt : null,
+            ScheduledPublishAt = UtcTimestamp.ToStorage(req.ScheduledPublishAt),
+            ScheduledUnpublishAt = req.ScheduledPublishAt.HasValue
+                ? UtcTimestamp.ToStorage(req.ScheduledUnpublishAt)
+                : null,
             AuthorId = authorId,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow,
@@ -186,9 +193,11 @@ public static class PostsApi
         post.SeoDescription = req.SeoDescription;
         post.SeoKeywords = req.SeoKeywords;
         post.OgImageUrl = req.OgImageUrl;
-        post.ScheduledPublishAt = post.IsPublished ? null : req.ScheduledPublishAt;
-        post.ScheduledUnpublishAt =
-            post.IsPublished || req.ScheduledPublishAt.HasValue ? req.ScheduledUnpublishAt : null;
+        post.ScheduledPublishAt =
+            post.IsPublished ? null : UtcTimestamp.ToStorage(req.ScheduledPublishAt);
+        post.ScheduledUnpublishAt = post.IsPublished || req.ScheduledPublishAt.HasValue
+            ? UtcTimestamp.ToStorage(req.ScheduledUnpublishAt)
+            : null;
         post.UpdatedAt = DateTime.UtcNow;
         post.Tags = await TagResolver.ResolveAsync(db, req.TagNames);
 
@@ -264,9 +273,11 @@ public static class PostsApi
             .FirstOrDefaultAsync(p => p.Id == id);
         if (post is null) return Results.NotFound();
 
-        post.ScheduledPublishAt = post.IsPublished ? null : req.ScheduledPublishAt;
-        post.ScheduledUnpublishAt =
-            post.IsPublished || req.ScheduledPublishAt.HasValue ? req.ScheduledUnpublishAt : null;
+        post.ScheduledPublishAt =
+            post.IsPublished ? null : UtcTimestamp.ToStorage(req.ScheduledPublishAt);
+        post.ScheduledUnpublishAt = post.IsPublished || req.ScheduledPublishAt.HasValue
+            ? UtcTimestamp.ToStorage(req.ScheduledUnpublishAt)
+            : null;
         post.UpdatedAt = DateTime.UtcNow;
         if (await db.TrySaveAsync() is IResult conflict)
             return conflict;
@@ -276,26 +287,46 @@ public static class PostsApi
     private static BlogPostSummaryDto ToSummaryDto(BlogPost p) => new(
         p.Id, p.Title, p.Slug, p.Summary,
         p.Content is not null,
-        p.IsPublished, p.PublishedAt, p.CreatedAt, p.UpdatedAt,
+        p.IsPublished,
+        UtcTimestamp.ToOffset(p.PublishedAt),
+        UtcTimestamp.ToOffset(p.CreatedAt),
+        UtcTimestamp.ToOffset(p.UpdatedAt),
         p.Author?.DisplayName ?? string.Empty,
         p.Tags.Select(t => new TagDto(t.Id, t.Name, t.Slug)).ToList(),
-        p.ScheduledPublishAt, p.ScheduledUnpublishAt,
-        PublicationSchedule.GetState(p.IsPublished, p.ScheduledPublishAt, p.ScheduledUnpublishAt),
+        UtcTimestamp.ToOffset(p.ScheduledPublishAt),
+        UtcTimestamp.ToOffset(p.ScheduledUnpublishAt),
+        PublicationSchedule.GetState(
+            p.IsPublished,
+            UtcTimestamp.ToOffset(p.ScheduledPublishAt),
+            UtcTimestamp.ToOffset(p.ScheduledUnpublishAt)),
         p.HasBeenPublished
-    );
+    )
+    {
+        WordCount = p.WordCount
+    };
 
     private static BlogPostDetailDto ToDetailDto(BlogPost p) => new(
         p.Id, p.Title, p.Slug, p.Summary, p.Content,
         p.Content is not null,
-        p.IsPublished, p.PublishedAt, p.CreatedAt, p.UpdatedAt,
+        p.IsPublished,
+        UtcTimestamp.ToOffset(p.PublishedAt),
+        UtcTimestamp.ToOffset(p.CreatedAt),
+        UtcTimestamp.ToOffset(p.UpdatedAt),
         p.AuthorId, p.Author?.DisplayName ?? string.Empty,
         p.SeoTitle, p.SeoDescription, p.SeoKeywords, p.OgImageUrl,
         p.Tags.Select(t => new TagDto(t.Id, t.Name, t.Slug)).ToList(),
-        p.ScheduledPublishAt, p.ScheduledUnpublishAt,
-        PublicationSchedule.GetState(p.IsPublished, p.ScheduledPublishAt, p.ScheduledUnpublishAt),
+        UtcTimestamp.ToOffset(p.ScheduledPublishAt),
+        UtcTimestamp.ToOffset(p.ScheduledUnpublishAt),
+        PublicationSchedule.GetState(
+            p.IsPublished,
+            UtcTimestamp.ToOffset(p.ScheduledPublishAt),
+            UtcTimestamp.ToOffset(p.ScheduledUnpublishAt)),
         p.HasBeenPublished,
         p.ConcurrencyStamp
-    );
+    )
+    {
+        WordCount = p.WordCount
+    };
 
     /// <summary>
     /// Collects every field error on a create or update into one dictionary, so a request that is

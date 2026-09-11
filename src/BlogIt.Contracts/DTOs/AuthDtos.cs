@@ -6,7 +6,7 @@ public record LoginRequest(
     [property: Required][property: StringLength(ContentLimits.UsernameLength)] string Username,
     [property: Required] string Password);
 
-public record LoginResponse(string Token, string Username, string DisplayName, DateTime ExpiresAt);
+public record LoginResponse(string Token, string Username, string DisplayName, DateTimeOffset ExpiresAt);
 
 /// <remarks>
 /// No length or complexity attribute on either password — see <see cref="CreateUserRequest"/>.

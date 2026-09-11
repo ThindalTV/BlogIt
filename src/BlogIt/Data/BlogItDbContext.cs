@@ -1,4 +1,5 @@
 using BlogIt.Shared.Entities;
+using BlogIt.Shared.Helpers;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -16,6 +17,25 @@ public class BlogItDbContext(DbContextOptions<BlogItDbContext> options) : DbCont
     public DbSet<AiMessage> AiMessages => Set<AiMessage>();
     public DbSet<UrlRedirect> UrlRedirects => Set<UrlRedirect>();
     public DbSet<SetupLock> SetupLocks => Set<SetupLock>();
+
+    /// <summary>
+    /// Applies <see cref="UtcDateTimeConverter"/> to every <see cref="DateTime"/> column, so a
+    /// timestamp read back from the database carries <see cref="DateTimeKind.Utc"/> rather than the
+    /// <see cref="DateTimeKind.Unspecified"/> that <c>datetime2</c> materialises by default.
+    /// </summary>
+    /// <remarks>
+    /// Done as a convention rather than per mapper on purpose: the per-mapper approach had already
+    /// drifted once — the feed loader normalised, the sitemap loader beside it did not — and a
+    /// convention also covers projections, future columns, and the write path in one place.
+    /// See <see cref="UtcDateTimeConverter"/> for the translation constraint this carries.
+    /// </remarks>
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    {
+        base.ConfigureConventions(configurationBuilder);
+
+        // Covers DateTime? as well: EF applies a non-nullable converter to the nullable counterpart.
+        configurationBuilder.Properties<DateTime>().HaveConversion<UtcDateTimeConverter>();
+    }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -105,7 +125,8 @@ public class BlogItDbContext(DbContextOptions<BlogItDbContext> options) : DbCont
         {
             e.HasKey(s => s.Key);
             e.Property(s => s.Key).HasMaxLength(200).IsRequired();
-            e.Property(s => s.Value).IsRequired();
+            // Nullable: null is how a setting that is not set is stored. See SiteSetting.Value.
+            e.Property(s => s.Value).IsRequired(false);
         });
 
         modelBuilder.Entity<AiConversation>(e =>
@@ -171,6 +192,7 @@ public class BlogItDbContext(DbContextOptions<BlogItDbContext> options) : DbCont
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
         BumpConcurrencyStamps();
+        RecomputeWordCounts();
         return base.SaveChanges(acceptAllChangesOnSuccess);
     }
 
@@ -179,7 +201,33 @@ public class BlogItDbContext(DbContextOptions<BlogItDbContext> options) : DbCont
         CancellationToken cancellationToken = default)
     {
         BumpConcurrencyStamps();
+        RecomputeWordCounts();
         return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
+
+    /// <summary>
+    /// Keeps <see cref="BlogPost.WordCount"/> in step with <see cref="BlogPost.Content"/>.
+    /// </summary>
+    /// <remarks>
+    /// Done here rather than in the API handlers that happen to write posts today, because the data
+    /// model is public: a host writing a post straight through this context is a supported path, and
+    /// it would otherwise store a body whose word count silently disagreed with it. Recomputing only
+    /// when <c>Content</c> is actually modified keeps a title-only edit from re-rendering markdown.
+    /// </remarks>
+    private void RecomputeWordCounts()
+    {
+        foreach (var entry in ChangeTracker.Entries<BlogPost>())
+        {
+            var contentChanged = entry.State switch
+            {
+                EntityState.Added => true,
+                EntityState.Modified => entry.Property(post => post.Content).IsModified,
+                _ => false
+            };
+
+            if (contentChanged)
+                entry.Entity.WordCount = MarkdownHelper.CountWords(entry.Entity.Content);
+        }
     }
 
     /// <summary>

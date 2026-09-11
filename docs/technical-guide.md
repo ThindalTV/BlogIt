@@ -25,6 +25,11 @@ includes the matching `BlogIt` package transitively:
 dotnet add package BlogIt.AzureStorage
 ```
 
+Writing a *client* rather than hosting the blog — a console tool, a MAUI app,
+another service — needs neither. Install `BlogIt.Contracts` instead: the request
+and response records on their own, with no dependencies at all. See
+[Writing a client](#writing-a-client-blogitcontracts).
+
 ## Optional satellite packages
 
 The engine carries no AI or analytics SDK. Both are reached through provider
@@ -86,9 +91,29 @@ Leaving a satellite out is a supported deployment, not a broken one:
 | Left out | Effect |
 | --- | --- |
 | `BlogIt.OpenAi` | `POST /api/ai/conversations/{id}/messages` and `.../export-draft` return `400` with a problem response naming the package to install. Listing, reading, creating, and deleting conversations keep working — they touch only the database. |
-| `BlogIt.GoogleAnalytics` | `GET /api/analytics/summary` returns `404 "Analytics is not configured."` — the same answer as an installed provider with no credentials entered. The client-side measurement tag is unaffected: `GaScript` lives in `BlogIt` and needs no SDK. |
+| `BlogIt.GoogleAnalytics` | `GET /api/analytics/summary` returns `404 "Analytics is not configured."` — the same answer as an installed provider with no credentials entered. The client-side tag is unaffected: `GaScript` loads the Google Tag Manager container, lives in `BlogIt`, and needs no SDK. |
 
-Both are also replaceable rather than merely omittable: `IAiService` and
+### Analytics reporting requires a tag container
+
+The container ID and the reporting credentials are stored settings, not host
+configuration, but they are not independent of each other. The container ID is
+the Google Tag Manager container `GaScript` loads into the page — it is what
+collects the traffic, and it is where visitor consent is obtained — while the
+GA4 property ID and service-account JSON only read that traffic back.
+`AnalyticsPolicy`, in `BlogIt.Contracts`, is the single definition of the
+resulting rules: a container ID must be shaped like one (`GTM-` followed by
+letters and digits, so a GA4 `G-…` measurement ID is refused rather than
+interpolated into a container URL that will not serve it), and reporting may only
+be configured alongside one.
+
+Both `POST /api/setup/initialize` and `PUT /api/settings` enforce it and answer
+`400` otherwise, the settings route judging the *effective* settings rather than
+the request body so a partial update cannot slip a property ID past a stored
+container ID that is blank. The bundled admin runs the same code to hide the
+fields it would be refused for; a client of your own should do the same, but the
+server is the authority.
+
+Both satellites are also replaceable rather than merely omittable: `IAiService` and
 `IAnalyticsService` are public in `BlogIt`, and a host implementation registered
 before `AddBlogIt` wins over both the satellite and the fallback. The sample does
 this for analytics.
@@ -181,6 +206,15 @@ The defaults are:
 | `ApiPath` | `/api` | Setup and authenticated management APIs |
 | `MediaPath` | `/media` | Public media proxy |
 
+`MaxMediaUploadBytes` sets the largest accepted media upload, defaulting to 50 MB.
+It is applied to BlogIt's own upload endpoint, so it governs regardless of the
+server's global request-body limit — a host whose server defaults to 30 MB does
+not silently cap the blog — and an oversize upload gets a `413` whose body names
+the limit rather than an empty response the portal cannot explain. It does not
+reach limits enforced outside the application: reverse proxies and IIS apply their
+own caps and reject before the request arrives, so raising this much above the
+default means raising those to match.
+
 Override paths in the same registration callback:
 
 ```csharp
@@ -201,7 +235,8 @@ individually rather than moved; see
 
 Place forwarding, exception handling, HTTPS,
 and static files before `UseBlogIt`. Place host antiforgery after it, then call
-`MapBlogIt`.
+`MapBlogIt`. Forgetting either call, and some of the ways of getting the order
+wrong, are reported at startup — see [Startup checks](#startup-checks).
 
 ### Which URLs the blog's redirect table may claim
 
@@ -230,10 +265,10 @@ a `400`. The check also runs when a redirect is *served*, so setting this stops
 honouring rows that already exist — which is the point when a redirect on the
 host's login page is already in the table.
 
-One thing to include when you set it: BlogIt writes an *automatic* redirect when a
-post's slug changes, on the post's old path — `/{year}/{slug}` by default, wherever
-your public routes put it. Prefixes that do not cover those paths mean those
-redirects stop being served too, and old links to renamed posts start 404ing.
+Every redirect is one an administrator entered in the admin portal, or one you
+created through `IUrlRedirectService`. BlogIt writes none of its own: a post slug
+is locked at first publication, so a published post never changes URL and there is
+no rename for the engine to follow.
 
 The default is unrestricted, and deliberately so: a redirect source is a URL the
 site no longer serves, which is where the previous site put it rather than
@@ -241,6 +276,11 @@ anywhere the blog owns, so a blog-only default would refuse the feature's main
 use and would break running deployments on upgrade. If your application has
 routes worth protecting from blog authors — and it does, if any authenticated blog
 user is not also a site operator — set the prefixes.
+
+BlogIt logs the effective policy once at startup, at information level, so which
+of the two you are running is visible in the boot log rather than only in the
+configuration. It is not a warning: the unrestricted default is a deliberate
+choice, and a warning about intended behaviour is one people learn to ignore.
 
 ### If your application already has authentication
 
@@ -377,6 +417,64 @@ that convenience has two costs worth deciding about deliberately:
 Whichever you choose, it must complete before the application begins serving
 requests: BlogIt's endpoints assume their tables exist.
 
+### Claiming a site without the wizard
+
+A fresh database has no user, and no user means nothing can authenticate — the
+admin API cannot create the first account because creating an account requires an
+administrator. Normally a person completes the `/blogit` wizard. For CI,
+end-to-end tests, containers and provisioned environments, `InitializeBlogItAsync`
+does the same thing from code:
+
+```csharp
+await app.MigrateBlogItAsync();
+await app.InitializeBlogItAsync(new BlogItSetupRequest
+{
+    Username = "owner",
+    DisplayName = "Site Owner",
+    Password = adminPassword,
+    SiteName = "Example",
+    SiteUrl = "https://example.com"
+});
+await app.RunAsync();
+```
+
+AI and analytics settings are optional here even though the wizard asks for them.
+It returns `true` if this call claimed the site and `false` if it was already
+claimed, so a container entry point can call it on every start; an invalid request
+throws, because that means the calling code is wrong rather than that the site is
+in a particular state. It runs the same validation and the same setup lock as the
+HTTP route, so two replicas racing to claim one database resolve safely and the
+loser simply gets `false`.
+
+There is no option to disable the setup endpoint, and none is needed: it refuses
+once a user exists, so calling this before `Run()` closes it before the first
+request is served.
+
+### Startup checks
+
+`AddBlogIt` registers a startup filter that verifies the wiring once the pipeline
+is built, and fails with the fix named rather than letting the mistake surface
+later:
+
+- **`UseBlogIt` or `MapBlogIt` never called** — throws. Both are easy to miss and
+  neither failure is obvious: without `MapBlogIt` nothing is reachable, and
+  without `UseBlogIt` the application still starts and the admin portal still
+  works, but no URL redirect ever fires.
+- **A route mapped by both BlogIt and the host** — throws, naming the route and
+  the option that gives it back. Previously this was an `AmbiguousMatchException`
+  on the first request to the path.
+- **A file in `wwwroot` shadowed by a BlogIt root document** — warns. Static files
+  are registered before `UseBlogIt`, but routing runs first and the static-file
+  middleware stands aside once an endpoint matches, so `wwwroot/sitemap.xml` is
+  silently never served while `ServeSitemap` is on.
+- **`UseAntiforgery` before `UseBlogIt`** — warns. Nothing in BlogIt needs
+  antiforgery today, so this is a deviation from the documented order rather than
+  a fault.
+
+Two ordering rules remain undetectable and are still only conventions: calling
+`UseStaticFiles` after `UseBlogIt`, and registering your own `UseRateLimiter`.
+Neither leaves a mark anything can inspect afterwards.
+
 ## Deployment: BlogIt is single-instance today
 
 BlogIt is designed for one process serving a site. It runs behind a load balancer
@@ -389,26 +487,155 @@ What breaks, and why:
 
 | State | Where it lives | Effect with more than one instance |
 | --- | --- | --- |
-| Site settings | Whole-table snapshot in a singleton, no expiry, refreshed only by the instance that wrote | A setting changed on instance A is never seen by instance B until B restarts |
-| URL redirects | Same | A new or deleted redirect only takes effect on the instance that made the change |
+| Site settings | Whole-table snapshot in a singleton, 30-second expiry | A setting changed on instance A reaches instance B within 30 seconds |
+| URL redirects | Same | A new or deleted redirect takes effect on other instances within 30 seconds |
 | Preview tokens | Process-local dictionary | A preview link issued by A returns `404` when the balancer sends the click to B |
 | Publication scheduling | Hosted service with a timer and no leader election | Every instance processes the same due rows |
 
-The sharpest case is rotating the JWT secret. The signing key is read through the
-same settings cache, so after a rotation on instance A, tokens A issues are
-rejected by B and tokens B issues are rejected by A — administrators are logged
-out at random until every instance has restarted. Rotate the secret with one
-instance running, or restart all instances immediately afterwards.
+The two caches expire rather than living forever, which bounds most of the damage
+to seconds. That includes the case that used to be sharpest: the JWT signing key
+is read through the settings cache, so a rotation now propagates within the same
+30 seconds instead of leaving administrators logged out at random until every
+instance restarted. It is still worth rotating with one instance running.
+
+The remaining two rows have no such bound. A preview link is only valid on the
+instance that issued it, and session affinity is the only workaround. The
+scheduler has no leader election, so every instance processes the same due rows —
+harmless in the sense that they reach the same end state, but it is duplicated
+work and duplicated writes.
+
+**Nothing detects a second instance, and nothing is going to.** Rolling restarts,
+slot swaps and container rolling updates all run two instances briefly on every
+deployment, so from the database there is no way to tell a misconfiguration from a
+normal deploy in progress. A check would either warn on every release or miss the
+case it exists for. Instance count is a deployment decision; keep it to one.
 
 This constraint is about instance count, not about the database. `UseAzureSql`
 and its retry-on-failure execution strategy are for surviving transient
 connection faults against a managed database, which a single instance needs as
 much as several would; they are not an indication that scale-out works.
 
-If you need real scale-out, the missing pieces are a distributed (or
-short-TTL) settings and redirect cache, a shared preview-token store, and leader
-election for the scheduler. None of them exist today, and BlogIt should not be
-deployed as if they did.
+If you need real scale-out, the missing pieces are now a shared preview-token
+store and leader election for the scheduler. Neither exists today, and BlogIt
+should not be deployed as if they did.
+
+## Writing a client: `BlogIt.Contracts`
+
+The admin API's request and response records are not part of the engine
+assembly. They live in `BlogIt.Contracts`, which packs and versions on its own
+and has **zero dependencies** — no EF Core, no SQL Server client, no BCrypt, no
+ASP.NET Core framework reference. That is what makes it takeable from a console
+tool, a MAUI app, a WebAssembly client, or another service:
+
+```powershell
+dotnet add package BlogIt.Contracts
+```
+
+A host does **not** install it. `BlogIt` takes an exact-version dependency on
+the matching `BlogIt.Contracts`, so the records arrive transitively; referencing
+both only creates a version to keep in step by hand.
+
+The package is browser-safe, and the bundled Blazor WebAssembly admin compiles
+against exactly these types — which is the standing proof that nothing
+server-only has leaked in.
+
+### What is in it
+
+| Namespace | Contents |
+| --- | --- |
+| `BlogIt.Shared.DTOs` | The request and response records: posts, pages, tags, media, redirects, users, settings, setup, auth, previews, AI and analytics. |
+| `BlogIt.Shared` | `SettingKeys` for the well-known per-site settings, and the `ContentLimits`, `SeoLimits` and `RedirectLimits` ceilings. |
+| `BlogIt.Shared.Helpers` | `BlogUrlHelper` (build the same public post path the server routes), `OptionalText` (the null-vs-empty convention), and `PasswordPolicy`. |
+
+The namespaces are `BlogIt.Shared.*` while the assembly and package are
+`BlogIt.Contracts`. The mismatch is deliberate and documented in
+[docs/publishing.md](publishing.md); it is a candidate for the 1.0 cut, not
+before.
+
+### The limit constants are the schema's widths
+
+`ContentLimits`, `SeoLimits` and `RedirectLimits` are not client-side advice.
+Each constant is load-bearing in three places at once — the EF column width, the
+server-side check that returns a `400` instead of letting the value fail on
+`SaveChanges`, and the data annotation on the DTO. They are shared rather than
+copied precisely so those three cannot drift apart.
+`RedirectLimits.SourcePathLength` is the sharpest example: 450 characters is 900
+bytes of `nvarchar`, which is what keeps the unique index on that column inside
+SQL Server's 1700-byte nonclustered key limit.
+
+Nothing here bounds the unbounded columns. A post's summary and content and a
+page's content stay `nvarchar(max)`; the only thing the database refuses there
+is null.
+
+### Validate before you send — but the server is still the authority
+
+The records carry `System.ComponentModel.DataAnnotations` attributes for the
+limits whose constants live in this package, so a client can reject a bad
+payload without a round trip:
+
+```csharp
+using System.ComponentModel.DataAnnotations;
+using BlogIt.Shared.DTOs;
+
+var request = new CreateBlogPostRequest(
+    Title: title,
+    Summary: summary,
+    Content: markdown,
+    SeoTitle: null,
+    SeoDescription: null,
+    SeoKeywords: null,
+    OgImageUrl: null,
+    TagNames: []);
+
+List<ValidationResult> failures = [];
+if (!Validator.TryValidateObject(
+        request, new ValidationContext(request), failures, validateAllProperties: true))
+{
+    // Fix these first; the server rejects the same values with a 400.
+}
+```
+
+Those attributes are a **subset**, and passing them is not a promise the server
+will accept the payload. They cover the ceilings this package already declares
+as constants — title, slug, tag, SEO and redirect lengths — and nothing else.
+Rules whose authority is a server-side validator (slug character rules, URL
+scheme checks, settings coherence) are deliberately **not** restated here:
+copying those numbers across an assembly boundary would create a second source
+of truth that drifts silently. Treat a `400` with a problem-details body as the
+last word.
+
+`PasswordPolicy` is the exception that proves the shape of the rule. It is not a
+restatement — it is the single definition, moved into this assembly so the
+client and the server run *the same code* rather than two copies of the same
+rules. The client calls `PasswordPolicy.Validate` so the user hears about a weak
+password immediately; `AuthService` calls it again on arrival, because a
+client-side check is advice, not enforcement.
+
+### Optional text: null and empty are different
+
+BlogIt distinguishes them. `null` means the value does not exist; `""` means it
+exists and is empty. A client normalises on the way in with
+`OptionalText.OrNull`, so a field the author never filled in is stored as
+`null`, and reads back out with `OptionalText.FirstPresent` rather than `??`.
+Null-coalescing only skips `null`, so `post.SeoTitle ?? post.Title` returns `""`
+for any row that stored a blank SEO title. Rows like that exist, so readers have
+to tolerate them whatever the writers do from now on.
+
+### Appending a parameter is binary-breaking
+
+These records grow by appending constructor parameters with defaults —
+`ScheduledPublishAt`, `ScheduleState`, `HasBeenPublished` and `ConcurrencyStamp`
+all arrived that way. That is source-compatible and **binary-breaking**: a
+client compiled against the old record calls a constructor arity that no longer
+exists, and the failure is a runtime `MissingMethodException`, not a build
+error. Recompiling is the whole remedy.
+
+Two things follow for a client author. Construct these records with **named
+arguments**, so an appended parameter cannot silently rebind a positional call.
+And read the release notes before letting a client lag the server's contracts
+version. The full compatibility policy — what a minor bump means, what a major
+one means, and when to prefer an init-only property over a positional parameter
+— is in [docs/publishing.md](publishing.md).
 
 ## The data model is part of the public API — on purpose
 
@@ -442,7 +669,9 @@ its own database or schema rather than reaching for the entities.
 
 ## Editing content: concurrency tokens
 
-`BlogPostDetailDto` and `PageDto` carry a `ConcurrencyStamp`. `PUT /posts/{id}`
+`BlogPostDetailDto` and `PageDto` — both in
+[`BlogIt.Contracts`](#writing-a-client-blogitcontracts) — carry a
+`ConcurrencyStamp`. `PUT /posts/{id}`
 and `PUT /pages/{id}` require it, and **fail closed**: an omitted or stale value
 is rejected with `409 Conflict` rather than overwriting whatever the record now
 contains.
@@ -472,12 +701,62 @@ controller, or endpoint. It exposes:
 | `GetPostsAsync(page, pageSize)` | Paginated published archive |
 | `SearchPostsAsync(query)` | Published posts matching title, summary, or content |
 | `GetPostsByTagAsync(slug, page, pageSize)` | Paginated posts for a tag |
+| `GetPostsByDateRangeAsync(from, to, page, pageSize)` | Paginated posts published in `[from, to)` |
+| `GetArchiveCountsAsync()` | Published post counts per UTC month, newest first |
 | `GetPostAsync(slug, includeNavigation)` | One published post and optional adjacent posts |
 | `GetPageAsync(slug)` | One published custom page |
+| `GetTagAsync(slug)` | One tag, or `null` when no such tag exists |
 
 Every method is published-only. "Published" means `IsPublished` is set *and*
 `PublishedAt` has a value, so a post scheduled for a future date is excluded
 too. Drafts return `null` rather than the content.
+
+If you query the entities yourself, use the `WherePublished()` extension in
+`BlogIt.Shared.Data` rather than writing that rule out again:
+
+```csharp
+var posts = await db.BlogPosts.WherePublished()
+    .OrderByDescending(post => post.PublishedAt)
+    .ToListAsync();
+```
+
+There is a `Page` overload too, and it is deliberately a different rule — a page
+has no publication instant, so the flag is the whole condition. Filtering posts
+on `IsPublished` alone publishes posts that no BlogIt listing returns.
+
+Every paged result carries `TotalCount` alongside `Page` and `TotalPages`, so
+"Found 47 posts" needs no second query.
+
+### Month archives and reading time
+
+`GetPostsByDateRangeAsync` takes instants rather than a year and a month, because
+BlogIt has no notion of a site timezone and a `(year, month)` signature would
+silently pick one. For UTC months:
+
+```csharp
+var from = new DateTimeOffset(year, month, 1, 0, 0, 0, TimeSpan.Zero);
+var page = await Content.GetPostsByDateRangeAsync(from, from.AddMonths(1), 1, 10);
+```
+
+A site that wants local months converts its own boundaries and passes those.
+`GetArchiveCountsAsync` buckets by UTC month, so a post published within an
+offset's distance of midnight on the first or last of a month can be counted in
+the neighbouring bucket. Cache its result — it only changes when something is
+published.
+
+`BlogPostSummaryDto.WordCount` carries the word count of the post's body, so a
+listing can show a reading time without loading every body. It is `null` only for
+a row written before the column existed and not yet backfilled, and `0` for a
+summary-only post. How many words per minute to assume, and whether to show a
+reading time at all, is yours.
+
+### Timestamps are UTC instants
+
+Every timestamp BlogIt returns is a `DateTimeOffset` at offset zero. Format with
+`"o"` where an offset is required — Open Graph's `article:published_time`, Atom —
+or call `ToLocalTime()` to display it. These were `DateTime` before 0.2.0 and came
+back with `DateTimeKind.Unspecified`, which formatted with no offset at all; if
+you have host code compensating for that, it can be deleted.
 
 The single exception is the `includeUnpublished` parameter on `GetPostAsync`
 and `GetPageAsync`, which defaults to `false`. Pass `true` only on a path that
@@ -524,10 +803,50 @@ Post bodies and summaries are Markdown. The host decides how to render and
 sanitize them. The sample uses `BlogIt.Helpers.MarkdownHelper.ToHtml` and casts
 the result to `MarkupString`.
 
+Summaries are Markdown too, and they may contain links. That matters if your card
+component is itself a link: an `<a>` cannot contain another `<a>`, and browsers
+repair the invalid nesting by closing the outer anchor early — which visually
+breaks the card rather than producing an error anyone would notice in review.
+Either link only the title or a call-to-action and leave the card body
+non-interactive, or strip inline links when rendering a summary inside a linked
+card.
+
+### Canonical URLs come from the configured site URL
+
+Build canonical URLs from the site URL saved in admin settings, not from
+`NavigationManager.BaseUri`. `BaseUri` reflects whichever hostname answered the
+request, so a site reachable on an apex domain, a `www` subdomain and a staging
+host would declare a different canonical on each — which defeats the point of
+declaring one at all. The configured site URL is also what `BlogFeed.SiteUrl` and
+`SitemapEntry.Location` are built from, so taking canonicals from the same place
+keeps the three consistent by construction.
+
+### What BlogIt deliberately does not decide
+
+Some things a blog needs are presentation policy, and BlogIt supplies the inputs
+without an opinion on the output:
+
+- **Reading time.** `WordCount` is on the summary DTO; words per minute, rounding,
+  and whether to show it are yours.
+- **Related posts.** Tags are on every summary DTO, and `GetPostsByTagAsync` is
+  the query. What counts as "related" is a product decision.
+- **Pagination chrome.** `Page`, `TotalPages` and `TotalCount` are on every paged
+  result. Whether that renders as numbered links, prev/next, or infinite scroll is
+  a design decision.
+- **Whether a page shows its title.** `Page.Title` is metadata — it feeds the SEO
+  title, the admin listing, slug generation and the sitemap — and rendering it is
+  your template's call. If some pages should not show a heading, put the `#`
+  heading in the page's own Markdown and stop rendering `Title` in the template,
+  or skip the template heading when the content already opens with one.
+
 The package also provides `BlogIt.Components.Shared.SeoHead` and `GaScript`.
 Compose them into host pages for metadata, structured data, canonical URLs, and
-Google Analytics. `GaScript` emits markup only after a measurement ID is saved
-in admin settings.
+Google Tag Manager. `GaScript` emits markup only after a container ID is saved
+in admin settings. It renders Google's standard GTM snippet, with the loader
+written out as a plain async `<script>` element pointing at `gtm.js` rather than
+injected from JavaScript — same DOM, same load. The `<noscript>` iframe half of
+Google's snippet is not emitted, because BlogIt contributes to the document head
+only.
 
 See `samples/BlogIt.Sample` for archive, post, page, search, tag, preview, SEO,
 and analytics examples.
@@ -560,10 +879,12 @@ builder.Services.AddBlogIt(options =>
 ```
 
 Switching one off unmaps the route entirely. That matters because leaving it
-mapped is not neutral: a host static file at the same path is silently shadowed
-by BlogIt's endpoint, and a host *endpoint* at the same path fails at request
-time with `AmbiguousMatchException`. Turning the switch off makes the path the
-host's again.
+mapped is not neutral: a host static file at the same path is silently shadowed by
+BlogIt's endpoint, and a host *endpoint* at the same path is a duplicate route.
+Both are now reported at startup — the shadowed file as a warning, the duplicate
+route as a failure naming the switch — rather than being discovered on a request
+that never reaches the right handler. See "Startup checks". Turning the switch off
+makes the path the host's again.
 
 Turning `ServeSitemap` off also drops the `Sitemap:` line from BlogIt's
 `robots.txt`, since there is then no such document to point crawlers at.
@@ -623,9 +944,14 @@ Build and run the automated suite:
 
 ```powershell
 dotnet build .\BlogIt.slnx -c Release
-dotnet test .\tests\BlogIt.Tests\BlogIt.Tests.csproj -c Release --no-build
+dotnet test .\BlogIt.slnx -c Release --no-build
 ```
 
-Package verification lives under `build/package-layout-tests` and
-`build/package-smoke`; it validates package contents and clean consumer
-applications used by release CI.
+The tests live in three projects — `BlogIt.Tests.Shared`, `BlogIt.Tests.Web` and
+`BlogIt.Tests.MAUI` — so run the solution rather than naming one. On a machine
+without the MAUI workloads installed, use `.\BlogIt.Web.slnx` instead: it is the
+same set minus the MAUI projects, and it works for both `build` and `test`.
+
+Package verification lives under `build/package-layout-tests`; it validates package
+contents and a clean consumer application, and the release workflow runs it against the
+packages it just packed, before publishing.

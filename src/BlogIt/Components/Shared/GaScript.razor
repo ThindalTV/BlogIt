@@ -1,25 +1,45 @@
 @using BlogIt.Services
+@using BlogIt.Shared
+@using BlogIt.Shared.Helpers
 @namespace BlogIt.Components.Shared
 @inject ISettingsService SettingsService
 
-@if (!string.IsNullOrEmpty(measurementId))
+@*
+    Loads the site's Google Tag Manager container. GTM rather than a raw gtag: the container is
+    where tags, triggers and — the reason it has to be the only entry point — cookie consent are
+    configured, so a page that loaded gtag.js directly would be tracking outside the consent the
+    container enforces. See AnalyticsPolicy.
+
+    The two script elements are Google's standard snippet with its loader unrolled. The published
+    snippet injects the tag from JavaScript purely because it has to run inside whatever page it is
+    pasted into; rendering the element directly produces the same DOM and the same load. The
+    dataLayer push is not decoration: 'gtm.start' carries the container's load timing and the
+    'gtm.js' event is what fires GTM's Container Loaded triggers.
+*@
+@if (containerId is not null)
 {
-    <HeadContent>
-        <script async src="https://www.googletagmanager.com/gtag/js?id=@measurementId"></script>
+    <BlogItHeadTags>
         <script>
             window.dataLayer = window.dataLayer || [];
-            function gtag(){dataLayer.push(arguments);}
-            gtag('js', new Date());
-            gtag('config', '@measurementId');
+            window.dataLayer.push({ 'gtm.start': new Date().getTime(), event: 'gtm.js' });
         </script>
-    </HeadContent>
+        <script async src="https://www.googletagmanager.com/gtm.js?id=@containerId"></script>
+    </BlogItHeadTags>
 }
 
 @code {
-    private string? measurementId;
+    private string? containerId;
 
     protected override async Task OnInitializedAsync()
     {
-        measurementId = await SettingsService.GetAsync(BlogIt.Shared.SettingKeys.GoogleAnalyticsMeasurementId);
+        var stored = await SettingsService.GetAsync(SettingKeys.GoogleTagManagerContainerId);
+
+        // A malformed ID is dropped rather than emitted. Both write paths reject one, so this only
+        // catches a value written before the rule existed or straight into the database - and a
+        // container URL built from a GA4 measurement ID loads nothing, so emitting it would only
+        // cost a request and hide the misconfiguration behind a tag that appears to be present.
+        containerId = AnalyticsPolicy.HasTag(stored) && AnalyticsPolicy.IsWellFormedContainerId(stored)
+            ? stored!.Trim()
+            : null;
     }
 }

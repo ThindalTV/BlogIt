@@ -8,15 +8,15 @@
 {
     @if (isPreview)
     {
-        <HeadContent>
+        <BlogItHeadTags>
             <meta name="robots" content="noindex,nofollow" />
-        </HeadContent>
+        </BlogItHeadTags>
         <div class="draft-preview-banner" role="status">
             <strong>DRAFT PREVIEW</strong>
             <span>This single-use preview does not publish the page.</span>
         </div>
     }
-    <SeoHead Title="@(customPage.SeoTitle ?? customPage.Title)"
+    <SeoHead Title="@(OptionalText.FirstPresent(customPage.SeoTitle, customPage.Title))"
              Description="@(customPage.SeoDescription)"
              Keywords="@(customPage.SeoKeywords)"
              OgImage="@(customPage.OgImageUrl)"

@@ -80,17 +80,27 @@ else
         <div class="settings-section">
             <h2 class="settings-section-title">Analytics</h2>
             <div class="form-group">
-                <label class="form-label" for="settings-ga-measurement-id">Measurement ID</label>
-                <input id="settings-ga-measurement-id" class="form-input" @bind="gaMeasurementId" placeholder="G-XXXXXXXXXX" />
+                <label class="form-label" for="settings-gtm-container-id">Container ID <span class="form-hint">(Google Tag Manager, where your tags and cookie consent live)</span></label>
+                <input id="settings-gtm-container-id" class="form-input" @bind="gtmContainerId" @bind:event="oninput" placeholder="GTM-XXXXXXX" />
             </div>
-            <div class="form-group">
-                <label class="form-label" for="settings-ga-property-id">Property ID</label>
-                <input id="settings-ga-property-id" class="form-input" @bind="gaPropertyId" placeholder="123456789" />
-            </div>
-            <div class="form-group">
-                <label class="form-label" for="settings-ga-credentials">Service Account Credentials JSON <span class="form-hint">(leave blank to keep existing)</span></label>
-                <textarea id="settings-ga-credentials" class="form-textarea" @bind="gaCredentialsJson" rows="5" placeholder="****"></textarea>
-            </div>
+            @if (!HasTag)
+            {
+                <div class="alert alert-info">
+                    Reporting needs a container ID. Nothing is being tracked without one, so there
+                    is nothing for the dashboard to report on — enter one above to configure it.
+                </div>
+            }
+            else
+            {
+                <div class="form-group">
+                    <label class="form-label" for="settings-ga-property-id">Property ID</label>
+                    <input id="settings-ga-property-id" class="form-input" @bind="gaPropertyId" placeholder="123456789" />
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="settings-ga-credentials">Service Account Credentials JSON <span class="form-hint">(leave blank to keep existing)</span></label>
+                    <textarea id="settings-ga-credentials" class="form-textarea" @bind="gaCredentialsJson" rows="5" placeholder="****"></textarea>
+                </div>
+            }
         </div>
 
         <div class="settings-section">
@@ -118,10 +128,24 @@ else
     private string aiBaseUrl = "";
     private string aiModel = "";
     private string aiExportModel = "";
-    private string gaMeasurementId = "";
+    private string gtmContainerId = "";
     private string gaPropertyId = "";
     private string gaCredentialsJson = "";
     private int jwtExpiryMinutes = 60;
+
+    /// <summary>
+    /// Whether reporting may be configured at all. The server enforces the same rule through
+    /// <c>AnalyticsPolicy</c>; this only keeps the form from offering a combination it would refuse.
+    /// </summary>
+    private bool HasTag => AnalyticsPolicy.HasTag(gtmContainerId);
+
+    /// <summary>
+    /// The stored value for <paramref name="key"/>, treating "not set" (null) exactly like "not
+    /// present" and falling back to <paramref name="fallback"/> for both.
+    /// </summary>
+    private static string Value(
+        Dictionary<string, string?> settings, string key, string fallback = "") =>
+        settings.TryGetValue(key, out var value) && !string.IsNullOrEmpty(value) ? value : fallback;
 
     protected override async Task OnInitializedAsync()
     {
@@ -130,17 +154,21 @@ else
             var settings = await Api.GetSettingsAsync();
             if (settings != null)
             {
-                siteName = settings.GetValueOrDefault(SettingKeys.SiteName, "");
-                siteUrl = settings.GetValueOrDefault(SettingKeys.SiteUrl, "");
-                siteDescription = settings.GetValueOrDefault(SettingKeys.SiteDescription, "");
-                defaultOgImage = settings.GetValueOrDefault(SettingKeys.DefaultOgImage, "");
-                aiProvider = settings.GetValueOrDefault(SettingKeys.AiProvider, "github-copilot");
-                aiBaseUrl = settings.GetValueOrDefault(SettingKeys.AiBaseUrl, "");
-                aiModel = settings.GetValueOrDefault(SettingKeys.AiModel, "");
-                aiExportModel = settings.GetValueOrDefault(SettingKeys.AiExportModel, "");
-                gaMeasurementId = settings.GetValueOrDefault(SettingKeys.GoogleAnalyticsMeasurementId, "");
-                gaPropertyId = settings.GetValueOrDefault(SettingKeys.GoogleAnalyticsPropertyId, "");
-                if (int.TryParse(settings.GetValueOrDefault(SettingKeys.JwtExpiryMinutes, "60"), out var exp))
+                // Value(), not GetValueOrDefault(): a setting that is not set is now stored and
+                // returned as null, so the key is present and the dictionary's own default never
+                // applies. Reading it raw would put null into these bound fields and, worse, leave
+                // aiProvider null so the provider <select> matched no option at all.
+                siteName = Value(settings, SettingKeys.SiteName);
+                siteUrl = Value(settings, SettingKeys.SiteUrl);
+                siteDescription = Value(settings, SettingKeys.SiteDescription);
+                defaultOgImage = Value(settings, SettingKeys.DefaultOgImage);
+                aiProvider = Value(settings, SettingKeys.AiProvider, "github-copilot");
+                aiBaseUrl = Value(settings, SettingKeys.AiBaseUrl);
+                aiModel = Value(settings, SettingKeys.AiModel);
+                aiExportModel = Value(settings, SettingKeys.AiExportModel);
+                gtmContainerId = Value(settings, SettingKeys.GoogleTagManagerContainerId);
+                gaPropertyId = Value(settings, SettingKeys.GoogleAnalyticsPropertyId);
+                if (int.TryParse(Value(settings, SettingKeys.JwtExpiryMinutes, "60"), out var exp))
                     jwtExpiryMinutes = exp;
             }
         }
@@ -161,6 +189,14 @@ else
             return;
         }
 
+        // Same code the server validates with, so the form cannot drift from what it will accept.
+        if (AnalyticsPolicy.Validate(gtmContainerId, null, null) is string containerError)
+        {
+            errorMsg = containerError;
+            isSaving = false;
+            return;
+        }
+
         try
         {
             // Secrets stay null unless the user actually retyped one this session — null means
@@ -175,9 +211,15 @@ else
                 AiModel: aiModel,
                 AiExportModel: aiExportModel,
                 AiApiKey: string.IsNullOrWhiteSpace(aiApiKey) ? null : aiApiKey,
-                GoogleAnalyticsMeasurementId: gaMeasurementId,
-                GoogleAnalyticsPropertyId: gaPropertyId,
-                GoogleAnalyticsCredentialsJson: string.IsNullOrWhiteSpace(gaCredentialsJson) ? null : gaCredentialsJson,
+                GoogleTagManagerContainerId: gtmContainerId,
+                // Clearing the measurement ID clears reporting with it, rather than leaving stored
+                // credentials behind for a tag that no longer exists. Empty string, not null: null
+                // means "leave unchanged", and for the credentials it is the only way to actually
+                // clear a stored secret.
+                GoogleAnalyticsPropertyId: HasTag ? gaPropertyId : "",
+                GoogleAnalyticsCredentialsJson: !HasTag
+                    ? ""
+                    : string.IsNullOrWhiteSpace(gaCredentialsJson) ? null : gaCredentialsJson,
                 JwtExpiryMinutes: jwtExpiryMinutes);
 
             await Api.UpdateSettingsAsync(settings);
