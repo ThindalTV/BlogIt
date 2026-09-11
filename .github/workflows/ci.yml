@@ -1,10 +1,45 @@
 name: CI — Build & Test
 
+# Web/server side of the product. The MAUI admin is built by ci-maui.yml instead: it needs
+# the maui-android workload, which costs minutes this job should not pay on every change.
+# BlogIt.Contracts is shared, so it triggers both workflows.
 on:
   push:
     branches: [main]
+    paths:
+      - "src/BlogIt/**"
+      - "src/BlogIt.Admin/**"
+      - "src/BlogIt.AzureStorage/**"
+      - "src/BlogIt.GoogleAnalytics/**"
+      - "src/BlogIt.OpenAi/**"
+      - "src/BlogIt.Contracts/**"
+      - "samples/**"
+      - "tests/BlogIt.Tests.Web/**"
+      - "tests/BlogIt.Tests.Shared/**"
+      - "build/**"
+      - "BlogIt.slnx"
+      - "BlogIt.Web.slnx"
+      - "Directory.Build.props"
+      - "Directory.Packages.props"
+      - ".github/workflows/ci.yml"
   pull_request:
     branches: [main]
+    paths:
+      - "src/BlogIt/**"
+      - "src/BlogIt.Admin/**"
+      - "src/BlogIt.AzureStorage/**"
+      - "src/BlogIt.GoogleAnalytics/**"
+      - "src/BlogIt.OpenAi/**"
+      - "src/BlogIt.Contracts/**"
+      - "samples/**"
+      - "tests/BlogIt.Tests.Web/**"
+      - "tests/BlogIt.Tests.Shared/**"
+      - "build/**"
+      - "BlogIt.slnx"
+      - "BlogIt.Web.slnx"
+      - "Directory.Build.props"
+      - "Directory.Packages.props"
+      - ".github/workflows/ci.yml"
 
 permissions:
   contents: read
@@ -26,19 +61,29 @@ jobs:
           dotnet-quality: "preview"
 
       - name: Restore dependencies
-        run: dotnet restore BlogIt.slnx --property:Configuration=Release
+        run: dotnet restore BlogIt.Web.slnx --property:Configuration=Release
 
       - name: Build solution
-        run: dotnet build BlogIt.slnx --no-restore --configuration Release
+        run: dotnet build BlogIt.Web.slnx --no-restore --configuration Release
 
-      - name: Run tests
+      - name: Run shared tests
         run: >-
-          dotnet test tests/BlogIt.Tests/BlogIt.Tests.csproj
+          dotnet test tests/BlogIt.Tests.Shared/BlogIt.Tests.Shared.csproj
           --no-build
           --no-restore
           --configuration Release
           --verbosity normal
-          --logger "trx;LogFileName=test-results.trx"
+          --logger "trx;LogFileName=test-results-shared.trx"
+          --results-directory artifacts/test-results
+
+      - name: Run web tests
+        run: >-
+          dotnet test tests/BlogIt.Tests.Web/BlogIt.Tests.Web.csproj
+          --no-build
+          --no-restore
+          --configuration Release
+          --verbosity normal
+          --logger "trx;LogFileName=test-results-web.trx"
           --results-directory artifacts/test-results
 
       - name: Upload test results

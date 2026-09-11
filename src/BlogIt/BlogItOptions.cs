@@ -1,3 +1,5 @@
+using BlogIt.Shared;
+
 namespace BlogIt;
 
 public sealed class BlogItOptions
@@ -15,6 +17,7 @@ public sealed class BlogItOptions
     private bool _serveRobotsTxt = true;
     private bool _allowPrivateAiEndpoints;
     private IReadOnlyList<string> _redirectSourcePrefixes = [];
+    private long _maxMediaUploadBytes = ContentLimits.MediaUploadBytes;
     private bool _isReadOnly;
 
     public string AdminPath
@@ -212,6 +215,35 @@ public sealed class BlogItOptions
         }
     }
 
+    /// <summary>
+    /// Largest media upload BlogIt accepts, in bytes. Defaults to
+    /// <see cref="ContentLimits.MediaUploadBytes"/> (50 MiB).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Applied to BlogIt's own upload endpoint, so it overrides the server's global request-body
+    /// limit for that route in both directions. Without it the effective ceiling was whichever
+    /// default the host's server happened to carry — 30 MB on Kestrel — and an oversize upload was
+    /// rejected during model binding, before any BlogIt code ran, producing a bare 413 with no body
+    /// the admin portal could turn into a message.
+    /// </para>
+    /// <para>
+    /// This is the limit BlogIt can enforce, not the only limit in the path. Reverse proxies and
+    /// IIS apply their own caps (<c>client_max_body_size</c>, <c>maxAllowedContentLength</c>), and
+    /// those reject the request before it reaches the application at all. Raising this much above
+    /// the default means raising them to match.
+    /// </para>
+    /// </remarks>
+    public long MaxMediaUploadBytes
+    {
+        get => _maxMediaUploadBytes;
+        set
+        {
+            EnsureMutable();
+            _maxMediaUploadBytes = value;
+        }
+    }
+
     public BlogItOptions UseDatabaseProvider(IBlogItDatabaseProviderRegistration provider)
     {
         ArgumentNullException.ThrowIfNull(provider);
@@ -338,6 +370,13 @@ public sealed class BlogItOptions
         {
             throw new InvalidOperationException(
                 "BlogIt requires exactly one storage provider. Configure one in AddBlogIt, for example options.UseFileSystemStorage(...) or options.UseAzureStorage(...).");
+        }
+
+        if (_maxMediaUploadBytes <= 0)
+        {
+            throw new InvalidOperationException(
+                "BlogIt MaxMediaUploadBytes must be greater than zero. To stop hosting media, leave "
+                + "the media endpoints unused rather than setting the limit to zero.");
         }
 
         ValidateProviderName("database", DatabaseProvider.Name);

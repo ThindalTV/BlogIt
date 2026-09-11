@@ -7,7 +7,7 @@ public record MediaFileDto(
     string ContentType,
     string PublicPath,
     long SizeBytes,
-    DateTime UploadedAt,
+    DateTimeOffset UploadedAt,
     string UploaderDisplayName
 );
 

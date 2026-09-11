@@ -63,12 +63,24 @@ there is nothing to configure at startup and nothing that can be configured in t
 places. The service-account JSON is held as a secret setting and is never returned by the
 settings API.
 
-## Reporting, not measurement
+## Reporting, not collection
 
-This package only reads reports. The client-side measurement tag is separate: the
-`GaScript` component in the core `BlogIt` package emits it from the saved measurement ID
-and needs neither this package nor any SDK. A site can therefore collect analytics without
-installing this at all — it just will not show them on the dashboard.
+This package only reads reports. The client-side tag is separate: the `GaScript` component
+in the core `BlogIt` package loads the site's Google Tag Manager container from the saved
+container ID and needs neither this package nor any SDK. A site can therefore collect
+analytics without installing this at all — it just will not show them on the dashboard.
+
+The dependency runs the other way, though, and it is enforced. A site's GTM container ID
+has to be set before its GA4 property ID and service-account JSON may be: the container is
+what collects the traffic and, on a site with a consent banner, where consent is obtained,
+so reporting configured without one would describe traffic that was never consented to.
+`AnalyticsPolicy` in `BlogIt.Contracts` is the single definition of that rule, applied by
+the setup wizard, the settings screen and both write endpoints. Clearing the container ID
+clears the reporting settings with it.
+
+The two IDs are different things and are not interchangeable: `GTM-…` is the container this
+package's sibling loads, `G-…` is the GA4 measurement ID you configure *inside* that
+container, and the property ID here is the numeric GA4 property the Data API reports on.
 
 ## Replacing the provider
 

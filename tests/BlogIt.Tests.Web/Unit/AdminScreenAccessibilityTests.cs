@@ -66,8 +66,12 @@ public class AdminScreenAccessibilityTests
         // Positional rather than by id: the ids are what these tests are asserting about, so
         // driving the wizard through them would make the fixture pass by construction.
         cut.FindAll(".wizard-section input")[0].Change("admin");
-        cut.FindAll(".wizard-section input")[2].Change("correct-horse");
-        cut.FindAll(".wizard-section input")[3].Change("correct-horse");
+        // Display name and a policy-compliant password: step 1 now applies the same
+        // AccountFieldValidator and PasswordPolicy rules the server does, so the wizard no longer
+        // advances on input the submit would have rejected three steps later.
+        cut.FindAll(".wizard-section input")[1].Change("Admin User");
+        cut.FindAll(".wizard-section input")[2].Change("CorrectHorse1");
+        cut.FindAll(".wizard-section input")[3].Change("CorrectHorse1");
         Next(cut);
 
         Sweep(cut, "Setup step 2 (site information)");

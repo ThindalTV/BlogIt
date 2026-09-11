@@ -173,7 +173,9 @@
         uploadError = "";
         try
         {
-            await using var stream = uploadFile.OpenReadStream(maxAllowedSize: 50 * 1024 * 1024);
+            // See MediaList.razor: one shared constant rather than two literals that drifted apart.
+            await using var stream = uploadFile.OpenReadStream(
+                maxAllowedSize: ContentLimits.MediaUploadBytes);
             var uploaded = await Api.UploadMediaAsync(uploadTitle, stream, uploadFile.Name, uploadFile.ContentType);
             if (uploaded != null)
             {

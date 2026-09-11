@@ -36,8 +36,12 @@ public class SiteMetadataServiceTests
         entries.Should().OnlyContain(entry =>
             entry.Location == "https://blog.example" + entry.Path);
         entries.Should().NotContain(entry => entry.Path == "/hidden");
+        // Asserted as an explicit zero-offset instant, not a bare DateTime. A bare DateTime is
+        // Unspecified, which this assertion would read at the machine's local offset — which is
+        // how the sitemap's missing UTC normalization stayed invisible here: expectation and
+        // production shared the same assumption, so the test passed on a wrong value.
         entries.Single(entry => entry.Path == "/about").LastModified
-            .Should().Be(new DateTime(2025, 3, 4));
+            .Should().Be(new DateTimeOffset(2025, 3, 4, 0, 0, 0, TimeSpan.Zero));
     }
 
     [Fact]

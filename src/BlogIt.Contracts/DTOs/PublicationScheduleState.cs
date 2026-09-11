@@ -9,15 +9,15 @@ public enum PublicationScheduleState
 }
 
 public record UpdatePublicationScheduleRequest(
-    DateTime? ScheduledPublishAt,
-    DateTime? ScheduledUnpublishAt);
+    DateTimeOffset? ScheduledPublishAt,
+    DateTimeOffset? ScheduledUnpublishAt);
 
 public static class PublicationSchedule
 {
     public static PublicationScheduleState GetState(
         bool isPublished,
-        DateTime? scheduledPublishAt,
-        DateTime? scheduledUnpublishAt)
+        DateTimeOffset? scheduledPublishAt,
+        DateTimeOffset? scheduledUnpublishAt)
     {
         if (isPublished)
             return scheduledUnpublishAt.HasValue
@@ -29,12 +29,16 @@ public static class PublicationSchedule
             : PublicationScheduleState.Draft;
     }
 
-    public static string? Validate(DateTime? scheduledPublishAt, DateTime? scheduledUnpublishAt)
+    /// <remarks>
+    /// There is no longer a kind check here. These were <see cref="DateTime"/>, which could arrive
+    /// labelled <c>Unspecified</c> or <c>Local</c> and so had to be rejected outright to avoid
+    /// storing a wall-clock reading as an instant. A <see cref="DateTimeOffset"/> always names an
+    /// unambiguous instant whatever offset it carries, so ordering is the only rule left.
+    /// </remarks>
+    public static string? Validate(
+        DateTimeOffset? scheduledPublishAt,
+        DateTimeOffset? scheduledUnpublishAt)
     {
-        if (scheduledPublishAt is { Kind: not DateTimeKind.Utc })
-            return "Scheduled publish time must be a UTC instant.";
-        if (scheduledUnpublishAt is { Kind: not DateTimeKind.Utc })
-            return "Scheduled unpublish time must be a UTC instant.";
         if (scheduledPublishAt.HasValue &&
             scheduledUnpublishAt.HasValue &&
             scheduledUnpublishAt <= scheduledPublishAt)

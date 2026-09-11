@@ -3,8 +3,8 @@ namespace BlogIt.Shared.DTOs;
 public record AiConversationSummaryDto(
     Guid Id,
     string Title,
-    DateTime CreatedAt,
-    DateTime UpdatedAt,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt,
     int MessageCount,
     Guid? LinkedDraftId
 );
@@ -12,13 +12,13 @@ public record AiConversationSummaryDto(
 public record AiConversationDetailDto(
     Guid Id,
     string Title,
-    DateTime CreatedAt,
-    DateTime UpdatedAt,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt,
     Guid? LinkedDraftId,
     IReadOnlyList<AiMessageDto> Messages
 );
 
-public record AiMessageDto(Guid Id, string Role, string Content, DateTime CreatedAt);
+public record AiMessageDto(Guid Id, string Role, string Content, DateTimeOffset CreatedAt);
 
 public record CreateAiConversationRequest(string Title);
 

@@ -15,6 +15,18 @@ public class BlogPost : IConcurrencyStamped, ISeoMetadata
     /// <summary>Full markdown content. Null means summary-only post — no full page rendered.</summary>
     public string? Content { get; set; }
 
+    /// <summary>
+    /// Words in <see cref="Content"/>, maintained by <c>BlogItDbContext</c> on save.
+    /// </summary>
+    /// <remarks>
+    /// Nullable so that "never computed" (a row written before this column existed, until the
+    /// migrator backfills it) stays distinguishable from "computed, and there is nothing to read"
+    /// — a summary-only post reports <c>0</c>, not null. Stored rather than derived because the
+    /// public listing queries deliberately never load <see cref="Content"/>, so nothing downstream
+    /// can count it.
+    /// </remarks>
+    public int? WordCount { get; set; }
+
     public bool IsPublished { get; set; }
     public bool HasBeenPublished { get; set; }
     public DateTime? PublishedAt { get; set; }

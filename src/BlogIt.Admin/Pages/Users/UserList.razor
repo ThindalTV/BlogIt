@@ -124,6 +124,15 @@ else
             errorMsg = "Username and password are required.";
             return;
         }
+
+        // The same PasswordPolicy the server applies, not a copy of its rules. Checked here so the
+        // initial password is rejected before the round trip; the server checks it again on arrival
+        // and stays the authority.
+        if (PasswordPolicy.Validate(newPassword) is string passwordError)
+        {
+            errorMsg = passwordError;
+            return;
+        }
         isCreating = true;
         errorMsg = "";
         try

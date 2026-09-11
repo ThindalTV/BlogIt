@@ -1,6 +1,7 @@
 using BlogIt.Services;
 using BlogIt.Shared.Data;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -67,6 +68,7 @@ public static class BlogItServiceCollectionExtensions
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<ISettingsService, SettingsService>();
         services.TryAddScoped<IAuthService, AuthService>();
+        services.TryAddScoped<ISetupService, SetupService>();
         // Always registered, even with no provider: the AI and analytics endpoints take these as
         // handler parameters, so leaving them unresolvable would fail inside DI activation as an
         // unhandled 500 before any BlogIt error handling ran. The fallbacks degrade deliberately -
@@ -78,6 +80,10 @@ public static class BlogItServiceCollectionExtensions
         services.TryAddSingleton<IUrlRedirectService, UrlRedirectService>();
         services.TryAddScoped<IPublicContentService, PublicContentService>();
         services.TryAddScoped<ISiteMetadataService, SiteMetadataService>();
+        // Scoped, not singleton: the head belongs to one page render. See IBlogItHeadRegistry for
+        // why a shared instance would bleed one visitor's meta tags onto another's page.
+        services.TryAddScoped<BlogIt.Components.Shared.IBlogItHeadRegistry,
+            BlogIt.Components.Shared.BlogItHeadRegistry>();
         services.TryAddSingleton<BlogItAdminAssets>();
         services.AddHostedService<PublicationSchedulingService>();
         services.AddHttpContextAccessor();
@@ -138,6 +144,13 @@ public static class BlogItServiceCollectionExtensions
             ServiceDescriptor.Singleton<IBlogItEndpointContributor, EngineEndpointContributor>());
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IBlogItEndpointContributor, AdminAssetEndpointContributor>());
+
+        // Records what the host called during startup, then checks it once the pipeline is built.
+        // The filter is only ever invoked by a web host, so a console application that registers
+        // BlogIt purely to run migrations is unaffected.
+        services.TryAddSingleton<BlogItRegistrationState>();
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IStartupFilter, BlogItStartupValidator>());
 
         return services;
     }

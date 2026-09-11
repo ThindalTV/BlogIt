@@ -7,6 +7,16 @@ namespace BlogIt.Shared.Helpers;
 /// </summary>
 /// <remarks>
 /// <para>
+/// It lives in the contracts assembly rather than the engine so that the server and the admin
+/// client run <em>the same code</em>, not two copies of the same rules. The client checks a password
+/// before it posts, purely so the user hears about a weak one immediately; the server checks it
+/// again on arrival and remains the authority, because a client-side check is advice, not
+/// enforcement. Before this moved, only the server could check — which is why the setup wizard
+/// accepted a weak password, took the user through three more steps, and only then failed on the
+/// final submit, leaving them to page back to the first step to fix it.
+/// </para>
+/// <para>
+/// <para>
 /// <see cref="MaxLength"/> is deliberately far above BCrypt's 72-byte input ceiling. BCrypt ignores
 /// everything past that, so two accepted passwords sharing a 72-byte prefix hash identically; the
 /// cap does not fix that, it only stops unbounded input reaching the hasher and turns a silently

@@ -4,7 +4,7 @@
 
 <PageTitle>@(string.IsNullOrEmpty(Title) ? siteName : $"{Title} — {siteName}")</PageTitle>
 
-<HeadContent>
+<BlogItHeadTags>
     @if (!string.IsNullOrEmpty(Description))
     {
         <meta name="description" content="@Description" />
@@ -16,15 +16,15 @@
 
     @* Open Graph *@
     <meta property="og:type" content="@OgType" />
-    <meta property="og:title" content="@(Title ?? siteName)" />
+    <meta property="og:title" content="@(OptionalText.FirstPresent(Title, siteName))" />
     <meta property="og:site_name" content="@siteName" />
     @if (!string.IsNullOrEmpty(Description))
     {
         <meta property="og:description" content="@Description" />
     }
-    @if (!string.IsNullOrEmpty(OgImage ?? defaultOgImage))
+    @if (OptionalText.FirstPresent(OgImage, defaultOgImage) is not null)
     {
-        <meta property="og:image" content="@(OgImage ?? defaultOgImage)" />
+        <meta property="og:image" content="@(OptionalText.FirstPresent(OgImage, defaultOgImage))" />
     }
     @if (!string.IsNullOrEmpty(CanonicalUrl))
     {
@@ -34,21 +34,21 @@
 
     @* Twitter Card *@
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="@(Title ?? siteName)" />
+    <meta name="twitter:title" content="@(OptionalText.FirstPresent(Title, siteName))" />
     @if (!string.IsNullOrEmpty(Description))
     {
         <meta name="twitter:description" content="@Description" />
     }
-    @if (!string.IsNullOrEmpty(OgImage ?? defaultOgImage))
+    @if (OptionalText.FirstPresent(OgImage, defaultOgImage) is not null)
     {
-        <meta name="twitter:image" content="@(OgImage ?? defaultOgImage)" />
+        <meta name="twitter:image" content="@(OptionalText.FirstPresent(OgImage, defaultOgImage))" />
     }
 
     @if (SchemaType != SeoSchemaType.None)
     {
         <script type="application/ld+json">@((MarkupString)BuildStructuredData())</script>
     }
-</HeadContent>
+</BlogItHeadTags>
 
 @code {
     [Parameter] public string? Title { get; set; }
@@ -60,8 +60,8 @@
     [Parameter] public SeoSchemaType SchemaType { get; set; }
     [Parameter] public string? StructuredDataName { get; set; }
     [Parameter] public string? AuthorName { get; set; }
-    [Parameter] public DateTime? PublishedAt { get; set; }
-    [Parameter] public DateTime? ModifiedAt { get; set; }
+    [Parameter] public DateTimeOffset? PublishedAt { get; set; }
+    [Parameter] public DateTimeOffset? ModifiedAt { get; set; }
 
     private string siteName = "BlogIt";
     private string? defaultOgImage;
@@ -74,7 +74,7 @@
 
     private string BuildStructuredData()
     {
-        var schemaName = StructuredDataName ?? Title ?? siteName;
+        var schemaName = OptionalText.FirstPresent(StructuredDataName, Title, siteName)!;
         var schemaType = SchemaType switch
         {
             SeoSchemaType.WebSite => "WebSite",
@@ -101,10 +101,12 @@
             data["description"] = Description;
         if (!string.IsNullOrWhiteSpace(CanonicalUrl))
             data["url"] = CanonicalUrl;
+        // Schema.org dates are the calendar day the instant falls on in UTC, so that the value does
+        // not drift by a day depending on the offset the caller happens to hand over.
         if (PublishedAt.HasValue)
-            data["datePublished"] = PublishedAt.Value.ToString("yyyy-MM-dd");
+            data["datePublished"] = PublishedAt.Value.UtcDateTime.ToString("yyyy-MM-dd");
         if (ModifiedAt.HasValue)
-            data["dateModified"] = ModifiedAt.Value.ToString("yyyy-MM-dd");
+            data["dateModified"] = ModifiedAt.Value.UtcDateTime.ToString("yyyy-MM-dd");
         if (!string.IsNullOrWhiteSpace(AuthorName))
         {
             data["author"] = new Dictionary<string, string>

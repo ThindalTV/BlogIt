@@ -30,8 +30,8 @@ Without `BlogIt.OpenAi`, the two AI endpoints that call a provider answer `400`
 naming the package to install; the conversation list and CRUD still work. Without
 `BlogIt.GoogleAnalytics`, the analytics summary answers `404 "Analytics is not
 configured."` — the same response as an installed provider with no credentials
-entered. `GaScript`, the client-side measurement tag, is in this package and
-needs no satellite.
+entered. `GaScript`, which loads the site's Google Tag Manager container, is in
+this package and needs no satellite.
 
 ## Filesystem startup
 

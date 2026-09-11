@@ -30,7 +30,7 @@ public class AuthService(BlogItDbContext db, ISettingsService settings) : IAuthS
         var expiryStr = await settings.GetAsync(SettingKeys.JwtExpiryMinutes) ?? "60";
         var expiry = int.TryParse(expiryStr, out var m) ? m : 60;
 
-        var expiresAt = DateTime.UtcNow.AddMinutes(expiry);
+        var expiresAt = DateTimeOffset.UtcNow.AddMinutes(expiry);
         var token = GenerateToken(
             user.Id,
             user.Username,

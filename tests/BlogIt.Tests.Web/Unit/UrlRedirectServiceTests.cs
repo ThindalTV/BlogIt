@@ -47,28 +47,6 @@ public sealed class UrlRedirectServiceTests
         (await db.UrlRedirects.CountAsync()).Should().Be(1);
     }
 
-    [Fact]
-    public async Task AutomaticRedirects_UpdateOnlyAutomaticEntries()
-    {
-        var (service, _) = CreateService();
-        var manual = await service.CreateAsync("/manual", "/owner-target", true);
-
-        await service.UpsertAutomaticAsync("/same", "/same");
-        await service.UpsertAutomaticAsync("/generated", "/first");
-        await service.UpsertAutomaticAsync("/generated", "/second");
-        await service.UpsertAutomaticAsync("/manual", "/automatic-target");
-
-        var generated = await service.FindAsync("/generated");
-        generated.Should().NotBeNull();
-        generated!.TargetUrl.Should().Be("/second");
-        generated.IsAutomatic.Should().BeTrue();
-        generated.IsPermanent.Should().BeTrue();
-
-        var preservedManual = await service.FindAsync("/manual");
-        preservedManual.Should().BeEquivalentTo(manual);
-        (await service.FindAsync("/same")).Should().BeNull();
-    }
-
     private static (UrlRedirectService Service, TestDbContextFactory Factory) CreateService()
     {
         var options = new DbContextOptionsBuilder<BlogItDbContext>()

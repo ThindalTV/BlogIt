@@ -221,8 +221,12 @@ else
 
             if (isNew)
             {
+                // Blank SEO fields are sent as null, not "": the author never filled them in, so
+                // the value does not exist. See OptionalText.
                 var req = new CreatePageRequest(
-                    title, slug, content, seoTitle, seoDescription, seoKeywords, ogImageUrl,
+                    title, slug, content,
+                    OptionalText.OrNull(seoTitle), OptionalText.OrNull(seoDescription),
+                    OptionalText.OrNull(seoKeywords), OptionalText.OrNull(ogImageUrl),
                     isPublished, scheduledPublishAt, scheduledUnpublishAt);
                 var created = await Api.CreatePageAsync(req);
                 if (created != null)
@@ -237,7 +241,9 @@ else
             {
                 // See PostEdit.razor: the token proves this edit is based on the current version.
                 var req = new UpdatePageRequest(
-                    title, slug, content, seoTitle, seoDescription, seoKeywords, ogImageUrl,
+                    title, slug, content,
+                    OptionalText.OrNull(seoTitle), OptionalText.OrNull(seoDescription),
+                    OptionalText.OrNull(seoKeywords), OptionalText.OrNull(ogImageUrl),
                     isPublished, scheduledPublishAt, scheduledUnpublishAt,
                     page?.ConcurrencyStamp ?? default);
                 await Api.UpdatePageAsync(pageId.Value, req);
@@ -262,11 +268,15 @@ else
             Nav.NavigateTo(preview.Url, forceLoad: true);
     }
 
-    private static DateTime? ToUtc(string value) =>
-        string.IsNullOrWhiteSpace(value) ? null : DateTime.Parse(value).ToUniversalTime();
+    // The datetime-local input carries a wall-clock reading with no zone, so it is interpreted in
+    // the browser's timezone and sent as the instant it names.
+    private static DateTimeOffset? ToUtc(string value) =>
+        string.IsNullOrWhiteSpace(value)
+            ? null
+            : new DateTimeOffset(DateTime.Parse(value).ToUniversalTime());
 
-    private static string ToLocalInput(DateTime? utc) =>
-        utc?.ToLocalTime().ToString("yyyy-MM-ddTHH:mm") ?? "";
+    private static string ToLocalInput(DateTimeOffset? instant) =>
+        instant?.ToLocalTime().ToString("yyyy-MM-ddTHH:mm") ?? "";
 
     private static string ScheduleLabel(PublicationScheduleState state) => state switch
     {

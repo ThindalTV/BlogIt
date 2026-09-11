@@ -46,6 +46,8 @@
     <ProjectReference Include="..\..\src\BlogIt.OpenAi\BlogIt.OpenAi.csproj" />
     <ProjectReference Include="..\..\src\BlogIt\BlogIt.csproj" />
     <ProjectReference Include="..\..\src\BlogIt.Contracts\BlogIt.Contracts.csproj" />
+    <!-- Shared test helpers and the contracts-level tests both clients depend on. -->
+    <ProjectReference Include="..\BlogIt.Tests.Shared\BlogIt.Tests.Shared.csproj" />
     <ProjectReference Include="..\..\samples\BlogIt.Sample\BlogIt.Sample.csproj" />
   </ItemGroup>
 

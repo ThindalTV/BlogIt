@@ -57,7 +57,10 @@ public static class SettingsApi
         if (errors.Count > 0)
             return Results.ValidationProblem(errors);
 
-        var toSave = new Dictionary<string, string>();
+        // Values here are never null: Set/SetSecret skip a null, which on this path means "the
+        // client did not send this field" — leave the stored value alone. That is a different
+        // meaning from the null the storage layer uses for "not set", and deliberately so.
+        var toSave = new Dictionary<string, string?>();
         Set(toSave, SettingKeys.SiteName, body.SiteName);
         Set(toSave, SettingKeys.SiteUrl, body.SiteUrl);
         Set(toSave, SettingKeys.SiteDescription, body.SiteDescription);
@@ -66,7 +69,7 @@ public static class SettingsApi
         Set(toSave, SettingKeys.AiBaseUrl, body.AiBaseUrl);
         Set(toSave, SettingKeys.AiModel, body.AiModel);
         Set(toSave, SettingKeys.AiExportModel, body.AiExportModel);
-        Set(toSave, SettingKeys.GoogleAnalyticsMeasurementId, body.GoogleAnalyticsMeasurementId);
+        Set(toSave, SettingKeys.GoogleTagManagerContainerId, body.GoogleTagManagerContainerId?.Trim());
         Set(toSave, SettingKeys.GoogleAnalyticsPropertyId, body.GoogleAnalyticsPropertyId);
         SetSecret(toSave, SettingKeys.AiApiKey, body.AiApiKey);
         SetSecret(toSave, SettingKeys.GoogleAnalyticsCredentialsJson, body.GoogleAnalyticsCredentialsJson);
@@ -74,10 +77,34 @@ public static class SettingsApi
         if (body.JwtExpiryMinutes is int minutes)
             toSave[SettingKeys.JwtExpiryMinutes] = minutes.ToString();
 
+        // Analytics reporting may only exist alongside a tag container - see AnalyticsPolicy.
+        // Checked against the *effective* settings rather than the body, because a partial update
+        // carrying only a property ID says nothing about the container ID already stored, and a
+        // body-only check would wave it through. Reading the stored values here rather than up with
+        // the other validation keeps the merge rules in one place: toSave already encodes
+        // Set/SetSecret's "null means unchanged" and "the placeholder means unchanged".
+        var stored = await settings.GetAllAsync();
+        if (AnalyticsPolicy.Validate(
+                Effective(SettingKeys.GoogleTagManagerContainerId),
+                Effective(SettingKeys.GoogleAnalyticsPropertyId),
+                Effective(SettingKeys.GoogleAnalyticsCredentialsJson))
+            is string analyticsError)
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["googleTagManagerContainerId"] = [analyticsError]
+            });
+        }
+
         if (toSave.Count > 0)
             await settings.SetManyAsync(toSave);
 
         return Results.NoContent();
+
+        // The value a key will hold once this write lands: what the request is changing it to, or
+        // what is already stored when the request leaves it alone.
+        string? Effective(string key) =>
+            toSave.TryGetValue(key, out var pending) ? pending : stored.GetValueOrDefault(key);
     }
 
     /// <summary>
@@ -96,7 +123,7 @@ public static class SettingsApi
     }
 
     /// <summary>Null means "leave this setting alone"; an empty string clears it.</summary>
-    private static void Set(Dictionary<string, string> target, string key, string? value)
+    private static void Set(Dictionary<string, string?> target, string key, string? value)
     {
         if (value is not null)
             target[key] = value;
@@ -108,7 +135,7 @@ public static class SettingsApi
     /// would otherwise overwrite a real credential with three asterisks. Both shipped clients
     /// strip it themselves; this makes a third client that forgets harmless.
     /// </summary>
-    private static void SetSecret(Dictionary<string, string> target, string key, string? value)
+    private static void SetSecret(Dictionary<string, string?> target, string key, string? value)
     {
         if (value is null || value == SettingsRedaction.Placeholder)
             return;

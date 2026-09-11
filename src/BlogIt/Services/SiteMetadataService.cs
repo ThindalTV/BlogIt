@@ -21,7 +21,7 @@ namespace BlogIt.Services;
 /// The value for <c>&lt;lastmod&gt;</c>, or <see langword="null"/> for entries that have no
 /// meaningful modification date (the home and archive listings).
 /// </param>
-public sealed record SitemapEntry(string Path, string Location, DateTime? LastModified);
+public sealed record SitemapEntry(string Path, string Location, DateTimeOffset? LastModified);
 
 /// <summary>One <c>User-agent</c> group of a <c>robots.txt</c> document.</summary>
 /// <param name="UserAgent">The crawler this group applies to; <c>*</c> means all of them.</param>
@@ -79,8 +79,8 @@ public sealed record BlogFeedItem(
     string SummaryHtml,
     string ContentHtml,
     string? Author,
-    DateTime PublishedAt,
-    DateTime UpdatedAt);
+    DateTimeOffset PublishedAt,
+    DateTimeOffset UpdatedAt);
 
 /// <summary>Channel-level feed metadata plus the most recent published items.</summary>
 /// <remarks>
@@ -95,14 +95,15 @@ public sealed record BlogFeedItem(
 /// <param name="Description">The site description, or a generated one when unset.</param>
 /// <param name="SiteUrl">The resolved absolute site URL, with a trailing slash.</param>
 /// <param name="UpdatedAt">
-/// The newest item's update time, UTC; <see cref="DateTime.UnixEpoch"/> when there are no items.
+/// The newest item's update time, UTC; <see cref="DateTimeOffset.UnixEpoch"/> when there are no
+/// items.
 /// </param>
 /// <param name="Items">The items, newest first.</param>
 public sealed record BlogFeed(
     string Title,
     string Description,
     string SiteUrl,
-    DateTime UpdatedAt,
+    DateTimeOffset UpdatedAt,
     IReadOnlyList<BlogFeedItem> Items);
 
 /// <summary>
@@ -222,8 +223,7 @@ public sealed class SiteMetadataService(
         int maxItems,
         CancellationToken cancellationToken)
     {
-        var posts = await db.BlogPosts
-            .Where(post => post.IsPublished && post.PublishedAt != null)
+        var posts = await db.BlogPosts.WherePublished()
             .OrderByDescending(post => post.PublishedAt)
             .ThenByDescending(post => post.Id)
             .Select(post => new
@@ -244,15 +244,18 @@ public sealed class SiteMetadataService(
 
         var items = posts.Select(post =>
         {
-            var publishedAt = ToUtc(post.PublishedAt);
-            var updatedAt = ToUtc(post.UpdatedAt);
+            var publishedAt = UtcTimestamp.ToOffset(post.PublishedAt);
+            var updatedAt = UtcTimestamp.ToOffset(post.UpdatedAt);
             if (updatedAt < publishedAt)
                 updatedAt = publishedAt;
 
             return new BlogFeedItem(
                 post.Id,
                 post.Title,
-                BlogUrlHelper.GetPostPath(post.Slug, post.PublishedAt, post.CreatedAt),
+                BlogUrlHelper.GetPostPath(
+                    post.Slug,
+                    publishedAt,
+                    UtcTimestamp.ToOffset(post.CreatedAt)),
                 $"urn:uuid:{post.Id:D}",
                 MarkdownHelper.ToHtml(post.Summary),
                 MarkdownHelper.ToHtml(post.Content ?? post.Summary),
@@ -268,7 +271,7 @@ public sealed class SiteMetadataService(
                 ? $"Latest posts from {title}"
                 : siteDescription,
             siteUrl,
-            items.Count == 0 ? DateTime.UnixEpoch : items.Max(item => item.UpdatedAt),
+            items.Count == 0 ? DateTimeOffset.UnixEpoch : items.Max(item => item.UpdatedAt),
             items);
     }
 
@@ -283,14 +286,12 @@ public sealed class SiteMetadataService(
     {
         var baseUrl = siteUrl.TrimEnd('/');
 
-        var posts = await db.BlogPosts
-            .Where(post => post.IsPublished && post.PublishedAt != null)
+        var posts = await db.BlogPosts.WherePublished()
             .Select(post => new { post.Slug, post.PublishedAt, post.CreatedAt, post.UpdatedAt })
             .AsNoTracking()
             .ToListAsync(cancellationToken);
 
-        var pages = await db.Pages
-            .Where(page => page.IsPublished)
+        var pages = await db.Pages.WherePublished()
             .Select(page => new { page.Slug, page.UpdatedAt })
             .AsNoTracking()
             .ToListAsync(cancellationToken);
@@ -302,16 +303,20 @@ public sealed class SiteMetadataService(
         };
 
         entries.AddRange(posts.Select(post => Entry(
-            BlogUrlHelper.GetPostPath(post.Slug, post.PublishedAt, post.CreatedAt),
-            post.UpdatedAt)));
-        entries.AddRange(pages.Select(page => Entry($"/{page.Slug}", page.UpdatedAt)));
+            BlogUrlHelper.GetPostPath(
+                post.Slug,
+                UtcTimestamp.ToOffset(post.PublishedAt),
+                UtcTimestamp.ToOffset(post.CreatedAt)),
+            UtcTimestamp.ToOffset(post.UpdatedAt))));
+        entries.AddRange(pages.Select(page =>
+            Entry($"/{page.Slug}", UtcTimestamp.ToOffset(page.UpdatedAt))));
 
         return entries;
 
         // Concatenation rather than `new Uri(base, path)`: the Uri overload resolves a rooted path
         // against the *origin*, which silently drops the prefix of a blog mounted at
         // https://example.com/blog/.
-        SitemapEntry Entry(string path, DateTime? lastModified) =>
+        SitemapEntry Entry(string path, DateTimeOffset? lastModified) =>
             new(path, baseUrl + path, lastModified);
     }
 
@@ -331,10 +336,4 @@ public sealed class SiteMetadataService(
             options.ServeSitemap ? [$"{baseUrl}/sitemap.xml"] : []);
     }
 
-    private static DateTime ToUtc(DateTime value) => value.Kind switch
-    {
-        DateTimeKind.Utc => value,
-        DateTimeKind.Local => value.ToUniversalTime(),
-        _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
-    };
 }

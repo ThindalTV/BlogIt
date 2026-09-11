@@ -50,7 +50,7 @@ public class SetupApiTests(BlogItSampleFactory factory) : IClassFixture<BlogItSa
             AiBaseUrl: null,
             AiModel: null,
             AiExportModel: null,
-            GoogleAnalyticsMeasurementId: null,
+            GoogleTagManagerContainerId: null,
             GoogleAnalyticsPropertyId: null,
             GoogleAnalyticsCredentialsJson: null
         );
@@ -98,7 +98,7 @@ public class SetupApiTests(BlogItSampleFactory factory) : IClassFixture<BlogItSa
             AiBaseUrl: null,
             AiModel: null,
             AiExportModel: null,
-            GoogleAnalyticsMeasurementId: null,
+            GoogleTagManagerContainerId: null,
             GoogleAnalyticsPropertyId: null,
             GoogleAnalyticsCredentialsJson: null);
 
@@ -132,7 +132,7 @@ public class SetupApiTests(BlogItSampleFactory factory) : IClassFixture<BlogItSa
             AiBaseUrl: null,
             AiModel: null,
             AiExportModel: null,
-            GoogleAnalyticsMeasurementId: null,
+            GoogleTagManagerContainerId: null,
             GoogleAnalyticsPropertyId: null,
             GoogleAnalyticsCredentialsJson: null);
 
@@ -163,7 +163,7 @@ public class SetupApiTests(BlogItSampleFactory factory) : IClassFixture<BlogItSa
             AiBaseUrl: null,
             AiModel: null,
             AiExportModel: null,
-            GoogleAnalyticsMeasurementId: null,
+            GoogleTagManagerContainerId: null,
             GoogleAnalyticsPropertyId: null,
             GoogleAnalyticsCredentialsJson: null);
 
@@ -200,7 +200,7 @@ public class SetupApiTests(BlogItSampleFactory factory) : IClassFixture<BlogItSa
             AiBaseUrl: baseUrl,
             AiModel: null,
             AiExportModel: null,
-            GoogleAnalyticsMeasurementId: null,
+            GoogleTagManagerContainerId: null,
             GoogleAnalyticsPropertyId: null,
             GoogleAnalyticsCredentialsJson: null);
 

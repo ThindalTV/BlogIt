@@ -1,0 +1,16 @@
+<!-- The web/server half of the product: every project in BlogIt.slnx except the MAUI client,
+     its Core library and its tests, which the path-filtered MAUI CI job builds instead.
+     Kept in sync by SolutionCoverageTests. -->
+<Solution>
+  <Project Path="src/BlogIt.Admin/BlogIt.Admin.csproj" />
+  <Project Path="tests/BlogIt.Tests.Shared/BlogIt.Tests.Shared.csproj" />
+  <Project Path="tests/BlogIt.Tests.Web/BlogIt.Tests.Web.csproj" />
+  <Project Path="samples/BlogIt.Sample.AppHost/BlogIt.Sample.AppHost.csproj" />
+  <Project Path="samples/BlogIt.Sample.ServiceDefaults/BlogIt.Sample.ServiceDefaults.csproj" />
+  <Project Path="samples/BlogIt.Sample/BlogIt.Sample.csproj" />
+  <Project Path="src/BlogIt/BlogIt.csproj" />
+  <Project Path="src/BlogIt.AzureStorage/BlogIt.AzureStorage.csproj" />
+  <Project Path="src/BlogIt.GoogleAnalytics/BlogIt.GoogleAnalytics.csproj" />
+  <Project Path="src/BlogIt.OpenAi/BlogIt.OpenAi.csproj" />
+  <Project Path="src/BlogIt.Contracts/BlogIt.Contracts.csproj" />
+</Solution>

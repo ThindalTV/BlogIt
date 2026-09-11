@@ -708,11 +708,12 @@ foreach ($dependency in $forbidden) {
 # stable build today cannot pass while still being floating tomorrow.
 $mainDependencies = [ordered]@{
     "BCrypt.Net-Next" = "4.2.0"
-    # Exact, and equal to this package's own version: the DTOs are the wire format both halves
-    # compile against, so an engine paired with a different contracts build is a silent
-    # serialisation mismatch. Falls out of the ProjectReference rather than being hand-written, but
-    # asserted here so a stray PrivateAssets="all" cannot quietly turn it back into a smuggled DLL.
-    "BlogIt.Contracts" = $version
+    # A bracketed exact range, not a bare version: the DTOs are the wire format both halves compile
+    # against, so an engine paired with a different contracts build is a silent serialisation
+    # mismatch. This assertion used to read `$version`, which NuGet interprets as a *minimum* — so
+    # the exactness both this comment and BlogIt.csproj claimed was never actually enforced, and a
+    # mismatched pair restored without a warning. BlogIt.Versioning.props now brackets it.
+    "BlogIt.Contracts" = "[$version]"
     "Markdig" = "1.3.2"
     "Microsoft.AspNetCore.Authentication.JwtBearer" = "10.0.11"
     "Microsoft.EntityFrameworkCore" = "10.0.11"
@@ -740,8 +741,9 @@ foreach ($satelliteOnlyDependency in @("OpenAI", "Google.Analytics.Data.V1Beta")
     }
 }
 
-# Every satellite is held to the same shape: one library asset, its own README, an exact-version
-# dependency on the matching BlogIt so a consumer can never end up with a mismatched pair, exactly
+# Every satellite is held to the same shape: one library asset, its own README, a bracketed
+# exact-version dependency on the matching BlogIt so a consumer can never end up with a mismatched
+# pair — an unbracketed version would be a floor, which is what this used to assert — exactly
 # one SDK of its own, no framework reference, and none of the engine's admin or build-transitive
 # assets duplicated. Asserted as one table so adding a satellite means adding a row, not a block.
 $satelliteExpectations = @(
@@ -751,7 +753,7 @@ $satelliteExpectations = @(
         Id = "BlogIt.AzureStorage"
         Assembly = "BlogIt.AzureStorage.dll"
         Dependencies = [ordered]@{
-            "BlogIt" = $version
+            "BlogIt" = "[$version]"
             "Azure.Storage.Blobs" = "12.29.1"
         }
     },
@@ -761,7 +763,7 @@ $satelliteExpectations = @(
         Id = "BlogIt.OpenAi"
         Assembly = "BlogIt.OpenAi.dll"
         Dependencies = [ordered]@{
-            "BlogIt" = $version
+            "BlogIt" = "[$version]"
             "OpenAI" = "2.12.0"
         }
     },
@@ -774,7 +776,7 @@ $satelliteExpectations = @(
         # Google publishes no stable Analytics Data client, so keeping it here lets BlogIt itself
         # release stable. This package ships prerelease until Google ships a stable V1 client.
         Dependencies = [ordered]@{
-            "BlogIt" = $version
+            "BlogIt" = "[$version]"
             "Google.Analytics.Data.V1Beta" = "2.0.0-beta10"
         }
     }

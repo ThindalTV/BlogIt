@@ -26,6 +26,25 @@ public static class MarkdownHelper
         return Markdown.ToHtml(markdown, Pipeline);
     }
 
+    /// <summary>Counts the words in a markdown body.</summary>
+    /// <remarks>
+    /// Renders to plain text first so that markup, link targets and HTML attributes are not counted,
+    /// and so that block tags become the whitespace that keeps adjacent words apart. What remains is
+    /// split on whitespace — a deliberately plain definition, which means fenced code and bare URLs
+    /// count as words. Stability matters more than precision here: the figure is stored on the post
+    /// and only recomputed when the body changes, so a rule that is easy to predict beats one that
+    /// is marginally more accurate.
+    /// </remarks>
+    public static int CountWords(string? markdown)
+    {
+        if (string.IsNullOrWhiteSpace(markdown))
+            return 0;
+
+        return ToPlainText(markdown)
+            .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)
+            .Length;
+    }
+
     /// <summary>Strips all markdown/HTML and returns plain text (for SEO descriptions etc.).</summary>
     public static string ToPlainText(string? markdown)
     {

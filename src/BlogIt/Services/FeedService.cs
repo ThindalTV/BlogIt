@@ -303,9 +303,10 @@ public static class FeedService
         return builder.ToString();
     }
 
-    // Feed timestamps arrive already normalized to UTC by the loader, so this only formats.
-    private static string ToRfc822(DateTime value) =>
-        value.ToString("r", CultureInfo.InvariantCulture);
+    // RFC 822 dates in a feed are conventionally written in GMT, so the instant is taken through
+    // UtcDateTime rather than formatted at whatever offset it happens to carry.
+    private static string ToRfc822(DateTimeOffset value) =>
+        value.UtcDateTime.ToString("r", CultureInfo.InvariantCulture);
 
     private sealed class Utf8StringWriter(StringBuilder builder) : StringWriter(builder, CultureInfo.InvariantCulture)
     {

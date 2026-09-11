@@ -115,12 +115,12 @@ public class JwtSigningKeyCacheTests
             return Task.FromResult(values.GetValueOrDefault(key));
         }
 
-        public Task<Dictionary<string, string>> GetAllAsync() =>
+        public Task<Dictionary<string, string?>> GetAllAsync() =>
             throw new NotSupportedException();
 
-        public Task SetAsync(string key, string value) => throw new NotSupportedException();
+        public Task SetAsync(string key, string? value) => throw new NotSupportedException();
 
-        public Task SetManyAsync(Dictionary<string, string> settings) =>
+        public Task SetManyAsync(Dictionary<string, string?> settings) =>
             throw new NotSupportedException();
     }
 }

@@ -60,7 +60,9 @@ public class SqlServerProviderTests
             "20260814205906_AddAiConversationSummary",
             "20260814220335_AddAiMessageIsCompacted",
             "20260815221704_AddAppUserSecurityStamp",
-            "20260815225105_AddIndexesColumnWidthsAndConcurrencyStamps");
+            "20260815225105_AddIndexesColumnWidthsAndConcurrencyStamps",
+            "20260818093824_MakeSiteSettingValueNullable",
+            "20260828110805_AddBlogPostWordCount");
     }
 
     private static ServiceProvider CreateServices(

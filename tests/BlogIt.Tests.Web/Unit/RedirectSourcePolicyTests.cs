@@ -201,9 +201,6 @@ public class RedirectSourcePolicyTests
             throw new NotSupportedException();
 
         public Task<bool> DeleteAsync(Guid id) => throw new NotSupportedException();
-
-        public Task UpsertAutomaticAsync(string sourcePath, string targetUrl) =>
-            throw new NotSupportedException();
     }
 
     private sealed record InMemoryDatabaseProvider : IBlogItDatabaseProviderRegistration

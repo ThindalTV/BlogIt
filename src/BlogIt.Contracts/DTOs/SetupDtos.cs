@@ -22,7 +22,7 @@ public record SetupInitializeRequest(
     string? AiBaseUrl,
     string? AiModel,
     string? AiExportModel,
-    string? GoogleAnalyticsMeasurementId,
+    string? GoogleTagManagerContainerId,
     string? GoogleAnalyticsPropertyId,
     string? GoogleAnalyticsCredentialsJson
 );

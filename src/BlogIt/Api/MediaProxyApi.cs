@@ -16,7 +16,9 @@ public static class MediaProxyApi
             // Anonymous, and every hit costs a database lookup plus a storage read. The limit is
             // sized for real visitor traffic — many requests per page view — rather than for admin
             // traffic; BlogItRateLimiterPolicies.Media carries the arithmetic.
-            .RequireRateLimiting(BlogItDefaults.MediaRateLimiterPolicy);
+            .RequireRateLimiting(BlogItDefaults.MediaRateLimiterPolicy)
+            // No option relocates this route on its own; MediaPath moves it.
+            .WithMetadata(new BlogItEndpointMetadata(DisableHint: null));
 
         return app;
     }

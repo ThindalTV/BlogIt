@@ -30,7 +30,8 @@ public static class SitemapApi
                 // and page, with no cap, where the feeds stop at FeedService.MaxItems. See
                 // BlogItRateLimiterPolicies.RootDocument for why this is throttled rather than
                 // capped or cached.
-                .RequireRateLimiting(BlogItDefaults.RootDocumentRateLimiterPolicy);
+                .RequireRateLimiting(BlogItDefaults.RootDocumentRateLimiterPolicy)
+                .WithMetadata(new BlogItEndpointMetadata(nameof(BlogItOptions.ServeSitemap)));
         }
 
         if (options.ServeRobotsTxt)
@@ -38,7 +39,8 @@ public static class SitemapApi
             app.MapGet("/robots.txt", GetRobotsAsync)
                 .AllowAnonymous()
                 .WithName(BlogItEndpointNames.RobotsTxt)
-                .RequireRateLimiting(BlogItDefaults.RootDocumentRateLimiterPolicy);
+                .RequireRateLimiting(BlogItDefaults.RootDocumentRateLimiterPolicy)
+                .WithMetadata(new BlogItEndpointMetadata(nameof(BlogItOptions.ServeRobotsTxt)));
         }
 
         return app;

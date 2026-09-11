@@ -236,14 +236,20 @@ public static class AiApi
     }
 
     private static AiConversationSummaryDto ToSummaryDto(AiConversation c) => new(
-        c.Id, c.Title, c.CreatedAt, c.UpdatedAt,
+        c.Id, c.Title,
+        UtcTimestamp.ToOffset(c.CreatedAt),
+        UtcTimestamp.ToOffset(c.UpdatedAt),
         c.Messages.Count, c.LinkedDraftId
     );
 
     private static AiConversationDetailDto ToDetailDto(AiConversation c) => new(
-        c.Id, c.Title, c.CreatedAt, c.UpdatedAt, c.LinkedDraftId,
+        c.Id, c.Title,
+        UtcTimestamp.ToOffset(c.CreatedAt),
+        UtcTimestamp.ToOffset(c.UpdatedAt),
+        c.LinkedDraftId,
         c.Messages.OrderBy(m => m.CreatedAt)
-                  .Select(m => new AiMessageDto(m.Id, m.Role, m.Content, m.CreatedAt))
+                  .Select(m => new AiMessageDto(
+                      m.Id, m.Role, m.Content, UtcTimestamp.ToOffset(m.CreatedAt)))
                   .ToList()
     );
 }

@@ -12,7 +12,7 @@
         </div>
 
         <div class="wizard-steps">
-            @for (int i = 1; i <= 4; i++)
+            @for (int i = 1; i <= StepCount; i++)
             {
                 var step = i;
                 <div class="wizard-step @(step == currentStep ? "active" : step < currentStep ? "done" : "")">
@@ -106,19 +106,47 @@
         else if (currentStep == 4)
         {
             <div class="wizard-section">
-                <h2>Google Analytics <span class="form-hint">(optional)</span></h2>
+                <h2>Visitor Tracking <span class="form-hint">(optional)</span></h2>
+                <p class="form-hint">
+                    BlogIt loads one Google Tag Manager container into every public page. The
+                    container is where your tags, triggers and cookie consent live, so everything
+                    tracked goes through it. Leave this blank to track nothing — the next step,
+                    analytics reporting, is only available once a container ID is entered.
+                </p>
                 <div class="form-group">
-                    <label class="form-label" for="setup-ga-measurement-id">Measurement ID</label>
-                    <input id="setup-ga-measurement-id" class="form-input" @bind="model.GoogleAnalyticsMeasurementId" placeholder="G-XXXXXXXXXX" />
+                    <label class="form-label" for="setup-gtm-container-id">Container ID</label>
+                    <input id="setup-gtm-container-id" class="form-input" @bind="model.GoogleTagManagerContainerId" @bind:event="oninput" placeholder="GTM-XXXXXXX" />
                 </div>
-                <div class="form-group">
-                    <label class="form-label" for="setup-ga-property-id">Property ID</label>
-                    <input id="setup-ga-property-id" class="form-input" @bind="model.GoogleAnalyticsPropertyId" placeholder="123456789" />
-                </div>
-                <div class="form-group">
-                    <label class="form-label" for="setup-ga-credentials">Service Account Credentials JSON</label>
-                    <textarea id="setup-ga-credentials" class="form-textarea" @bind="model.GoogleAnalyticsCredentialsJson" rows="6" placeholder='{"type":"service_account",…}'></textarea>
-                </div>
+            </div>
+        }
+        else if (currentStep == 5)
+        {
+            <div class="wizard-section">
+                <h2>Analytics Reporting <span class="form-hint">(optional)</span></h2>
+                @if (!HasTag)
+                {
+                    <div class="alert alert-info">
+                        No container ID was entered on the previous step, so nothing is being tracked
+                        and there is nothing to report on. Go back and enter one to configure the
+                        admin dashboard's analytics panel.
+                    </div>
+                }
+                else
+                {
+                    <p class="form-hint">
+                        Reads the traffic your container collects back into the admin dashboard.
+                        These are GA4 Data API credentials, and require the
+                        <code>BlogIt.GoogleAnalytics</code> package on the host.
+                    </p>
+                    <div class="form-group">
+                        <label class="form-label" for="setup-ga-property-id">Property ID</label>
+                        <input id="setup-ga-property-id" class="form-input" @bind="model.GoogleAnalyticsPropertyId" placeholder="123456789" />
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="setup-ga-credentials">Service Account Credentials JSON</label>
+                        <textarea id="setup-ga-credentials" class="form-textarea" @bind="model.GoogleAnalyticsCredentialsJson" rows="6" placeholder='{"type":"service_account",…}'></textarea>
+                    </div>
+                }
             </div>
         }
 
@@ -131,7 +159,7 @@
             {
                 <span></span>
             }
-            @if (currentStep < 4)
+            @if (currentStep < StepCount)
             {
                 <button class="btn btn-primary" @onclick="NextStep">Next →</button>
             }
@@ -159,12 +187,22 @@
             Nav.NavigateTo("login", replace: true);
     }
 
+    /// <summary>
+    /// Tracking and reporting are two steps rather than one because the second depends on the
+    /// first: the tag container collects consent and the traffic, and reporting only reads back
+    /// what the container collected. See <c>AnalyticsPolicy</c>.
+    /// </summary>
+    private const int StepCount = 5;
+
+    private bool HasTag => AnalyticsPolicy.HasTag(model.GoogleTagManagerContainerId);
+
     private string StepLabel(int step) => step switch
     {
         1 => "Account",
         2 => "Site Info",
         3 => "AI",
-        4 => "Analytics",
+        4 => "Tracking",
+        5 => "Analytics",
         _ => ""
     };
 
@@ -174,13 +212,38 @@
         if (currentStep == 1)
         {
             if (string.IsNullOrWhiteSpace(model.Username)) { errorMsg = "Username is required."; return; }
+            if (string.IsNullOrWhiteSpace(model.DisplayName)) { errorMsg = "Display name is required."; return; }
             if (string.IsNullOrWhiteSpace(model.Password)) { errorMsg = "Password is required."; return; }
+
+            // The same PasswordPolicy the server applies on submit, not a copy of its rules — so the
+            // wizard cannot drift from what will actually be accepted. Reported here so a weak
+            // password is caught on the step that asks for it, rather than three steps later on
+            // Finish Setup with no way back but the Back button.
+            if (PasswordPolicy.Validate(model.Password) is string passwordError) { errorMsg = passwordError; return; }
+
             if (model.Password != confirmPassword) { errorMsg = "Passwords do not match."; return; }
         }
         else if (currentStep == 2)
         {
             if (string.IsNullOrWhiteSpace(model.SiteName)) { errorMsg = "Site name is required."; return; }
             if (!IsValidAbsoluteHttpUrl(model.SiteUrl)) { errorMsg = "Site URL must be an absolute http:// or https:// URL."; return; }
+        }
+        else if (currentStep == 4)
+        {
+            // Checked on the step that asks for it rather than on the final submit, for the same
+            // reason as the password: paging back three steps to fix one typo is a bad way to hear
+            // about it.
+            if (AnalyticsPolicy.Validate(model.GoogleTagManagerContainerId, null, null)
+                is string containerError) { errorMsg = containerError; return; }
+
+            if (!HasTag)
+            {
+                // Clearing the container ID after filling reporting in has to discard the reporting
+                // fields too, or paging back and forth would smuggle a configuration past the next
+                // step's guard and into a submit the server would then reject.
+                model.GoogleAnalyticsPropertyId = null;
+                model.GoogleAnalyticsCredentialsJson = null;
+            }
         }
         currentStep++;
     }
@@ -202,7 +265,7 @@
                 model.Username, model.DisplayName, model.Password,
                 model.SiteName, model.SiteUrl, model.SiteDescription, model.DefaultOgImage,
                 model.AiProvider, model.AiApiKey, model.AiBaseUrl, model.AiModel, model.AiExportModel,
-                model.GoogleAnalyticsMeasurementId, model.GoogleAnalyticsPropertyId, model.GoogleAnalyticsCredentialsJson
+                model.GoogleTagManagerContainerId, model.GoogleAnalyticsPropertyId, model.GoogleAnalyticsCredentialsJson
             ));
             Nav.NavigateTo("login", replace: true);
         }
@@ -227,7 +290,7 @@
         public string? AiBaseUrl { get; set; }
         public string? AiModel { get; set; }
         public string? AiExportModel { get; set; }
-        public string? GoogleAnalyticsMeasurementId { get; set; }
+        public string? GoogleTagManagerContainerId { get; set; }
         public string? GoogleAnalyticsPropertyId { get; set; }
         public string? GoogleAnalyticsCredentialsJson { get; set; }
     }

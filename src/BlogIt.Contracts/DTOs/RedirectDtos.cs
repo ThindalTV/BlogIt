@@ -8,8 +8,8 @@ public record UrlRedirectDto(
     string TargetUrl,
     bool IsPermanent,
     bool IsAutomatic,
-    DateTime CreatedAt,
-    DateTime UpdatedAt);
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt);
 
 /// <remarks>
 /// The source-path ceiling is not cosmetic: <see cref="RedirectLimits.SourcePathLength"/> is what

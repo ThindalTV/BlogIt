@@ -19,7 +19,10 @@ public static class GoogleAnalyticsExtensions
     /// <para>
     /// This is reporting only, and separate from the client-side measurement snippet: the
     /// <c>GaScript</c> component in the core package emits a GA tag from the saved measurement ID
-    /// and needs no provider and no SDK.
+    /// and needs no provider and no SDK. The settings are not independent in the other direction,
+    /// though: reporting may only be configured on a site that has a measurement ID, because the
+    /// gtag is what collects the traffic and where consent for collecting it is obtained. See
+    /// <c>BlogIt.Shared.Helpers.AnalyticsPolicy</c>.
     /// </para>
     /// </remarks>
     /// <param name="options">The options instance being configured inside <c>AddBlogIt</c>.</param>

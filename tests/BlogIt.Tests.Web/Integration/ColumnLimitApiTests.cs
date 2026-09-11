@@ -247,7 +247,7 @@ public class ColumnLimitApiTests(BlogItSampleFactory factory) : IClassFixture<Bl
             AiBaseUrl: null,
             AiModel: null,
             AiExportModel: null,
-            GoogleAnalyticsMeasurementId: null,
+            GoogleTagManagerContainerId: null,
             GoogleAnalyticsPropertyId: null,
             GoogleAnalyticsCredentialsJson: null));
 

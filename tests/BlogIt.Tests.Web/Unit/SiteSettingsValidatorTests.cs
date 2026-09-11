@@ -26,7 +26,7 @@ public class SiteSettingsValidatorTests
             AiModel: "gpt-4o",
             AiExportModel: "gpt-4o",
             AiApiKey: "sk-real-key",
-            GoogleAnalyticsMeasurementId: "G-XXXXXXXXXX",
+            GoogleTagManagerContainerId: "GTM-XXXXXXX",
             GoogleAnalyticsPropertyId: "123456789",
             GoogleAnalyticsCredentialsJson: "{}",
             JwtExpiryMinutes: 1440);

@@ -2,20 +2,21 @@ using System.ComponentModel.DataAnnotations;
 
 namespace BlogIt.Shared.DTOs;
 
+/// <inheritdoc cref="BlogPostSummaryDto" path="/remarks"/>
 public record PageDto(
     Guid Id,
     string Title,
     string Slug,
     string Content,
     bool IsPublished,
-    DateTime CreatedAt,
-    DateTime UpdatedAt,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt,
     string? SeoTitle,
     string? SeoDescription,
     string? SeoKeywords,
     string? OgImageUrl,
-    DateTime? ScheduledPublishAt = null,
-    DateTime? ScheduledUnpublishAt = null,
+    DateTimeOffset? ScheduledPublishAt = null,
+    DateTimeOffset? ScheduledUnpublishAt = null,
     PublicationScheduleState ScheduleState = PublicationScheduleState.Draft,
     bool HasBeenPublished = false,
     /// <summary>
@@ -36,8 +37,8 @@ public record CreatePageRequest(
     [property: StringLength(SeoLimits.KeywordsLength)] string? SeoKeywords,
     [property: StringLength(SeoLimits.OgImageUrlLength)] string? OgImageUrl,
     bool IsPublished,
-    DateTime? ScheduledPublishAt = null,
-    DateTime? ScheduledUnpublishAt = null
+    DateTimeOffset? ScheduledPublishAt = null,
+    DateTimeOffset? ScheduledUnpublishAt = null
 );
 
 /// <param name="ConcurrencyStamp">
@@ -53,7 +54,7 @@ public record UpdatePageRequest(
     [property: StringLength(SeoLimits.KeywordsLength)] string? SeoKeywords,
     [property: StringLength(SeoLimits.OgImageUrlLength)] string? OgImageUrl,
     bool IsPublished,
-    DateTime? ScheduledPublishAt = null,
-    DateTime? ScheduledUnpublishAt = null,
+    DateTimeOffset? ScheduledPublishAt = null,
+    DateTimeOffset? ScheduledUnpublishAt = null,
     Guid ConcurrencyStamp = default
 );

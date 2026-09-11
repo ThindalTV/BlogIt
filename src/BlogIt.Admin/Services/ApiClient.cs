@@ -343,9 +343,15 @@ public class ApiClient(HttpClient http)
 
     // ── Settings ────────────────────────────────────────────────────────────
 
-    public async Task<Dictionary<string, string>?> GetSettingsAsync()
+    /// <summary>
+    /// Every stored setting. A value is null when the setting is not set — no AI key, no analytics
+    /// ID — which is a distinct state from an empty string, and distinct again from the key being
+    /// absent. Callers that only want "what should this field show?" should treat null and absent
+    /// alike; see <c>SiteSettings.razor</c>.
+    /// </summary>
+    public async Task<Dictionary<string, string?>?> GetSettingsAsync()
     {
-        return await http.GetFromJsonAsync<Dictionary<string, string>>("settings");
+        return await http.GetFromJsonAsync<Dictionary<string, string?>>("settings");
     }
 
     public async Task UpdateSettingsAsync(SiteSettingsUpdateRequest settings)

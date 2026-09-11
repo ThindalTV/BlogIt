@@ -162,7 +162,11 @@ else
         {
             var file = e.File;
             var title = Path.GetFileNameWithoutExtension(file.Name);
-            await using var stream = file.OpenReadStream(maxAllowedSize: 50 * 1024 * 1024);
+            // The same constant the server's default ceiling comes from. These were two separate
+            // literals and they disagreed: this side allowed 50 MB while the server stopped at
+            // Kestrel's 30 MB default, so a file in between uploaded and then failed.
+            await using var stream = file.OpenReadStream(
+                maxAllowedSize: ContentLimits.MediaUploadBytes);
             await Api.UploadMediaAsync(title, stream, file.Name, file.ContentType);
             successMsg = $"'{file.Name}' uploaded successfully.";
             // Page 1: the newest upload sorts to the top of the list, which is where the user
