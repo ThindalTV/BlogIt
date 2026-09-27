@@ -1,4 +1,4 @@
-namespace BlogIt.Shared.Helpers;
+namespace BlogIt.Contracts;
 
 /// <summary>
 /// The single definition of what BlogIt accepts as a password. Applied by setup, user creation and

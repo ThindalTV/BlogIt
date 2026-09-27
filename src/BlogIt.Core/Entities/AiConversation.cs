@@ -1,4 +1,4 @@
-namespace BlogIt.Shared.Entities;
+namespace BlogIt.Entities;
 
 public class AiConversation
 {

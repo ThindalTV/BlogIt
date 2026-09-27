@@ -2,8 +2,8 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Net.Http.Headers;
 using System.Security.Claims;
 using System.Text;
-using BlogIt.Shared.Data;
-using BlogIt.Shared.Entities;
+using BlogIt.Data;
+using BlogIt.Entities;
 using BlogIt.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
@@ -69,7 +69,7 @@ public static class TestHelpers
         db.Users.Add(user);
         await db.SaveChangesAsync();
         var settings = scope.ServiceProvider.GetRequiredService<ISettingsService>();
-        await settings.SetAsync(BlogIt.Shared.SettingKeys.JwtSecret, BlogItSampleFactory.TestJwtSecret);
+        await settings.SetAsync(BlogIt.Contracts.SettingKeys.JwtSecret, BlogItSampleFactory.TestJwtSecret);
         return user.Id;
     }
 

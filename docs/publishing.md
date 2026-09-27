@@ -67,24 +67,18 @@ could ever depend on `BlogIt` alongside a different patch. That is acceptable fo
 five packages from one vendor released from one tag, which is the stated policy
 above. Revisit it if BlogIt grows a third-party ecosystem.
 
-### Namespace and assembly name do not match, deliberately
+### Namespaces follow the assembly
 
-The package and assembly are `BlogIt.Contracts`; the namespaces are
-`BlogIt.Shared.*`, and `BlogIt.Shared.Helpers` spans this assembly (via
-`BlogUrlHelper`) and the engine (the other twelve helpers). This is a known
-wart, left alone on purpose:
+`BlogIt.Contracts` is code shared with *other applications* — third-party
+clients, the MAUI admin — so its namespaces are `BlogIt.Contracts` and
+`BlogIt.Contracts.DTOs`, and no other assembly declares a type in them. The
+engine's types are named for their folders: `BlogIt.Entities`, `BlogIt.Data`,
+`BlogIt.Helpers` and so on.
 
-- Renaming the namespaces would touch nearly every file in the engine, the
-  Blazor admin, the MAUI admin, the sample and the tests, for a cosmetic gain
-  and a large rebase hazard against any in-flight work.
-- Renaming the *assembly* to `BlogIt.Shared` would leave the package id as the
-  odd one out, or force a third name into circulation.
-- A namespace spanning two assemblies is legal and common, and there is no type
-  collision between the two halves — the cost here is confusion, not breakage.
-
-Reconsider at the 1.0 cut, where a namespace change is a single documented
-breaking change rather than churn. Until then the mismatch is documented in the
-package README so a client author is not surprised by it.
+These were `BlogIt.Shared.*` before 0.2.0, with `BlogIt.Shared.Helpers` spread
+across both assemblies. That was renamed before the first published release,
+while the only consumer was a host built in step with the engine, so the change
+never had to be carried as a breaking change on a released version.
 
 ## Contract compatibility policy
 

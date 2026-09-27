@@ -1,4 +1,4 @@
-namespace BlogIt.Shared.Helpers;
+namespace BlogIt.Contracts;
 
 /// <summary>
 /// The single definition of what BlogIt accepts as analytics configuration: what a Google Tag

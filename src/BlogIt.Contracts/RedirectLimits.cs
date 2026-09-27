@@ -1,4 +1,4 @@
-namespace BlogIt.Shared;
+namespace BlogIt.Contracts;
 
 /// <summary>Bounds for URL redirect fields.</summary>
 public static class RedirectLimits

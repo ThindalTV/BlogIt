@@ -1,9 +1,9 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text;
+using BlogIt.Contracts;
+using BlogIt.Contracts.DTOs;
 using BlogIt.Services;
-using BlogIt.Shared;
-using BlogIt.Shared.DTOs;
 using BlogIt.Tests.Helpers;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;

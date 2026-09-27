@@ -1,5 +1,5 @@
-using BlogIt.Shared.DTOs;
-using BlogIt.Shared.Entities;
+using BlogIt.Contracts.DTOs;
+using BlogIt.Entities;
 
 namespace BlogIt.Services;
 

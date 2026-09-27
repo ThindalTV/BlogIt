@@ -1,5 +1,5 @@
+using BlogIt.Contracts.DTOs;
 using BlogIt.Services;
-using BlogIt.Shared.DTOs;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -160,7 +160,7 @@ public sealed class AiAnalyticsProviderTests
             CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
-        public Task<Shared.Entities.BlogPost> ExportToDraftAsync(
+        public Task<Entities.BlogPost> ExportToDraftAsync(
             Guid conversationId,
             Guid authorId,
             string? additionalInstructions,

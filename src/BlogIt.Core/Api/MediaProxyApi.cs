@@ -1,4 +1,4 @@
-using BlogIt.Shared.Data;
+using BlogIt.Data;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 

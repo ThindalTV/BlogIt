@@ -1,6 +1,6 @@
 using System.Reflection;
-using BlogIt.Shared.DTOs;
-using BlogIt.Shared.Helpers;
+using BlogIt.Contracts;
+using BlogIt.Contracts.DTOs;
 using FluentAssertions;
 
 namespace BlogIt.Tests.Unit;

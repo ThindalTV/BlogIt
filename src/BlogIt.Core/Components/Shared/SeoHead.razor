@@ -68,8 +68,8 @@
 
     protected override async Task OnInitializedAsync()
     {
-        siteName = await SettingsService.GetAsync(BlogIt.Shared.SettingKeys.SiteName) ?? "BlogIt";
-        defaultOgImage = await SettingsService.GetAsync(BlogIt.Shared.SettingKeys.DefaultOgImage);
+        siteName = await SettingsService.GetAsync(BlogIt.Contracts.SettingKeys.SiteName) ?? "BlogIt";
+        defaultOgImage = await SettingsService.GetAsync(BlogIt.Contracts.SettingKeys.DefaultOgImage);
     }
 
     private string BuildStructuredData()

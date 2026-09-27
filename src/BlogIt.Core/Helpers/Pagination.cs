@@ -1,4 +1,4 @@
-namespace BlogIt.Shared.Helpers;
+namespace BlogIt.Helpers;
 
 /// <summary>
 /// Forces the <c>page</c> and <c>pageSize</c> query parameters of the admin list endpoints into a

@@ -83,8 +83,8 @@ else
     {
         if (Page < 1) Page = 1;
 
-        siteDescription = await SettingsService.GetAsync(BlogIt.Shared.SettingKeys.SiteDescription);
-        siteUrl = await SettingsService.GetAsync(BlogIt.Shared.SettingKeys.SiteUrl) ?? "";
+        siteDescription = await SettingsService.GetAsync(BlogIt.Contracts.SettingKeys.SiteDescription);
+        siteUrl = await SettingsService.GetAsync(BlogIt.Contracts.SettingKeys.SiteUrl) ?? "";
 
         var postPage = await ContentService.GetPostsAsync(Page, PageSize);
         Page = postPage.Page;

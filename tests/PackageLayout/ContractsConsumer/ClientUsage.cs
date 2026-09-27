@@ -1,7 +1,6 @@
 using System.ComponentModel.DataAnnotations;
-using BlogIt.Shared;
-using BlogIt.Shared.DTOs;
-using BlogIt.Shared.Helpers;
+using BlogIt.Contracts;
+using BlogIt.Contracts.DTOs;
 
 namespace ContractsConsumer;
 

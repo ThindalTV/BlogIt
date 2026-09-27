@@ -17,7 +17,7 @@ public static class BlogItAzureSqlOptionsExtensions
     /// as a unit — a bare <c>Database.BeginTransactionAsync()</c> throws
     /// <c>InvalidOperationException</c> ("The configured execution strategy does not support
     /// user-initiated transactions"). Use
-    /// <see cref="BlogIt.Shared.Data.BlogItDbContextTransactionExtensions.ExecuteInTransactionAsync"/>
+    /// <see cref="BlogIt.Data.BlogItDbContextTransactionExtensions.ExecuteInTransactionAsync"/>
     /// for any multi-step write that needs to be atomic. Single <c>SaveChangesAsync()</c> calls
     /// need no special handling — EF Core already retries those automatically.
     /// </remarks>

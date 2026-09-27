@@ -1,8 +1,8 @@
 using BlogIt.Api;
+using BlogIt.Contracts.DTOs;
+using BlogIt.Data;
 using BlogIt.Middleware;
 using BlogIt.Services;
-using BlogIt.Shared.Data;
-using BlogIt.Shared.DTOs;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;

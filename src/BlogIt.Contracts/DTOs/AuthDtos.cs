@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace BlogIt.Shared.DTOs;
+namespace BlogIt.Contracts.DTOs;
 
 public record LoginRequest(
     [property: Required][property: StringLength(ContentLimits.UsernameLength)] string Username,

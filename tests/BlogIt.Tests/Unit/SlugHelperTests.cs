@@ -1,5 +1,5 @@
-using BlogIt.Shared;
-using BlogIt.Shared.Helpers;
+using BlogIt.Contracts;
+using BlogIt.Helpers;
 using FluentAssertions;
 
 namespace BlogIt.Tests.Unit;

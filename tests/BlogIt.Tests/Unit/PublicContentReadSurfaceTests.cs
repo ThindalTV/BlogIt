@@ -1,6 +1,6 @@
+using BlogIt.Data;
+using BlogIt.Entities;
 using BlogIt.Services;
-using BlogIt.Shared.Data;
-using BlogIt.Shared.Entities;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 
@@ -14,7 +14,7 @@ namespace BlogIt.Tests.Unit;
 /// <remarks>
 /// Each of these existed as host code before it existed here. The archive listing in particular was
 /// roughly a hundred lines against the raw context, most of it re-deriving
-/// <see cref="Shared.DTOs.BlogPostSummaryDto"/> — including the publication-schedule state, which is
+/// <see cref="Contracts.DTOs.BlogPostSummaryDto"/> — including the publication-schedule state, which is
 /// engine logic a host has no way to keep in step.
 /// </remarks>
 public class PublicContentReadSurfaceTests

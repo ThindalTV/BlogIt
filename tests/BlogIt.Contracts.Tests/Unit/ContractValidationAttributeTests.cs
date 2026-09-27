@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.Reflection;
-using BlogIt.Shared;
-using BlogIt.Shared.DTOs;
+using BlogIt.Contracts;
+using BlogIt.Contracts.DTOs;
 using FluentAssertions;
 
 namespace BlogIt.Tests.Unit;
@@ -224,6 +224,6 @@ public class ContractValidationAttributeTests
     private static IEnumerable<PropertyInfo> ContractProperties() =>
         typeof(CreateBlogPostRequest).Assembly
             .GetExportedTypes()
-            .Where(type => type.Namespace == "BlogIt.Shared.DTOs")
+            .Where(type => type.Namespace == "BlogIt.Contracts.DTOs")
             .SelectMany(type => type.GetProperties(BindingFlags.Public | BindingFlags.Instance));
 }

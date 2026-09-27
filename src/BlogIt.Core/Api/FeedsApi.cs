@@ -1,4 +1,4 @@
-using BlogIt.Shared.Data;
+using BlogIt.Data;
 using BlogIt.Services;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;

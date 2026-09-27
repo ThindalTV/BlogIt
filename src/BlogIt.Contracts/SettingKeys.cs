@@ -1,4 +1,4 @@
-namespace BlogIt.Shared;
+namespace BlogIt.Contracts;
 
 /// <summary>Well-known keys for the SiteSettings key-value store.</summary>
 public static class SettingKeys

@@ -1,4 +1,4 @@
-using BlogIt.Shared.DTOs;
+using BlogIt.Contracts.DTOs;
 
 namespace BlogIt.Services;
 
@@ -9,7 +9,7 @@ public interface IAiService
         string userContent,
         CancellationToken cancellationToken = default);
 
-    Task<BlogIt.Shared.Entities.BlogPost> ExportToDraftAsync(
+    Task<BlogIt.Entities.BlogPost> ExportToDraftAsync(
         Guid conversationId,
         Guid authorId,
         string? additionalInstructions,

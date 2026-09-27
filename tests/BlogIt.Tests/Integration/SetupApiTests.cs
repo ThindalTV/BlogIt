@@ -1,6 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
-using BlogIt.Shared.DTOs;
+using BlogIt.Contracts.DTOs;
 using BlogIt.Tests.Helpers;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
@@ -79,8 +79,8 @@ public class SetupApiTests(BlogItSampleFactory factory) : IClassFixture<BlogItSa
 
         using (var scope = freshFactory.Services.CreateScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BlogIt.Shared.Data.BlogItDbContext>();
-            db.SetupLocks.Add(new BlogIt.Shared.Entities.SetupLock());
+            var db = scope.ServiceProvider.GetRequiredService<BlogIt.Data.BlogItDbContext>();
+            db.SetupLocks.Add(new BlogIt.Entities.SetupLock());
             await db.SaveChangesAsync();
         }
 
@@ -106,7 +106,7 @@ public class SetupApiTests(BlogItSampleFactory factory) : IClassFixture<BlogItSa
         response.StatusCode.Should().Be(HttpStatusCode.Conflict);
 
         using var verifyScope = freshFactory.Services.CreateScope();
-        var verifyDb = verifyScope.ServiceProvider.GetRequiredService<BlogIt.Shared.Data.BlogItDbContext>();
+        var verifyDb = verifyScope.ServiceProvider.GetRequiredService<BlogIt.Data.BlogItDbContext>();
         (await verifyDb.Users.CountAsync()).Should().Be(0);
     }
 
@@ -140,7 +140,7 @@ public class SetupApiTests(BlogItSampleFactory factory) : IClassFixture<BlogItSa
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
 
         using var scope = freshFactory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<BlogIt.Shared.Data.BlogItDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<BlogIt.Data.BlogItDbContext>();
         (await db.Users.CountAsync()).Should().Be(0);
     }
 
@@ -171,7 +171,7 @@ public class SetupApiTests(BlogItSampleFactory factory) : IClassFixture<BlogItSa
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
 
         using var scope = freshFactory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<BlogIt.Shared.Data.BlogItDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<BlogIt.Data.BlogItDbContext>();
         (await db.Users.CountAsync()).Should().Be(0);
     }
 
@@ -208,7 +208,7 @@ public class SetupApiTests(BlogItSampleFactory factory) : IClassFixture<BlogItSa
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
 
         using var scope = freshFactory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<BlogIt.Shared.Data.BlogItDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<BlogIt.Data.BlogItDbContext>();
         (await db.Users.CountAsync()).Should().Be(0);
     }
 

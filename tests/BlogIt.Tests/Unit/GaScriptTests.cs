@@ -1,6 +1,6 @@
 using BlogIt.Components.Shared;
+using BlogIt.Contracts;
 using BlogIt.Services;
-using BlogIt.Shared;
 using Bunit;
 using FluentAssertions;
 using Microsoft.AspNetCore.Components;

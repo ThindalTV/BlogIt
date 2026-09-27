@@ -1,10 +1,10 @@
 using System.Collections;
 using System.Reflection;
 using System.Text.Json;
+using BlogIt.Contracts.DTOs;
+using BlogIt.Data;
+using BlogIt.Entities;
 using BlogIt.Services;
-using BlogIt.Shared.Data;
-using BlogIt.Shared.DTOs;
-using BlogIt.Shared.Entities;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 

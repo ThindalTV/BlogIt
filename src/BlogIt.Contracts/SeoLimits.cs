@@ -1,4 +1,4 @@
-namespace BlogIt.Shared;
+namespace BlogIt.Contracts;
 
 /// <summary>
 /// Maximum lengths for the SEO metadata fields on posts and pages.

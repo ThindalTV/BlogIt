@@ -1,5 +1,5 @@
 using BlogIt;
-using BlogIt.Shared.Data;
+using BlogIt.Data;
 using FluentAssertions;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;

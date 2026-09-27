@@ -1,4 +1,4 @@
-using BlogIt.Shared;
+using BlogIt.Contracts;
 
 namespace BlogIt;
 

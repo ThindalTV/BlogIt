@@ -1,4 +1,4 @@
-namespace BlogIt.Shared.Entities;
+namespace BlogIt.Entities;
 
 /// <summary>
 /// The SEO metadata fields carried identically by <see cref="BlogPost"/> and <see cref="Page"/>.

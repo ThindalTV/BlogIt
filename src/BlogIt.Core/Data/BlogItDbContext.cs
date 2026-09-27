@@ -1,9 +1,10 @@
-using BlogIt.Shared.Entities;
-using BlogIt.Shared.Helpers;
+using BlogIt.Contracts;
+using BlogIt.Entities;
+using BlogIt.Helpers;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
-namespace BlogIt.Shared.Data;
+namespace BlogIt.Data;
 
 public class BlogItDbContext(DbContextOptions<BlogItDbContext> options) : DbContext(options)
 {

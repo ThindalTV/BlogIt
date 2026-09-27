@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace BlogIt.Shared.DTOs;
+namespace BlogIt.Contracts.DTOs;
 
 /// <inheritdoc cref="BlogPostSummaryDto" path="/remarks"/>
 public record PageDto(

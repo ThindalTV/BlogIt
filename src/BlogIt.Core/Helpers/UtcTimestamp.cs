@@ -1,4 +1,4 @@
-namespace BlogIt.Shared.Helpers;
+namespace BlogIt.Helpers;
 
 /// <summary>
 /// Converts the <see cref="DateTime"/> values entities store into the

@@ -1,4 +1,4 @@
-using BlogIt.Shared.DTOs;
+using BlogIt.Contracts.DTOs;
 
 namespace BlogIt;
 
@@ -22,7 +22,7 @@ public sealed record BlogItSetupRequest
 
     /// <summary>
     /// Password for the first administrator account. Must satisfy
-    /// <see cref="Shared.Helpers.PasswordPolicy"/>.
+    /// <see cref="Contracts.PasswordPolicy"/>.
     /// </summary>
     public required string Password { get; init; }
 

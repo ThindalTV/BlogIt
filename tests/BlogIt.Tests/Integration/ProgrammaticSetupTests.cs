@@ -1,9 +1,9 @@
 using System.Net;
 using System.Net.Http.Json;
 using BlogIt;
-using BlogIt.Shared;
-using BlogIt.Shared.DTOs;
-using BlogIt.Shared.Data;
+using BlogIt.Contracts;
+using BlogIt.Contracts.DTOs;
+using BlogIt.Data;
 using BlogIt.Services;
 using FluentAssertions;
 using Microsoft.AspNetCore.Builder;

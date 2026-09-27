@@ -1,7 +1,7 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
-using BlogIt.Shared.DTOs;
+using BlogIt.Contracts.DTOs;
 
 namespace BlogIt.Admin.Services;
 

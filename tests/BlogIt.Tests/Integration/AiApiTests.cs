@@ -1,10 +1,10 @@
 using System.Net;
 using System.Net.Http.Json;
+using BlogIt.Contracts;
+using BlogIt.Contracts.DTOs;
+using BlogIt.Data;
+using BlogIt.Entities;
 using BlogIt.Services;
-using BlogIt.Shared;
-using BlogIt.Shared.Data;
-using BlogIt.Shared.DTOs;
-using BlogIt.Shared.Entities;
 using BlogIt.Tests.Helpers;
 using FluentAssertions;
 using Microsoft.AspNetCore.Hosting;

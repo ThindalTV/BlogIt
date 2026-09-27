@@ -1,5 +1,5 @@
 using System.Text;
-using BlogIt.Shared;
+using BlogIt.Contracts;
 using Microsoft.IdentityModel.Tokens;
 
 namespace BlogIt.Services;

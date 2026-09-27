@@ -1,6 +1,6 @@
-using BlogIt.Shared.Data;
-using BlogIt.Shared.DTOs;
-using BlogIt.Shared.Helpers;
+using BlogIt.Contracts;
+using BlogIt.Contracts.DTOs;
+using BlogIt.Data;
 using BlogIt.Services;
 using Microsoft.EntityFrameworkCore;
 

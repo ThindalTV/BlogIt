@@ -146,7 +146,7 @@ public static class BlogItApplicationExtensions
     /// </returns>
     /// <exception cref="ArgumentException">
     /// The request is invalid — an unusable site URL, a password that fails
-    /// <see cref="Shared.Helpers.PasswordPolicy"/>, analytics without a tag container, and so on.
+    /// <see cref="Contracts.PasswordPolicy"/>, analytics without a tag container, and so on.
     /// </exception>
     /// <remarks>
     /// <para>

@@ -1,6 +1,6 @@
 using System.Net;
 using BlogIt.Admin.Services;
-using BlogIt.Shared.DTOs;
+using BlogIt.Contracts.DTOs;
 using BlogIt.Tests.Helpers;
 using FluentAssertions;
 

@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
 using System.Net.Http.Headers;
-using BlogIt.Shared.Data;
+using BlogIt.Data;
 using BlogIt.Tests.Helpers;
 using FluentAssertions;
 using Microsoft.AspNetCore.Hosting;

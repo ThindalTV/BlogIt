@@ -21,15 +21,11 @@ server-only has leaked in.
 
 | Namespace | Contents |
 | --- | --- |
-| `BlogIt.Shared.DTOs` | Request/response records for posts, pages, tags, media, redirects, users, settings, setup, auth, previews, AI and analytics. |
-| `BlogIt.Shared` | `SettingKeys`, and the `ContentLimits`, `SeoLimits` and `RedirectLimits` length ceilings. |
-| `BlogIt.Shared.Helpers` | `BlogUrlHelper`, so a client builds the same public post paths the server routes; `OptionalText`, the null-vs-empty convention for optional fields; `PasswordPolicy`; `AnalyticsPolicy`. |
+| `BlogIt.Contracts.DTOs` | Request/response records for posts, pages, tags, media, redirects, users, settings, setup, auth, previews, AI and analytics. |
+| `BlogIt.Contracts` | `SettingKeys`; the `ContentLimits`, `SeoLimits` and `RedirectLimits` length ceilings; `BlogUrlHelper`, so a client builds the same public post paths the server routes; `OptionalText`, the null-vs-empty convention for optional fields; `PasswordPolicy`; `AnalyticsPolicy`. |
 
-The namespaces are `BlogIt.Shared.*` while the assembly and package are
-`BlogIt.Contracts`. That mismatch is known and deliberate as of now: renaming the
-namespaces would touch nearly every file in the engine, the admin and the tests for a
-cosmetic gain, and renaming the assembly would leave the package id as the odd one out.
-It is a candidate for the 1.0 cut, not before.
+The namespaces match the package name. Before 0.2.0 they were `BlogIt.Shared.*`; a client
+upgrading from that only needs its `using` directives changed.
 
 ## Timestamps are UTC instants
 
@@ -51,7 +47,7 @@ constants live in this package, so a client can check a payload without a round 
 
 ```csharp
 using System.ComponentModel.DataAnnotations;
-using BlogIt.Shared.DTOs;
+using BlogIt.Contracts.DTOs;
 
 var request = new CreateBlogPostRequest(
     Title: title,

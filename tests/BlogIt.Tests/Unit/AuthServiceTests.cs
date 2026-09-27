@@ -1,5 +1,5 @@
-using BlogIt.Shared.Data;
-using BlogIt.Shared.Entities;
+using BlogIt.Data;
+using BlogIt.Entities;
 using BlogIt.Services;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
@@ -21,8 +21,8 @@ public class AuthServiceTests
             .Options;
         var db = new BlogItDbContext(opts);
         db.SiteSettings.AddRange(
-            new SiteSetting { Key = BlogIt.Shared.SettingKeys.JwtSecret, Value = "unit-test-secret-long-enough-for-hmac" },
-            new SiteSetting { Key = BlogIt.Shared.SettingKeys.JwtExpiryMinutes, Value = "60" }
+            new SiteSetting { Key = BlogIt.Contracts.SettingKeys.JwtSecret, Value = "unit-test-secret-long-enough-for-hmac" },
+            new SiteSetting { Key = BlogIt.Contracts.SettingKeys.JwtExpiryMinutes, Value = "60" }
         );
         db.SaveChanges();
         return (db, new SettingsService(new TestDbContextFactory(opts)));
@@ -41,7 +41,7 @@ public class AuthServiceTests
         await db.SaveChangesAsync();
 
         var service = new AuthService(db, settings);
-        var result = await service.LoginAsync(new BlogIt.Shared.DTOs.LoginRequest("alice", "secret"));
+        var result = await service.LoginAsync(new BlogIt.Contracts.DTOs.LoginRequest("alice", "secret"));
 
         result.Should().NotBeNull();
         result!.Token.Should().NotBeEmpty();
@@ -61,7 +61,7 @@ public class AuthServiceTests
         await db.SaveChangesAsync();
 
         var service = new AuthService(db, settings);
-        var result = await service.LoginAsync(new BlogIt.Shared.DTOs.LoginRequest("bob", "wrong"));
+        var result = await service.LoginAsync(new BlogIt.Contracts.DTOs.LoginRequest("bob", "wrong"));
 
         result.Should().BeNull();
     }
@@ -71,7 +71,7 @@ public class AuthServiceTests
     {
         var (db, settings) = CreateSubject();
         var service = new AuthService(db, settings);
-        var result = await service.LoginAsync(new BlogIt.Shared.DTOs.LoginRequest("nobody", "pass"));
+        var result = await service.LoginAsync(new BlogIt.Contracts.DTOs.LoginRequest("nobody", "pass"));
         result.Should().BeNull();
     }
 
@@ -90,7 +90,7 @@ public class AuthServiceTests
 
         var service = new AuthService(db, settings);
         var success = await service.ChangePasswordAsync(user.Id,
-            new BlogIt.Shared.DTOs.ChangePasswordRequest("old", "NewPass1!"));
+            new BlogIt.Contracts.DTOs.ChangePasswordRequest("old", "NewPass1!"));
 
         success.Should().BeTrue();
         var updated = await db.Users.FindAsync(user.Id);
@@ -112,7 +112,7 @@ public class AuthServiceTests
         var originalStamp = user.SecurityStamp;
 
         await CreateService(db, settings).ChangePasswordAsync(user.Id,
-            new BlogIt.Shared.DTOs.ChangePasswordRequest("OldPass1!", "NewPass1!"));
+            new BlogIt.Contracts.DTOs.ChangePasswordRequest("OldPass1!", "NewPass1!"));
 
         (await db.Users.FindAsync(user.Id))!.SecurityStamp.Should().NotBe(originalStamp);
     }
@@ -140,7 +140,7 @@ public class AuthServiceTests
         await db.SaveChangesAsync();
 
         var change = async () => await CreateService(db, settings).ChangePasswordAsync(user.Id,
-            new BlogIt.Shared.DTOs.ChangePasswordRequest("OldPass1!", weak));
+            new BlogIt.Contracts.DTOs.ChangePasswordRequest("OldPass1!", weak));
 
         await change.Should().ThrowAsync<ArgumentException>()
             .WithParameterName("request");
@@ -162,9 +162,9 @@ public class AuthServiceTests
         await db.SaveChangesAsync();
 
         var change = async () => await CreateService(db, settings).ChangePasswordAsync(user.Id,
-            new BlogIt.Shared.DTOs.ChangePasswordRequest(
+            new BlogIt.Contracts.DTOs.ChangePasswordRequest(
                 "OldPass1!",
-                "Aa1" + new string('x', BlogIt.Shared.Helpers.PasswordPolicy.MaxLength)));
+                "Aa1" + new string('x', BlogIt.Contracts.PasswordPolicy.MaxLength)));
 
         await change.Should().ThrowAsync<ArgumentException>();
     }
@@ -189,7 +189,7 @@ public class AuthServiceTests
         passphrase.Length.Should().BeGreaterThan(72);
 
         var success = await CreateService(db, settings).ChangePasswordAsync(user.Id,
-            new BlogIt.Shared.DTOs.ChangePasswordRequest("OldPass1!", passphrase));
+            new BlogIt.Contracts.DTOs.ChangePasswordRequest("OldPass1!", passphrase));
 
         success.Should().BeTrue();
     }
@@ -221,7 +221,7 @@ public class AuthServiceTests
 
         var service = new AuthService(db, settings);
         var success = await service.ChangePasswordAsync(user.Id,
-            new BlogIt.Shared.DTOs.ChangePasswordRequest("wrong", "NewPass1!"));
+            new BlogIt.Contracts.DTOs.ChangePasswordRequest("wrong", "NewPass1!"));
 
         success.Should().BeFalse();
     }

@@ -543,14 +543,13 @@ server-only has leaked in.
 
 | Namespace | Contents |
 | --- | --- |
-| `BlogIt.Shared.DTOs` | The request and response records: posts, pages, tags, media, redirects, users, settings, setup, auth, previews, AI and analytics. |
-| `BlogIt.Shared` | `SettingKeys` for the well-known per-site settings, and the `ContentLimits`, `SeoLimits` and `RedirectLimits` ceilings. |
-| `BlogIt.Shared.Helpers` | `BlogUrlHelper` (build the same public post path the server routes), `OptionalText` (the null-vs-empty convention), and `PasswordPolicy`. |
+| `BlogIt.Contracts.DTOs` | The request and response records: posts, pages, tags, media, redirects, users, settings, setup, auth, previews, AI and analytics. |
+| `BlogIt.Contracts` | `SettingKeys` for the well-known per-site settings; the `ContentLimits`, `SeoLimits` and `RedirectLimits` ceilings; `BlogUrlHelper` (build the same public post path the server routes), `OptionalText` (the null-vs-empty convention), `PasswordPolicy` and `AnalyticsPolicy`. |
 
-The namespaces are `BlogIt.Shared.*` while the assembly and package are
-`BlogIt.Contracts`. The mismatch is deliberate and documented in
-[docs/publishing.md](publishing.md); it is a candidate for the 1.0 cut, not
-before.
+The namespaces match the package: everything here is under `BlogIt.Contracts`,
+and nothing outside this package uses that namespace. The engine's own types
+live in `BlogIt.*` namespaces named for their folders — `BlogIt.Entities`,
+`BlogIt.Data`, `BlogIt.Helpers`, `BlogIt.Services`.
 
 ### The limit constants are the schema's widths
 
@@ -575,7 +574,7 @@ payload without a round trip:
 
 ```csharp
 using System.ComponentModel.DataAnnotations;
-using BlogIt.Shared.DTOs;
+using BlogIt.Contracts.DTOs;
 
 var request = new CreateBlogPostRequest(
     Title: title,
@@ -639,7 +638,7 @@ one means, and when to prefer an init-only property over a positional parameter
 
 ## The data model is part of the public API — on purpose
 
-`BlogItDbContext` and the entity types in `BlogIt.Shared.Entities` are public,
+`BlogItDbContext` and the entity types in `BlogIt.Entities` are public,
 with ordinary settable properties. This is deliberate, not an oversight.
 
 A host can supply its own database provider by registering a
@@ -712,7 +711,7 @@ Every method is published-only. "Published" means `IsPublished` is set *and*
 too. Drafts return `null` rather than the content.
 
 If you query the entities yourself, use the `WherePublished()` extension in
-`BlogIt.Shared.Data` rather than writing that rule out again:
+`BlogIt.Data` rather than writing that rule out again:
 
 ```csharp
 var posts = await db.BlogPosts.WherePublished()
@@ -780,7 +779,7 @@ For example, a host-owned archive component can read posts directly:
 {
     <article>
         <h2>
-            <a href="@BlogIt.Shared.BlogUrlHelper.GetPostPath(
+            <a href="@BlogIt.Contracts.BlogUrlHelper.GetPostPath(
                 post.Slug, post.PublishedAt, post.CreatedAt)">
                 @post.Title
             </a>
@@ -790,7 +789,7 @@ For example, a host-owned archive component can read posts directly:
 }
 
 @code {
-    private IReadOnlyList<BlogIt.Shared.DTOs.BlogPostSummaryDto> posts = [];
+    private IReadOnlyList<BlogIt.Contracts.DTOs.BlogPostSummaryDto> posts = [];
 
     protected override async Task OnInitializedAsync()
     {

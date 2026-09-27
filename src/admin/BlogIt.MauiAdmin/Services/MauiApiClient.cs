@@ -2,9 +2,9 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using BlogIt.Contracts.DTOs;
 using BlogIt.MauiAdmin.Core.Sites;
 using BlogIt.MauiAdmin.Models;
-using BlogIt.Shared.DTOs;
 
 namespace BlogIt.MauiAdmin.Services;
 

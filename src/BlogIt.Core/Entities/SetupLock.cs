@@ -1,4 +1,4 @@
-namespace BlogIt.Shared.Entities;
+namespace BlogIt.Entities;
 
 /// <summary>
 /// Sentinel row that guarantees first-run setup completes at most once, even under two

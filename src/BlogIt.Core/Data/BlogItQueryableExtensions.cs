@@ -1,6 +1,6 @@
-using BlogIt.Shared.Entities;
+using BlogIt.Entities;
 
-namespace BlogIt.Shared.Data;
+namespace BlogIt.Data;
 
 /// <summary>
 /// Query building blocks for hosts reading content straight from <see cref="BlogItDbContext"/>.

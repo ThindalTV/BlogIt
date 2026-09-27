@@ -1,8 +1,9 @@
-using BlogIt.Shared.Data;
-using BlogIt.Shared.Entities;
+using BlogIt.Contracts;
+using BlogIt.Data;
+using BlogIt.Entities;
 using Microsoft.EntityFrameworkCore;
 
-namespace BlogIt.Shared.Helpers;
+namespace BlogIt.Helpers;
 
 public static class TagResolver
 {

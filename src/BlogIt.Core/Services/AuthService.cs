@@ -1,10 +1,9 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
-using BlogIt.Shared;
-using BlogIt.Shared.Data;
-using BlogIt.Shared.DTOs;
-using BlogIt.Shared.Helpers;
+using BlogIt.Contracts;
+using BlogIt.Contracts.DTOs;
+using BlogIt.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 

@@ -1,4 +1,4 @@
-namespace BlogIt.Shared.Entities;
+namespace BlogIt.Entities;
 
 /// <summary>
 /// An entity that carries an optimistic-concurrency token, bumped by

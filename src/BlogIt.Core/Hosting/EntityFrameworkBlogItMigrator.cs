@@ -1,5 +1,5 @@
-using BlogIt.Shared.Data;
-using BlogIt.Shared.Helpers;
+using BlogIt.Data;
+using BlogIt.Helpers;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -27,7 +27,7 @@ internal sealed class EntityFrameworkBlogItMigrator(
     }
 
     /// <summary>
-    /// Fills in <see cref="Shared.Entities.BlogPost.WordCount"/> for posts written before the column
+    /// Fills in <see cref="Entities.BlogPost.WordCount"/> for posts written before the column
     /// existed.
     /// </summary>
     /// <remarks>

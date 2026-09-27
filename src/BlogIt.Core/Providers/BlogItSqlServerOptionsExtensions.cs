@@ -35,12 +35,12 @@ public static class BlogItSqlServerOptionsExtensions
 
         public void RegisterServices(IServiceCollection services)
         {
-            services.AddDbContextFactory<BlogIt.Shared.Data.BlogItDbContext>(options =>
+            services.AddDbContextFactory<BlogIt.Data.BlogItDbContext>(options =>
                 options.UseSqlServer(connectionString, sqlOptions =>
                 {
                     sqlServerOptionsAction?.Invoke(sqlOptions);
                     sqlOptions.MigrationsAssembly(
-                        typeof(BlogIt.Shared.Data.BlogItDbContext).Assembly.GetName().Name);
+                        typeof(BlogIt.Data.BlogItDbContext).Assembly.GetName().Name);
                 }));
             // Resolved by hand rather than by constructor injection so that logging stays optional.
             // A host that only migrates — a console entry point, a provisioning step — may never
@@ -48,7 +48,7 @@ public static class BlogItSqlServerOptionsExtensions
             // startup crash.
             services.AddSingleton<IBlogItMigrator>(provider => new EntityFrameworkBlogItMigrator(
                 provider.GetRequiredService<
-                    IDbContextFactory<BlogIt.Shared.Data.BlogItDbContext>>(),
+                    IDbContextFactory<BlogIt.Data.BlogItDbContext>>(),
                 provider.GetService<ILogger<EntityFrameworkBlogItMigrator>>()
                     ?? NullLogger<EntityFrameworkBlogItMigrator>.Instance));
         }

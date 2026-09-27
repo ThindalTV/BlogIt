@@ -1,6 +1,6 @@
 using Markdig;
 
-namespace BlogIt.Shared.Helpers;
+namespace BlogIt.Helpers;
 
 public static class MarkdownHelper
 {

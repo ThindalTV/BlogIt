@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 
-namespace BlogIt.Shared.Data;
+namespace BlogIt.Data;
 
 public static class BlogItDbContextTransactionExtensions
 {

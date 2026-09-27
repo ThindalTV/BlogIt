@@ -1,7 +1,7 @@
 using System.Net;
 using AngleSharp.Dom;
-using BlogIt.Shared;
-using BlogIt.Shared.DTOs;
+using BlogIt.Contracts;
+using BlogIt.Contracts.DTOs;
 using BlogIt.Tests.Helpers;
 using Bunit;
 using FluentAssertions;

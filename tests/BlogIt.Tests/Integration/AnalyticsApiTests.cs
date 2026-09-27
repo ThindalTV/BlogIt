@@ -1,6 +1,6 @@
 using System.Net;
+using BlogIt.Contracts.DTOs;
 using BlogIt.Services;
-using BlogIt.Shared.DTOs;
 using BlogIt.Tests.Helpers;
 using FluentAssertions;
 using Microsoft.AspNetCore.Hosting;

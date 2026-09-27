@@ -1,7 +1,7 @@
 using System.Collections.ObjectModel;
+using BlogIt.Contracts.DTOs;
 using BlogIt.MauiAdmin.Core.Media;
 using BlogIt.MauiAdmin.Services;
-using BlogIt.Shared.DTOs;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Maui.ApplicationModel.DataTransfer;

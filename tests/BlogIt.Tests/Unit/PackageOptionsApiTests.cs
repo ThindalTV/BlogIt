@@ -1,6 +1,6 @@
 using BlogIt;
+using BlogIt.Data;
 using BlogIt.Services;
-using BlogIt.Shared.Data;
 using FluentAssertions;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;

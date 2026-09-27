@@ -1,6 +1,6 @@
-using BlogIt.Shared;
-using BlogIt.Shared.Data;
-using BlogIt.Shared.Helpers;
+using BlogIt.Contracts;
+using BlogIt.Data;
+using BlogIt.Helpers;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;

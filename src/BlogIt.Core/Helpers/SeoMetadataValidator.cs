@@ -1,4 +1,6 @@
-namespace BlogIt.Shared.Helpers;
+using BlogIt.Contracts;
+
+namespace BlogIt.Helpers;
 
 /// <summary>
 /// Validates the SEO metadata fields against <see cref="SeoLimits"/> before they reach the

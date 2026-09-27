@@ -1,6 +1,6 @@
+using BlogIt.Contracts.DTOs;
 using BlogIt.MauiAdmin.Messages;
 using BlogIt.MauiAdmin.Services;
-using BlogIt.Shared.DTOs;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;

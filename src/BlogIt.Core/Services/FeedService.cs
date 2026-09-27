@@ -1,7 +1,7 @@
-using BlogIt.Shared;
-using BlogIt.Shared.Data;
-using BlogIt.Shared.Helpers;
 using BlogIt.Api;
+using BlogIt.Contracts;
+using BlogIt.Data;
+using BlogIt.Helpers;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using System.Diagnostics.CodeAnalysis;

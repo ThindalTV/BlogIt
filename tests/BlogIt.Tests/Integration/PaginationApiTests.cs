@@ -1,6 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
-using BlogIt.Shared.Helpers;
+using BlogIt.Helpers;
 using BlogIt.Tests.Helpers;
 using FluentAssertions;
 

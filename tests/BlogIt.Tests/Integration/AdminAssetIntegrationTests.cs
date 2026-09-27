@@ -1,6 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
-using BlogIt.Shared;
+using BlogIt.Contracts;
 using BlogIt.Tests.Helpers;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;

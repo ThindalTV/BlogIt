@@ -1,9 +1,9 @@
+using BlogIt.Contracts;
+using BlogIt.Contracts.DTOs;
+using BlogIt.Data;
+using BlogIt.Entities;
+using BlogIt.Helpers;
 using BlogIt.Services;
-using BlogIt.Shared;
-using BlogIt.Shared.Data;
-using BlogIt.Shared.DTOs;
-using BlogIt.Shared.Entities;
-using BlogIt.Shared.Helpers;
 using Microsoft.EntityFrameworkCore;
 using OpenAI;
 using OpenAI.Chat;

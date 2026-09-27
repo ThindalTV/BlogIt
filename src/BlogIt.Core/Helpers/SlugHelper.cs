@@ -4,7 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace BlogIt.Shared.Helpers;
+namespace BlogIt.Helpers;
 
 public static partial class SlugHelper
 {

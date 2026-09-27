@@ -1,6 +1,6 @@
+using BlogIt.Contracts;
+using BlogIt.Contracts.DTOs;
 using BlogIt.Middleware;
-using BlogIt.Shared;
-using BlogIt.Shared.DTOs;
 using BlogIt.Services;
 
 namespace BlogIt.Api;

@@ -88,7 +88,7 @@
     {
         if (Page < 1) Page = 1;
 
-        siteUrl = await SettingsService.GetAsync(BlogIt.Shared.SettingKeys.SiteUrl) ?? "";
+        siteUrl = await SettingsService.GetAsync(BlogIt.Contracts.SettingKeys.SiteUrl) ?? "";
 
         if (string.IsNullOrWhiteSpace(Q)) return;
 

@@ -1,7 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text;
-using BlogIt.Shared.DTOs;
+using BlogIt.Contracts.DTOs;
 using BlogIt.Tests.Helpers;
 using FluentAssertions;
 

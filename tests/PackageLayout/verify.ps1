@@ -382,7 +382,7 @@ function Invoke-ConsumerScenario {
         foreach ($publicType in @(
             "BlogIt.Components.Shared.SeoHead",
             "BlogIt.Services.IPublicContentService",
-            "BlogIt.Shared.DTOs.BlogPostSummaryDto"
+            "BlogIt.Contracts.DTOs.BlogPostSummaryDto"
         )) {
             if ($surfaceJson -notmatch [regex]::Escape($publicType)) {
                 throw "$Name public package surface did not expose $publicType."

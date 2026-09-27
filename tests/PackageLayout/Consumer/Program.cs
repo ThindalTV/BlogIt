@@ -1,6 +1,6 @@
 using BlogIt;
-using BlogIt.Shared;
-using BlogIt.Shared.Data;
+using BlogIt.Contracts;
+using BlogIt.Data;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -28,7 +28,7 @@ app.MapGet(
     {
         typeof(BlogIt.Components.Shared.SeoHead).FullName,
         typeof(BlogIt.Services.IPublicContentService).FullName,
-        typeof(BlogIt.Shared.DTOs.BlogPostSummaryDto).FullName
+        typeof(BlogIt.Contracts.DTOs.BlogPostSummaryDto).FullName
     });
 
 app.Run();

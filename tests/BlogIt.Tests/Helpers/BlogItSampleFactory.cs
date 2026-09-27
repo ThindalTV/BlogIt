@@ -1,4 +1,4 @@
-using BlogIt.Shared;
+using BlogIt.Contracts;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 

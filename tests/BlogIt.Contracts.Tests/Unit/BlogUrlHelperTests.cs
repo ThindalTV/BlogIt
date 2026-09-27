@@ -1,4 +1,4 @@
-using BlogIt.Shared.Helpers;
+using BlogIt.Contracts;
 using FluentAssertions;
 
 namespace BlogIt.Tests.Unit;

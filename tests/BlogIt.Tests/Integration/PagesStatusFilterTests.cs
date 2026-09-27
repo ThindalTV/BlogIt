@@ -1,5 +1,5 @@
 using System.Net.Http.Json;
-using BlogIt.Shared.DTOs;
+using BlogIt.Contracts.DTOs;
 using BlogIt.Tests.Helpers;
 using FluentAssertions;
 

@@ -1,6 +1,6 @@
-using BlogIt.Shared.DTOs;
+using BlogIt.Contracts.DTOs;
 
-namespace BlogIt.Shared.Helpers;
+namespace BlogIt.Helpers;
 
 /// <summary>
 /// Per-field validation for <see cref="SiteSettingsUpdateRequest"/>, run before anything is

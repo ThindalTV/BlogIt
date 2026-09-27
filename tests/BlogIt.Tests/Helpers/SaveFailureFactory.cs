@@ -1,4 +1,4 @@
-using BlogIt.Shared.Data;
+using BlogIt.Data;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;

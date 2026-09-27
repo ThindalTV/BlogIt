@@ -1,7 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.RateLimiting;
-using BlogIt.Shared.DTOs;
-using BlogIt.Shared.Helpers;
+using BlogIt.Contracts;
+using BlogIt.Contracts.DTOs;
 using BlogIt.Services;
 
 namespace BlogIt.Api;

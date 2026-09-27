@@ -1,8 +1,8 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
-using BlogIt.Shared;
-using BlogIt.Shared.DTOs;
+using BlogIt.Contracts;
+using BlogIt.Contracts.DTOs;
 using BlogIt.Tests.Helpers;
 using FluentAssertions;
 

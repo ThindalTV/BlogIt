@@ -2,7 +2,7 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:vm="clr-namespace:BlogIt.MauiAdmin.ViewModels.Ai"
-             xmlns:dtos="clr-namespace:BlogIt.Shared.DTOs;assembly=BlogIt.Contracts"
+             xmlns:dtos="clr-namespace:BlogIt.Contracts.DTOs;assembly=BlogIt.Contracts"
              x:Class="BlogIt.MauiAdmin.Views.Ai.ConversationChatPage"
              x:DataType="vm:ConversationChatViewModel"
              Title="{Binding Title}">

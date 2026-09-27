@@ -1,4 +1,4 @@
-using BlogIt.Shared.DTOs;
+using BlogIt.Contracts.DTOs;
 
 namespace BlogIt.Services;
 

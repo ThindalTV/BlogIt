@@ -1,4 +1,4 @@
-namespace BlogIt.Shared;
+namespace BlogIt.Contracts;
 
 /// <summary>
 /// Maximum lengths for the required text columns: titles and slugs, the two fields on an account,

@@ -1,5 +1,5 @@
+using BlogIt.Contracts;
 using BlogIt.Services;
-using BlogIt.Shared;
 using FluentAssertions;
 using Microsoft.Extensions.Logging;
 using Moq;

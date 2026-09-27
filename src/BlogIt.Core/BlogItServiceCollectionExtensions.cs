@@ -1,5 +1,5 @@
+using BlogIt.Data;
 using BlogIt.Services;
-using BlogIt.Shared.Data;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;

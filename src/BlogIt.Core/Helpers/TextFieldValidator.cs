@@ -1,4 +1,4 @@
-namespace BlogIt.Shared.Helpers;
+namespace BlogIt.Helpers;
 
 /// <summary>
 /// Boundary checks for the text fields whose EF configuration declares them required, bounded, or

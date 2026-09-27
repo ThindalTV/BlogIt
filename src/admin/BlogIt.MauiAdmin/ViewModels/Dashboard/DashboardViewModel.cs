@@ -1,6 +1,6 @@
 using System.Collections.ObjectModel;
+using BlogIt.Contracts.DTOs;
 using BlogIt.MauiAdmin.Services;
-using BlogIt.Shared.DTOs;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 

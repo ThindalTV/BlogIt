@@ -1,5 +1,5 @@
 using BlogIt.Api;
-using BlogIt.Shared.Data;
+using BlogIt.Data;
 using BlogIt.Tests.Helpers;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;

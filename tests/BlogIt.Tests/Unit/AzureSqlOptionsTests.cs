@@ -1,5 +1,5 @@
 using BlogIt;
-using BlogIt.Shared.Data;
+using BlogIt.Data;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;

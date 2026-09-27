@@ -1,6 +1,6 @@
+using BlogIt.Contracts;
+using BlogIt.Contracts.DTOs;
 using BlogIt.Services;
-using BlogIt.Shared;
-using BlogIt.Shared.DTOs;
 using Google.Analytics.Data.V1Beta;
 using Google.Apis.Auth.OAuth2;
 using Microsoft.Extensions.Logging;

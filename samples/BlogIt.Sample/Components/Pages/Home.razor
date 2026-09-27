@@ -71,9 +71,9 @@
 
     protected override async Task OnInitializedAsync()
     {
-        siteName = await SettingsService.GetAsync(BlogIt.Shared.SettingKeys.SiteName) ?? "BlogIt";
-        siteDescription = await SettingsService.GetAsync(BlogIt.Shared.SettingKeys.SiteDescription);
-        siteUrl = await SettingsService.GetAsync(BlogIt.Shared.SettingKeys.SiteUrl);
+        siteName = await SettingsService.GetAsync(BlogIt.Contracts.SettingKeys.SiteName) ?? "BlogIt";
+        siteDescription = await SettingsService.GetAsync(BlogIt.Contracts.SettingKeys.SiteDescription);
+        siteUrl = await SettingsService.GetAsync(BlogIt.Contracts.SettingKeys.SiteUrl);
 
         posts = await ContentService.GetRecentPostsAsync(5);
     }

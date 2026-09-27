@@ -1,6 +1,6 @@
 using System.Security.Cryptography;
 
-namespace BlogIt.Shared.Helpers;
+namespace BlogIt.Helpers;
 
 /// <summary>Generates the HMAC signing secret for BlogIt's JWTs.</summary>
 public static class JwtSecretGenerator

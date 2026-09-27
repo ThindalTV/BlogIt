@@ -1,6 +1,6 @@
+using BlogIt.Contracts.DTOs;
 using BlogIt.MauiAdmin.Services;
 using BlogIt.MauiAdmin.ViewModels.Media;
-using BlogIt.Shared.DTOs;
 
 namespace BlogIt.MauiAdmin.Views.Media;
 

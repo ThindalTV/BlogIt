@@ -1,7 +1,7 @@
+using BlogIt.Contracts;
+using BlogIt.Data;
+using BlogIt.Helpers;
 using BlogIt.Services;
-using BlogIt.Shared;
-using BlogIt.Shared.Data;
-using BlogIt.Shared.Helpers;
 using Microsoft.AspNetCore.RateLimiting;
 using System.Text;
 

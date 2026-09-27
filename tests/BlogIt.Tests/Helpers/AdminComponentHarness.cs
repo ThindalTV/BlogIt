@@ -2,7 +2,7 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 using BlogIt.Admin.Services;
-using BlogIt.Shared.DTOs;
+using BlogIt.Contracts.DTOs;
 using Bunit;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.Extensions.DependencyInjection;

@@ -1,7 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
-using BlogIt.Shared;
-using BlogIt.Shared.DTOs;
+using BlogIt.Contracts;
+using BlogIt.Contracts.DTOs;
 
 namespace BlogIt.MauiAdmin.Services;
 

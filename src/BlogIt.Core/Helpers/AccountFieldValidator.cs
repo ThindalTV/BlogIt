@@ -1,4 +1,6 @@
-namespace BlogIt.Shared.Helpers;
+using BlogIt.Contracts;
+
+namespace BlogIt.Helpers;
 
 /// <summary>
 /// Validates the two text fields every <c>AppUser</c> is created from, against the widths

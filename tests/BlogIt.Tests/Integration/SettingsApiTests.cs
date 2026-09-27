@@ -1,8 +1,8 @@
 using System.Net;
 using System.Net.Http.Json;
+using BlogIt.Contracts;
+using BlogIt.Contracts.DTOs;
 using BlogIt.Services;
-using BlogIt.Shared;
-using BlogIt.Shared.DTOs;
 using BlogIt.Tests.Helpers;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
@@ -28,7 +28,7 @@ public class SettingsApiTests(BlogItSampleFactory factory) : IClassFixture<BlogI
         settings.Should().NotBeNull();
 
         // JwtSecret should be redacted
-        if (settings!.TryGetValue(BlogIt.Shared.SettingKeys.JwtSecret, out var val))
+        if (settings!.TryGetValue(BlogIt.Contracts.SettingKeys.JwtSecret, out var val))
             val.Should().Be("***");
     }
 
@@ -40,15 +40,15 @@ public class SettingsApiTests(BlogItSampleFactory factory) : IClassFixture<BlogI
 
         var update = new Dictionary<string, string>
         {
-            [BlogIt.Shared.SettingKeys.SiteName] = "Updated Blog Name",
-            [BlogIt.Shared.SettingKeys.SiteDescription] = "Updated description"
+            [BlogIt.Contracts.SettingKeys.SiteName] = "Updated Blog Name",
+            [BlogIt.Contracts.SettingKeys.SiteDescription] = "Updated description"
         };
 
         var putResponse = await client.PutAsJsonAsync("/api/settings", update);
         putResponse.StatusCode.Should().BeOneOf(HttpStatusCode.OK, HttpStatusCode.NoContent);
 
         var settings = await client.GetFromJsonAsync<Dictionary<string, string>>("/api/settings");
-        settings![BlogIt.Shared.SettingKeys.SiteName].Should().Be("Updated Blog Name");
+        settings![BlogIt.Contracts.SettingKeys.SiteName].Should().Be("Updated Blog Name");
     }
 
     [Theory]
@@ -61,7 +61,7 @@ public class SettingsApiTests(BlogItSampleFactory factory) : IClassFixture<BlogI
 
         var update = new Dictionary<string, string>
         {
-            [BlogIt.Shared.SettingKeys.SiteUrl] = invalidSiteUrl
+            [BlogIt.Contracts.SettingKeys.SiteUrl] = invalidSiteUrl
         };
 
         var putResponse = await client.PutAsJsonAsync("/api/settings", update);
@@ -76,14 +76,14 @@ public class SettingsApiTests(BlogItSampleFactory factory) : IClassFixture<BlogI
 
         var update = new Dictionary<string, string>
         {
-            [BlogIt.Shared.SettingKeys.SiteUrl] = "https://updated.example.com"
+            [BlogIt.Contracts.SettingKeys.SiteUrl] = "https://updated.example.com"
         };
 
         var putResponse = await client.PutAsJsonAsync("/api/settings", update);
         putResponse.StatusCode.Should().BeOneOf(HttpStatusCode.OK, HttpStatusCode.NoContent);
 
         var settings = await client.GetFromJsonAsync<Dictionary<string, string>>("/api/settings");
-        settings![BlogIt.Shared.SettingKeys.SiteUrl].Should().Be("https://updated.example.com");
+        settings![BlogIt.Contracts.SettingKeys.SiteUrl].Should().Be("https://updated.example.com");
     }
 
     [Fact]

@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
-namespace BlogIt.Shared.Data;
+namespace BlogIt.Data;
 
 /// <summary>
 /// Forces every <see cref="DateTime"/> BlogIt stores to be a UTC instant, and every one it reads

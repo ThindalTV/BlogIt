@@ -1,6 +1,6 @@
 using System.Text;
+using BlogIt.Contracts;
 using BlogIt.Services;
-using BlogIt.Shared;
 using FluentAssertions;
 using Microsoft.IdentityModel.Tokens;
 

@@ -1,4 +1,4 @@
-namespace BlogIt.Shared.Helpers;
+namespace BlogIt.Contracts;
 
 /// <summary>
 /// The two halves of BlogIt's convention for optional text: <see langword="null"/> means the value

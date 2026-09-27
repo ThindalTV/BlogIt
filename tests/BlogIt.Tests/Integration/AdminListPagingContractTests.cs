@@ -1,7 +1,7 @@
 using System.Net.Http.Json;
-using BlogIt.Shared.Data;
-using BlogIt.Shared.DTOs;
-using BlogIt.Shared.Entities;
+using BlogIt.Contracts.DTOs;
+using BlogIt.Data;
+using BlogIt.Entities;
 using BlogIt.Tests.Helpers;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
