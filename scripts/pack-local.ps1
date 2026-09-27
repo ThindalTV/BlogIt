@@ -56,7 +56,8 @@ Write-Host "Packing BlogIt as $packageVersion ..." -ForegroundColor Cyan
 # app never sets it and is skipped for the same reason release.yml builds only BlogIt.Web.slnx.
 $srcRoot = Join-Path $PSScriptRoot "..\src"
 $projects = @(
-    Get-ChildItem -Path $srcRoot -Filter *.csproj -Recurse -Depth 1 |
+    # Depth 2 reaches src/<group>/<project>/<project>.csproj (src/providers, src/admin).
+    Get-ChildItem -Path $srcRoot -Filter *.csproj -Recurse -Depth 2 |
         Where-Object {
             (Get-Content $_.FullName -Raw) -match '<IsPackable>\s*true\s*</IsPackable>'
         } |
@@ -65,7 +66,7 @@ $projects = @(
 )
 
 if ($projects.Count -eq 0) {
-    throw "No packable projects found under $srcRoot - expected at least BlogIt.csproj."
+    throw "No packable projects found under $srcRoot - expected at least BlogIt.Core.csproj."
 }
 
 Write-Host "Packing $($projects.Count) project(s):" -ForegroundColor Cyan

@@ -81,7 +81,7 @@
             return;
         }
 
-        siteUrl = await SettingsService.GetAsync(BlogIt.Shared.SettingKeys.SiteUrl) ?? "";
+        siteUrl = await SettingsService.GetAsync(BlogIt.Contracts.SettingKeys.SiteUrl) ?? "";
     }
 
     // Flags the request for NotFoundResponseMiddleware, which renders a real 404 with real HTML

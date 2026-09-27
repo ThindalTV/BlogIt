@@ -1,4 +1,4 @@
-namespace BlogIt.Shared.DTOs;
+namespace BlogIt.Contracts.DTOs;
 
 public record AnalyticsSummaryDto(
     long Sessions,

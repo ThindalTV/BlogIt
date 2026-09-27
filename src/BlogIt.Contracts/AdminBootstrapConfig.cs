@@ -1,4 +1,4 @@
-namespace BlogIt.Shared;
+namespace BlogIt.Contracts;
 
 public sealed record BlogItAdminBootstrapConfig(string ApiPath)
 {

@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
 using BlogIt;
-using BlogIt.Shared.Data;
+using BlogIt.Data;
 using Microsoft.EntityFrameworkCore;
 
 internal sealed class TestingDatabaseProviderRegistration(string databaseName)

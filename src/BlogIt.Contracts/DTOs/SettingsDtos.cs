@@ -1,4 +1,4 @@
-namespace BlogIt.Shared.DTOs;
+namespace BlogIt.Contracts.DTOs;
 
 /// <summary>
 /// The complete set of site settings an admin client is allowed to write.

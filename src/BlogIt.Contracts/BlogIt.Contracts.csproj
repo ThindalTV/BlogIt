@@ -16,7 +16,7 @@
       rejected: a copied DTO is a second wire format that drifts the moment a parameter is appended,
       and the appending is exactly what this project does. Two packages with one version is the
       cheaper contract to keep honest.
-      build/package-layout-tests/verify.ps1 asserts the resulting shape: one library asset, zero
+      tests/PackageLayout/verify.ps1 asserts the resulting shape: one library asset, zero
       dependencies, zero framework references, and a fixture on the plain Microsoft.NET.Sdk that
       compiles against this package and nothing else.
     -->
@@ -25,7 +25,7 @@
     <Description>Browser-safe contracts shared by BlogIt clients and the server: the admin API's request and response records, well-known setting keys, the length limits the server enforces, and the public URL helper. No dependencies - reference this instead of the BlogIt engine when writing a client.</Description>
     <PackageTags>aspnetcore;blog;cms;dto;contracts;api-client</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <!-- Matches LICENSE.txt in the repository root; see src/BlogIt/BlogIt.csproj for why. -->
+    <!-- Matches LICENSE.txt in the repository root; see src/BlogIt.Core/BlogIt.Core.csproj for why. -->
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
     <RepositoryType>git</RepositoryType>

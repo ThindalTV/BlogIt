@@ -1,0 +1,60 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>BlogIt.OpenAi</AssemblyName>
+    <PackageId>BlogIt.OpenAi</PackageId>
+    <IsPackable>true</IsPackable>
+    <Authors>ThindalTV</Authors>
+    <Description>OpenAI-backed AI provider for BlogIt, powering the admin's brainstorm and export-to-draft screens, with a transitive dependency on the matching BlogIt engine package.</Description>
+    <PackageTags>aspnetcore;blog;cms;ai;openai;github-copilot</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+    <RepositoryType>git</RepositoryType>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+    <DebugType>portable</DebugType>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      No contracts reference of its own any more. This used to carry an explicit
+      PrivateAssets="all" ProjectReference to BlogIt.Contracts, because BlogIt marked its own
+      contracts reference private and so the DTOs and entities IAiService trades in did not flow
+      here. Now that BlogIt.Contracts is a package in its own right and BlogIt depends on it
+      publicly, it arrives transitively through this one reference - in source builds as a compile
+      reference and in package builds as a transitive nuspec dependency. Re-adding it would make
+      this satellite pin the contracts version independently of the engine, which is exactly the
+      mismatched pair the exact BlogIt dependency exists to prevent.
+    -->
+    <ProjectReference Include="..\..\BlogIt.Core\BlogIt.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="README.md"
+          Pack="true"
+          PackagePath="\" />
+    <!--
+      Exact pin, never a floating range: this version becomes the consuming application's
+      dependency floor, and a floating range would be re-resolved on the consumer's machine,
+      contradicting <Deterministic>true</Deterministic> above. Enforced by the shipped-project lint
+      in tests/PackageLayout/verify.ps1, which also asserts this exact version literally -
+      bump both in the same commit.
+    -->
+    <PackageReference Include="OpenAI" Version="2.12.0" />
+  </ItemGroup>
+
+  <!--
+    Imported last so a Version or VersionPrefix set above is visible to it. See the file itself for
+    why PackageVersion has to be plumbed into the assembly stamps by hand.
+  -->
+  <Import Project="..\..\..\build\BlogIt.Versioning.props" />
+
+</Project>

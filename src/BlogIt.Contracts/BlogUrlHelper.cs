@@ -1,4 +1,4 @@
-namespace BlogIt.Shared.Helpers;
+namespace BlogIt.Contracts;
 
 public static class BlogUrlHelper
 {

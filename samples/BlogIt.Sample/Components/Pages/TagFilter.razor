@@ -80,7 +80,7 @@ else
     {
         if (Page < 1) Page = 1;
 
-        siteUrl = await SettingsService.GetAsync(BlogIt.Shared.SettingKeys.SiteUrl) ?? "";
+        siteUrl = await SettingsService.GetAsync(BlogIt.Contracts.SettingKeys.SiteUrl) ?? "";
 
         var postPage = await ContentService.GetPostsByTagAsync(Slug, Page, PageSize);
         if (postPage.TagName is null) return;

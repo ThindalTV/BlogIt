@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace BlogIt.Shared.DTOs;
+namespace BlogIt.Contracts.DTOs;
 
 /// <remarks>
 /// Every timestamp BlogIt returns is a <see cref="DateTimeOffset"/> at offset zero — a UTC instant

@@ -101,7 +101,7 @@ public sealed class NotFoundResponseMiddleware(RequestDelegate next, ILoggerFact
 
         using var scope = context.RequestServices.CreateScope();
         var settings = scope.ServiceProvider.GetRequiredService<ISettingsService>();
-        var siteName = await settings.GetAsync(BlogIt.Shared.SettingKeys.SiteName) ?? "BlogIt";
+        var siteName = await settings.GetAsync(BlogIt.Contracts.SettingKeys.SiteName) ?? "BlogIt";
 
         using var htmlRenderer = new HtmlRenderer(scope.ServiceProvider, loggerFactory);
         var html = await htmlRenderer.Dispatcher.InvokeAsync(async () =>

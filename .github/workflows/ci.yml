@@ -7,15 +7,14 @@ on:
   push:
     branches: [main]
     paths:
-      - "src/BlogIt/**"
-      - "src/BlogIt.Admin/**"
-      - "src/BlogIt.AzureStorage/**"
-      - "src/BlogIt.GoogleAnalytics/**"
-      - "src/BlogIt.OpenAi/**"
+      - "src/BlogIt.Core/**"
       - "src/BlogIt.Contracts/**"
+      - "src/admin/BlogIt.Admin/**"
+      - "src/providers/**"
       - "samples/**"
-      - "tests/BlogIt.Tests.Web/**"
-      - "tests/BlogIt.Tests.Shared/**"
+      - "tests/BlogIt.Tests/**"
+      - "tests/BlogIt.Contracts.Tests/**"
+      - "tests/PackageLayout/**"
       - "build/**"
       - "BlogIt.slnx"
       - "BlogIt.Web.slnx"
@@ -25,15 +24,14 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - "src/BlogIt/**"
-      - "src/BlogIt.Admin/**"
-      - "src/BlogIt.AzureStorage/**"
-      - "src/BlogIt.GoogleAnalytics/**"
-      - "src/BlogIt.OpenAi/**"
+      - "src/BlogIt.Core/**"
       - "src/BlogIt.Contracts/**"
+      - "src/admin/BlogIt.Admin/**"
+      - "src/providers/**"
       - "samples/**"
-      - "tests/BlogIt.Tests.Web/**"
-      - "tests/BlogIt.Tests.Shared/**"
+      - "tests/BlogIt.Tests/**"
+      - "tests/BlogIt.Contracts.Tests/**"
+      - "tests/PackageLayout/**"
       - "build/**"
       - "BlogIt.slnx"
       - "BlogIt.Web.slnx"
@@ -66,19 +64,19 @@ jobs:
       - name: Build solution
         run: dotnet build BlogIt.Web.slnx --no-restore --configuration Release
 
-      - name: Run shared tests
+      - name: Run contracts tests
         run: >-
-          dotnet test tests/BlogIt.Tests.Shared/BlogIt.Tests.Shared.csproj
+          dotnet test tests/BlogIt.Contracts.Tests/BlogIt.Contracts.Tests.csproj
           --no-build
           --no-restore
           --configuration Release
           --verbosity normal
-          --logger "trx;LogFileName=test-results-shared.trx"
+          --logger "trx;LogFileName=test-results-contracts.trx"
           --results-directory artifacts/test-results
 
-      - name: Run web tests
+      - name: Run engine and admin tests
         run: >-
-          dotnet test tests/BlogIt.Tests.Web/BlogIt.Tests.Web.csproj
+          dotnet test tests/BlogIt.Tests/BlogIt.Tests.csproj
           --no-build
           --no-restore
           --configuration Release
