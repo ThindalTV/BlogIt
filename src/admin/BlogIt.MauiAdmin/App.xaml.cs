@@ -12,11 +12,13 @@ public partial class App : Application
         InitializeComponent();
 
         // Central reaction to a 401 from any site: send the user back to that
-        // site's own login screen rather than a generic error.
+        // site's own login screen rather than a generic error. In the window they are working
+        // in — Shell.Current would always pick the first window opened.
         WeakReferenceMessenger.Default.Register<SiteAuthExpiredMessage>(this, async (_, message) =>
         {
-            if (Microsoft.Maui.Controls.Shell.Current is not null)
-                await Microsoft.Maui.Controls.Shell.Current.GoToAsync($"sites/login?id={message.SiteId}");
+            var windows = ServiceHelper.GetRequiredService<ActiveWindowTracker>();
+            if (windows.CurrentWindow?.Page is Microsoft.Maui.Controls.Shell shell)
+                await shell.GoToAsync($"sites/login?id={message.SiteId}");
         });
     }
 
@@ -27,6 +29,10 @@ public partial class App : Application
     /// 1000-unit minimum so it could not reach a layout the app had no answer for, which is a
     /// constraint the adaptive Shell removes the need for.
     /// </remarks>
-    protected override Window CreateWindow(IActivationState? activationState) =>
-        new(ServiceHelper.GetRequiredService<AppShell>()) { Title = "BlogIt Admin" };
+    protected override Window CreateWindow(IActivationState? activationState)
+    {
+        var window = new Window(ServiceHelper.GetRequiredService<AppShell>()) { Title = "BlogIt Admin" };
+        ServiceHelper.GetRequiredService<ActiveWindowTracker>().Track(window);
+        return window;
+    }
 }

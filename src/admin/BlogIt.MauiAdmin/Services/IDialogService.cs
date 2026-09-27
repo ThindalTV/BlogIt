@@ -9,17 +9,13 @@ public interface IDialogService
     Task AlertAsync(string title, string message, string cancel = "OK");
 }
 
-public class DialogService : IDialogService
+/// <summary>Raises dialogs in the window the user is working in — see
+/// <see cref="ActiveWindowTracker"/>.</summary>
+public class DialogService(ActiveWindowTracker windows) : IDialogService
 {
-    public Task<bool> ConfirmAsync(string title, string message, string accept = "Yes", string cancel = "Cancel")
-    {
-        var page = Application.Current?.Windows.FirstOrDefault()?.Page;
-        return page?.DisplayAlertAsync(title, message, accept, cancel) ?? Task.FromResult(false);
-    }
+    public Task<bool> ConfirmAsync(string title, string message, string accept = "Yes", string cancel = "Cancel") =>
+        windows.CurrentPage?.DisplayAlertAsync(title, message, accept, cancel) ?? Task.FromResult(false);
 
-    public Task AlertAsync(string title, string message, string cancel = "OK")
-    {
-        var page = Application.Current?.Windows.FirstOrDefault()?.Page;
-        return page?.DisplayAlertAsync(title, message, cancel) ?? Task.CompletedTask;
-    }
+    public Task AlertAsync(string title, string message, string cancel = "OK") =>
+        windows.CurrentPage?.DisplayAlertAsync(title, message, cancel) ?? Task.CompletedTask;
 }

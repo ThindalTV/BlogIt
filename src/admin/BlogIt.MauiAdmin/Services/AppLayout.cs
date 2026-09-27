@@ -3,7 +3,7 @@ using BlogIt.MauiAdmin.Core.Navigation;
 namespace BlogIt.MauiAdmin.Services;
 
 /// <summary>
-/// The current navigation layout, kept up to date from the window's width.
+/// The current navigation layout of one window, kept up to date from that window's width.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -15,7 +15,9 @@ namespace BlogIt.MauiAdmin.Services;
 /// </para>
 /// <para>
 /// An instance with an event, rather than a static with one, so it can be injected into the Shell
-/// and substituted in a test. The width-to-mode decision itself lives in
+/// and substituted in a test. It is registered transient, one per Shell and so one per window:
+/// two windows can be different widths, and a shared instance would let resizing one re-lay-out
+/// the other. The width-to-mode decision itself lives in
 /// <see cref="LayoutBreakpoints"/> in the Core library, where it is covered without a device.
 /// </para>
 /// </remarks>

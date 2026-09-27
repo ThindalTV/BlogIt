@@ -36,7 +36,7 @@ public class MauiApiClient(IHttpClientFactory httpClientFactory, SiteProfileServ
         var profile = await profileService.GetActiveProfileAsync()
             ?? throw new InvalidOperationException("No active site profile. Please add a site first.");
 
-        client.BaseAddress = new Uri(profile.BaseUri, profile.ApiPath.TrimStart('/') + "/");
+        client.BaseAddress = profile.ApiBaseUri;
 
         var token = await profileService.GetTokenAsync(profile.Id);
         if (!string.IsNullOrEmpty(token) && profile.IsTokenValid)
@@ -56,8 +56,7 @@ public class MauiApiClient(IHttpClientFactory httpClientFactory, SiteProfileServ
         try
         {
             using var client = httpClientFactory.CreateClient();
-            var apiBase = new Uri(profile.BaseUri, profile.ApiPath.TrimStart('/') + "/");
-            var url = new Uri(apiBase, "auth/login");
+            var url = new Uri(profile.ApiBaseUri, "auth/login");
             using var response = await client.PostAsJsonAsync(url, new LoginRequest(username, password), BlogItJson.Options);
 
             if (!response.IsSuccessStatusCode)

@@ -56,6 +56,20 @@ public class SiteProfileTests
         profile.ApiPath.Should().Be("/api", "an empty box in the form means 'unset', not 'no prefix'");
     }
 
+    [Theory]
+    [InlineData(null, "https://myblog.com/api/")]
+    [InlineData("/admin-api", "https://myblog.com/admin-api/")]
+    [InlineData("admin-api/", "https://myblog.com/admin-api/")]
+    [InlineData("/blog/api/", "https://myblog.com/blog/api/")]
+    public void TheApiBaseEndsInExactlyOneSlash(string? apiPathOverride, string expected)
+    {
+        // Without the trailing slash a relative "posts" would replace the last path segment
+        // instead of landing under it; with two, every URL would carry an empty segment.
+        var profile = new SiteProfile { Host = "myblog.com", ApiPathOverride = apiPathOverride };
+
+        profile.ApiBaseUri.Should().Be(new Uri(expected));
+    }
+
     [Fact]
     public void TheDisplayLabelFallsBackToTheHostWhenUnnamed()
     {

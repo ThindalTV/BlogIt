@@ -36,14 +36,15 @@ public static class MauiProgram
         // {DataTemplate} and route factory both construct pages via
         // Activator.CreateInstance) — only ViewModels are registered here, and each
         // page's parameterless constructor pulls its ViewModel via ServiceHelper.
-        // The current navigation layout, and the one Shell that reacts to it. The Shell is
-        // transient rather than a singleton so a second window gets its own; AppLayout is shared,
-        // because window width is the same question for all of them.
-        builder.Services.AddSingleton<AppLayout>();
+        // The Shell and its navigation layout. Both are transient so a second window gets its own
+        // pair: layout follows a window's width, and two windows side by side can be different
+        // widths, so a shared AppLayout would let each window's resize re-lay-out the other.
+        builder.Services.AddTransient<AppLayout>();
         builder.Services.AddTransient<AppShell>();
         builder.Services.AddSingleton<ISecureStore, MauiSecureStore>();
         builder.Services.AddSingleton<SiteProfileStore>();
         builder.Services.AddSingleton<SiteProfileService>();
+        builder.Services.AddSingleton<ActiveWindowTracker>();
         builder.Services.AddSingleton<IDialogService, DialogService>();
         builder.Services.AddTransient<ActiveSiteHttpMessageHandler>();
         builder.Services.AddHttpClient("BlogIt").AddHttpMessageHandler<ActiveSiteHttpMessageHandler>();

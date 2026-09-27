@@ -45,14 +45,4 @@ public partial class AppShell : Microsoft.Maui.Controls.Shell
             // to reintroduce a breakpoint of its own.
             _ => FlyoutBehavior.Flyout,
         };
-
-    protected override void OnHandlerChanged()
-    {
-        base.OnHandlerChanged();
-
-        // Detaching from the window means this Shell is going away; without this the layout
-        // service, which is a singleton, would hold it alive through the event.
-        if (Handler is null)
-            _layout.ModeChanged -= ApplyLayout;
-    }
 }

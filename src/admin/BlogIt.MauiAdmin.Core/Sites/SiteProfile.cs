@@ -41,5 +41,9 @@ public class SiteProfile
 
     public Uri BaseUri => new($"{(UseHttps ? "https" : "http")}://{HostAndPort}/");
 
+    /// <summary>The site's API root with a trailing slash, so relative request paths combine
+    /// under it rather than replacing its last segment.</summary>
+    public Uri ApiBaseUri => new(BaseUri, ApiPath.TrimStart('/').TrimEnd('/') + "/");
+
     private string HostAndPort => Port is { } p ? $"{Host}:{p}" : Host;
 }
