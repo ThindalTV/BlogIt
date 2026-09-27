@@ -6,7 +6,7 @@ namespace BlogIt;
 
 /// <summary>
 /// Design-time factory used by EF Core CLI migrations.
-/// Run from the repository root: dotnet ef migrations add MigrationName --project src/BlogIt
+/// Run from the repository root: dotnet ef migrations add MigrationName --project src/BlogIt.Core
 /// </summary>
 [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
 public class BlogItDbContextFactory : IDesignTimeDbContextFactory<BlogItDbContext>

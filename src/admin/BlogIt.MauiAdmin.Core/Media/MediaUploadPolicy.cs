@@ -2,10 +2,11 @@ namespace BlogIt.MauiAdmin.Core.Media;
 
 /// <summary>
 /// Client-side extension allow-list + size cap applied before every upload. The
-/// server enforces neither (confirmed critical finding in AUDIT_REPORT.md — it
-/// trusts whatever Content-Type and size it's given with zero validation, and a
-/// spoofed Content-Type has been live-exploited there for same-origin script
-/// execution), so this is the only safety net an upload gets.
+/// server caps size (BlogItOptions.MaxMediaUploadBytes, 50 MB by default) but
+/// deliberately does not restrict type: it serves back whatever Content-Type the
+/// client reported, because administrators are trusted (see the accepted risks in
+/// docs/history/AUDIT_REPORT_2026-08-14.md). The allow-list here is the only type
+/// check an upload gets; the size cap just fails fast before a doomed upload.
 /// </summary>
 public static class MediaUploadPolicy
 {
