@@ -23,7 +23,7 @@ turns the packed `PackageVersion` into `AssemblyVersion`, `FileVersion`, and
 `InformationalVersion`. Nothing in the SDK does this by default — `PackageVersion`
 is derived *from* `Version`, never the reverse — so without it a release packed
 as `1.2.3` shipped assemblies stamped `1.0.0.0` and customer stack traces could
-not identify the build. `build/package-layout-tests/verify.ps1` asserts the
+not identify the build. `tests/PackageLayout/verify.ps1` asserts the
 stamps of all five shipped assemblies against the packed version.
 
 `AssemblyVersion` and `FileVersion` carry the four-part numeric core, so

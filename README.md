@@ -17,11 +17,14 @@ and services for building a host-owned public site.
 
 | Path | Contents |
 | --- | --- |
-| `build/` | Package verification and release smoke-test helpers |
-| `src/` | BlogIt engine, contracts, browser admin, the Azure/OpenAI/Google Analytics satellite providers, and MAUI admin client |
-| `tests/` | Unit and integration tests |
-| `docs/` | Technical, administrator, and publishing documentation |
+| `src/BlogIt.Core/` | The engine, published as the `BlogIt` package |
+| `src/BlogIt.Contracts/` | The wire contracts shared with other applications — DTOs, limits, policies |
+| `src/admin/` | Admin clients: the packaged Blazor portal, and the MAUI app with its logic library |
+| `src/providers/` | Optional satellite packages: Azure Blob storage, OpenAI, Google Analytics |
+| `tests/` | Unit and integration tests, plus `PackageLayout/` for package verification |
 | `samples/` | Aspire-hosted example application and public blog UI |
+| `build/` | Shared MSBuild versioning rules |
+| `docs/` | Technical, administrator, and publishing documentation; `history/` holds past audits |
 
 ## Quick start
 

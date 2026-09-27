@@ -67,11 +67,11 @@ jobs:
           # engine package's lib folder deliberately excludes BlogIt.Contracts.dll, so an engine
           # published without it would have a dependency that cannot be resolved from the feed.
           $projects = @(
-            "src/BlogIt/BlogIt.csproj",
+            "src/BlogIt.Core/BlogIt.Core.csproj",
             "src/BlogIt.Contracts/BlogIt.Contracts.csproj",
-            "src/BlogIt.AzureStorage/BlogIt.AzureStorage.csproj",
-            "src/BlogIt.OpenAi/BlogIt.OpenAi.csproj",
-            "src/BlogIt.GoogleAnalytics/BlogIt.GoogleAnalytics.csproj"
+            "src/providers/BlogIt.AzureStorage/BlogIt.AzureStorage.csproj",
+            "src/providers/BlogIt.OpenAi/BlogIt.OpenAi.csproj",
+            "src/providers/BlogIt.GoogleAnalytics/BlogIt.GoogleAnalytics.csproj"
           )
           foreach ($project in $projects) {
             dotnet pack $project `
@@ -88,7 +88,7 @@ jobs:
         # mistakes that are invisible until someone installs the release.
         shell: pwsh
         run: >-
-          ./build/package-layout-tests/verify.ps1
+          ./tests/PackageLayout/verify.ps1
           -PackageVersion $env:PACKAGE_VERSION
           -PackageFeed $env:PACKAGE_FEED
           -SkipPack

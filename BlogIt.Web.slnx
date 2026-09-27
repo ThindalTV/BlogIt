@@ -2,15 +2,25 @@
      its Core library and its tests, which the path-filtered MAUI CI job builds instead.
      Kept in sync by SolutionCoverageTests. -->
 <Solution>
-  <Project Path="src/BlogIt.Admin/BlogIt.Admin.csproj" />
-  <Project Path="tests/BlogIt.Tests.Shared/BlogIt.Tests.Shared.csproj" />
-  <Project Path="tests/BlogIt.Tests.Web/BlogIt.Tests.Web.csproj" />
-  <Project Path="samples/BlogIt.Sample.AppHost/BlogIt.Sample.AppHost.csproj" />
-  <Project Path="samples/BlogIt.Sample.ServiceDefaults/BlogIt.Sample.ServiceDefaults.csproj" />
-  <Project Path="samples/BlogIt.Sample/BlogIt.Sample.csproj" />
-  <Project Path="src/BlogIt/BlogIt.csproj" />
-  <Project Path="src/BlogIt.AzureStorage/BlogIt.AzureStorage.csproj" />
-  <Project Path="src/BlogIt.GoogleAnalytics/BlogIt.GoogleAnalytics.csproj" />
-  <Project Path="src/BlogIt.OpenAi/BlogIt.OpenAi.csproj" />
-  <Project Path="src/BlogIt.Contracts/BlogIt.Contracts.csproj" />
+  <Folder Name="/src/">
+    <Project Path="src/BlogIt.Core/BlogIt.Core.csproj" />
+    <Project Path="src/BlogIt.Contracts/BlogIt.Contracts.csproj" />
+  </Folder>
+  <Folder Name="/src/admin/">
+    <Project Path="src/admin/BlogIt.Admin/BlogIt.Admin.csproj" />
+  </Folder>
+  <Folder Name="/src/providers/">
+    <Project Path="src/providers/BlogIt.AzureStorage/BlogIt.AzureStorage.csproj" />
+    <Project Path="src/providers/BlogIt.GoogleAnalytics/BlogIt.GoogleAnalytics.csproj" />
+    <Project Path="src/providers/BlogIt.OpenAi/BlogIt.OpenAi.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/BlogIt.Tests/BlogIt.Tests.csproj" />
+    <Project Path="tests/BlogIt.Contracts.Tests/BlogIt.Contracts.Tests.csproj" />
+  </Folder>
+  <Folder Name="/samples/">
+    <Project Path="samples/BlogIt.Sample/BlogIt.Sample.csproj" />
+    <Project Path="samples/BlogIt.Sample.AppHost/BlogIt.Sample.AppHost.csproj" />
+    <Project Path="samples/BlogIt.Sample.ServiceDefaults/BlogIt.Sample.ServiceDefaults.csproj" />
+  </Folder>
 </Solution>

@@ -947,11 +947,12 @@ dotnet build .\BlogIt.slnx -c Release
 dotnet test .\BlogIt.slnx -c Release --no-build
 ```
 
-The tests live in three projects — `BlogIt.Tests.Shared`, `BlogIt.Tests.Web` and
-`BlogIt.Tests.MAUI` — so run the solution rather than naming one. On a machine
-without the MAUI workloads installed, use `.\BlogIt.Web.slnx` instead: it is the
-same set minus the MAUI projects, and it works for both `build` and `test`.
+The tests live in three projects — `BlogIt.Tests` (engine, browser admin and
+satellites), `BlogIt.Contracts.Tests` and `BlogIt.MauiAdmin.Tests` — so run the
+solution rather than naming one. On a machine without the MAUI workloads
+installed, use `.\BlogIt.Web.slnx` instead: it is the same set minus the MAUI
+projects, and it works for both `build` and `test`.
 
-Package verification lives under `build/package-layout-tests`; it validates package
+Package verification lives under `tests/PackageLayout`; it validates package
 contents and a clean consumer application, and the release workflow runs it against the
 packages it just packed, before publishing.
