@@ -43,8 +43,21 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!--
+      Private="false" is what keeps BlogIt.Admin.runtimeconfig.json out of every host's output. The
+      admin is an executable, so the SDK's AddDepsJsonAndRuntimeConfigToCopyItemsForReferencingProjects
+      hands its runtimeconfig to anything that references it, and ReferenceOutputAssembly="false" does
+      not stop that: the file flowed through this project into the root of a source-referencing host's
+      bin/ and publish/, next to the host's own runtimeconfig. Azure App Service on Linux picks the
+      startup DLL by finding exactly one *.runtimeconfig.json, so with two it ran its placeholder app
+      instead. MSBuild's GetCopyToOutputDirectoryItems and GetCopyToPublishDirectoryItems both skip
+      references marked Private="false". The admin's real payload travels separately, as the
+      BlogItAdminAssets tree built by the BuildBlogItAdminAssets target below. verify.ps1 asserts
+      exactly one runtimeconfig in both a source-referencing and a package-referencing publish.
+    -->
     <ProjectReference Include="..\admin\BlogIt.Admin\BlogIt.Admin.csproj"
                       ReferenceOutputAssembly="false"
+                      Private="false"
                       PrivateAssets="all" />
     <!--
       No PrivateAssets here, deliberately: this has to become a real nuspec dependency on
