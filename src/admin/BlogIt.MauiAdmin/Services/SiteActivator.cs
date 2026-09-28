@@ -35,6 +35,9 @@ public sealed class SiteActivator(
             return;
         }
 
+        // Absolute: the switcher calls this from any section, and outside Sites a relative
+        // "sites/..." route is read as the Sites FlyoutItem, which Shell refuses to route to.
+        var sites = AppNavigation.RouteTo("sites");
         var result = await probeService.ProbeAsync(site.BaseUri, site.ApiPath);
         switch (result.Status)
         {
@@ -42,11 +45,11 @@ public sealed class SiteActivator(
                 // Deliberately not activated yet — LoginViewModel does that once the credentials
                 // are actually accepted, so a failed sign-in cannot leave the app pointed at a
                 // site it has no session for.
-                await Shell.Current.GoToAsync($"sites/login?id={site.Id}");
+                await Shell.Current.GoToAsync($"{sites}/login?id={site.Id}");
                 break;
 
             case SiteProbeStatus.ReachableSetupIncomplete:
-                await Shell.Current.GoToAsync($"sites/setup-required?id={site.Id}");
+                await Shell.Current.GoToAsync($"{sites}/setup-required?id={site.Id}");
                 break;
 
             default:

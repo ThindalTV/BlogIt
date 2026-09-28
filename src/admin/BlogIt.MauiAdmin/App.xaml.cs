@@ -1,3 +1,4 @@
+using BlogIt.MauiAdmin.Core.Navigation;
 using BlogIt.MauiAdmin.Messages;
 using BlogIt.MauiAdmin.Services;
 using BlogIt.MauiAdmin.Views.Navigation;
@@ -13,12 +14,14 @@ public partial class App : Application
 
         // Central reaction to a 401 from any site: send the user back to that
         // site's own login screen rather than a generic error. In the window they are working
-        // in — Shell.Current would always pick the first window opened.
+        // in — Shell.Current would always pick the first window opened. Absolute, because the 401
+        // usually comes from outside the Sites section, where the relative "sites/login" makes
+        // Shell read "sites" as the FlyoutItem and throw.
         WeakReferenceMessenger.Default.Register<SiteAuthExpiredMessage>(this, async (_, message) =>
         {
             var windows = ServiceHelper.GetRequiredService<ActiveWindowTracker>();
             if (windows.CurrentWindow?.Page is Microsoft.Maui.Controls.Shell shell)
-                await shell.GoToAsync($"sites/login?id={message.SiteId}");
+                await shell.GoToAsync($"{AppNavigation.RouteTo("sites")}/login?id={message.SiteId}");
         });
     }
 
