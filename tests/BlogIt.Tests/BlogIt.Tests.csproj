@@ -44,6 +44,7 @@
     -->
     <ProjectReference Include="..\..\src\providers\BlogIt.GoogleAnalytics\BlogIt.GoogleAnalytics.csproj" />
     <ProjectReference Include="..\..\src\providers\BlogIt.OpenAi\BlogIt.OpenAi.csproj" />
+    <ProjectReference Include="..\..\src\providers\BlogIt.Sqlite\BlogIt.Sqlite.csproj" />
     <ProjectReference Include="..\..\src\BlogIt.Core\BlogIt.Core.csproj" />
     <ProjectReference Include="..\..\src\BlogIt.Contracts\BlogIt.Contracts.csproj" />
     <!-- Shared test helpers and the contracts-level tests both clients depend on. -->

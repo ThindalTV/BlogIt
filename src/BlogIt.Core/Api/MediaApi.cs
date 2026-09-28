@@ -51,7 +51,12 @@ public static class MediaApi
             .AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(q))
-            query = query.Where(m => m.Title.Contains(q) || m.FileName.Contains(q));
+        {
+            var pattern = SearchPattern.Containing(q);
+            query = query.Where(m =>
+                EF.Functions.Like(m.Title, pattern, SearchPattern.EscapeCharacter)
+                || EF.Functions.Like(m.FileName, pattern, SearchPattern.EscapeCharacter));
+        }
 
         var total = await query.CountAsync();
         var items = await query

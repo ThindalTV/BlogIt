@@ -1,7 +1,7 @@
 # BlogIt
 
-BlogIt is an embeddable ASP.NET Core blog engine with SQL Server persistence,
-filesystem or Azure Blob media storage, a packaged Blazor administration portal,
+BlogIt is an embeddable ASP.NET Core blog engine with SQL Server or SQLite
+persistence, filesystem or Azure Blob media storage, a packaged Blazor administration portal,
 and services for building a host-owned public site.
 
 ## Documentation
@@ -20,7 +20,7 @@ and services for building a host-owned public site.
 | `src/BlogIt.Core/` | The engine, published as the `BlogIt` package |
 | `src/BlogIt.Contracts/` | The wire contracts shared with other applications — DTOs, limits, policies |
 | `src/admin/` | Admin clients: the packaged Blazor portal, and the MAUI app with its logic library |
-| `src/providers/` | Optional satellite packages: Azure Blob storage, OpenAI, Google Analytics |
+| `src/providers/` | Optional satellite packages: SQLite, Azure Blob storage, OpenAI, Google Analytics |
 | `tests/` | Unit and integration tests, plus `PackageLayout/` for package verification |
 | `samples/` | Aspire-hosted example application and public blog UI |
 | `build/` | Shared MSBuild versioning rules |
@@ -28,7 +28,8 @@ and services for building a host-owned public site.
 
 ## Quick start
 
-BlogIt targets .NET 10 and requires SQL Server.
+BlogIt targets .NET 10 and stores its data in SQL Server, or in a single SQLite
+file with the `BlogIt.Sqlite` package. The sample below uses SQL Server.
 
 ```powershell
 dotnet add package BlogIt

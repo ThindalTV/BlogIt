@@ -13,6 +13,8 @@ checksum-verifies those exact artifacts. A release contains:
 - `BlogIt.OpenAi.<version>.snupkg`
 - `BlogIt.GoogleAnalytics.<version>.nupkg`
 - `BlogIt.GoogleAnalytics.<version>.snupkg`
+- `BlogIt.Sqlite.<version>.nupkg`
+- `BlogIt.Sqlite.<version>.snupkg`
 - `BlogIt.Contracts.<version>.nupkg`
 - `BlogIt.Contracts.<version>.snupkg`
 
@@ -24,7 +26,7 @@ turns the packed `PackageVersion` into `AssemblyVersion`, `FileVersion`, and
 is derived *from* `Version`, never the reverse — so without it a release packed
 as `1.2.3` shipped assemblies stamped `1.0.0.0` and customer stack traces could
 not identify the build. `tests/PackageLayout/verify.ps1` asserts the
-stamps of all five shipped assemblies against the packed version.
+stamps of all six shipped assemblies against the packed version.
 
 `AssemblyVersion` and `FileVersion` carry the four-part numeric core, so
 `1.2.3-rc.1` stamps `1.2.3.0`. `InformationalVersion` keeps the full version and
@@ -64,7 +66,7 @@ asserts the brackets. Third-party dependencies are untouched.
 The trade is real and worth restating: an exact range means a consumer cannot take
 a `BlogIt` patch without matching satellite builds, and no third-party package
 could ever depend on `BlogIt` alongside a different patch. That is acceptable for
-five packages from one vendor released from one tag, which is the stated policy
+six packages from one vendor released from one tag, which is the stated policy
 above. Revisit it if BlogIt grows a third-party ecosystem.
 
 ### Namespaces follow the assembly
@@ -174,8 +176,8 @@ raise `NU5104` and be rejected by feeds that block prerelease transitives, so it
 ships with a prerelease label (for example `1.0.0-beta.1`) until Google ships a
 stable `Google.Analytics.Data.V1`.
 
-Isolating that in a satellite is deliberate: `BlogIt`, `BlogIt.AzureStorage`, and
-`BlogIt.OpenAi` all release stable from the same tag, and only hosts that want
+Isolating that in a satellite is deliberate: `BlogIt`, `BlogIt.AzureStorage`,
+`BlogIt.OpenAi`, and `BlogIt.Sqlite` all release stable from the same tag, and only hosts that want
 analytics reporting opt into a prerelease dependency.
 
 ## License

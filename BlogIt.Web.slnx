@@ -13,6 +13,7 @@
     <Project Path="src/providers/BlogIt.AzureStorage/BlogIt.AzureStorage.csproj" />
     <Project Path="src/providers/BlogIt.GoogleAnalytics/BlogIt.GoogleAnalytics.csproj" />
     <Project Path="src/providers/BlogIt.OpenAi/BlogIt.OpenAi.csproj" />
+    <Project Path="src/providers/BlogIt.Sqlite/BlogIt.Sqlite.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/BlogIt.Tests/BlogIt.Tests.csproj" />

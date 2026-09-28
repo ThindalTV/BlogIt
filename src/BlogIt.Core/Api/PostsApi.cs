@@ -43,7 +43,12 @@ public static class PostsApi
             .AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(q))
-            query = query.Where(p => p.Title.Contains(q) || p.Summary.Contains(q));
+        {
+            var pattern = SearchPattern.Containing(q);
+            query = query.Where(p =>
+                EF.Functions.Like(p.Title, pattern, SearchPattern.EscapeCharacter)
+                || EF.Functions.Like(p.Summary, pattern, SearchPattern.EscapeCharacter));
+        }
 
         // Deliberately NOT WherePublished(), even though "published" is the same word. That
         // extension is visitor visibility — the flag *and* a publication instant — and this is an

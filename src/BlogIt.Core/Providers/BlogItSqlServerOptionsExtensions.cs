@@ -1,8 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace BlogIt;
 
@@ -42,15 +40,7 @@ public static class BlogItSqlServerOptionsExtensions
                     sqlOptions.MigrationsAssembly(
                         typeof(BlogIt.Data.BlogItDbContext).Assembly.GetName().Name);
                 }));
-            // Resolved by hand rather than by constructor injection so that logging stays optional.
-            // A host that only migrates — a console entry point, a provisioning step — may never
-            // have called AddLogging, and requiring it here would turn a missing convenience into a
-            // startup crash.
-            services.AddSingleton<IBlogItMigrator>(provider => new EntityFrameworkBlogItMigrator(
-                provider.GetRequiredService<
-                    IDbContextFactory<BlogIt.Data.BlogItDbContext>>(),
-                provider.GetService<ILogger<EntityFrameworkBlogItMigrator>>()
-                    ?? NullLogger<EntityFrameworkBlogItMigrator>.Instance));
+            services.AddSingleton<IBlogItMigrator>(EntityFrameworkBlogItMigrator.Create);
         }
     }
 }

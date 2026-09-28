@@ -12,6 +12,8 @@
       Google SDK dependency.
     -->
     <ProjectReference Include="..\..\src\providers\BlogIt.OpenAi\BlogIt.OpenAi.csproj" />
+    <!-- Only the Testing environment uses it, to run the test suite against a real SQLite file. -->
+    <ProjectReference Include="..\..\src\providers\BlogIt.Sqlite\BlogIt.Sqlite.csproj" />
     <!-- Source builds need the bundled contracts assembly as a compile reference. The BlogIt package supplies it itself. -->
     <ProjectReference Include="..\..\src\BlogIt.Contracts\BlogIt.Contracts.csproj"
                       PrivateAssets="all" />

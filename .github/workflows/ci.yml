@@ -84,6 +84,24 @@ jobs:
           --logger "trx;LogFileName=test-results-web.trx"
           --results-directory artifacts/test-results
 
+      # The integration suite again, on real SQLite files with the shipped BlogIt.Sqlite migrations
+      # instead of EF's in-memory provider. In-memory enforces no foreign keys, raises the wrong
+      # exception for a duplicate key and compares text ordinally, so passing there says little about
+      # a relational database. Unit tests are skipped: they build their own contexts and would only
+      # repeat the run above.
+      - name: Run integration tests on SQLite
+        env:
+          BLOGIT_TEST_DATABASE: sqlite
+        run: >-
+          dotnet test tests/BlogIt.Tests/BlogIt.Tests.csproj
+          --no-build
+          --no-restore
+          --configuration Release
+          --verbosity normal
+          --filter "FullyQualifiedName~BlogIt.Tests.Integration"
+          --logger "trx;LogFileName=test-results-web-sqlite.trx"
+          --results-directory artifacts/test-results
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

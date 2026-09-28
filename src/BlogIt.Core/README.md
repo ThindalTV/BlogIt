@@ -6,7 +6,8 @@ services for host-defined public views.
 
 ## Requirements and install
 
-BlogIt targets .NET 10 preview and requires SQL Server.
+BlogIt targets .NET 10 preview and stores its data in SQL Server, or in a single
+SQLite file through `BlogIt.Sqlite`.
 
 ```powershell
 dotnet add package BlogIt
@@ -17,11 +18,12 @@ Storage; that provider brings in the matching BlogIt package transitively.
 
 ### Optional satellite packages
 
-This package carries no AI or analytics SDK — install a satellite only if you
-want that feature, and each brings the matching `BlogIt` transitively:
+This package carries no SQLite, AI or analytics SDK — install a satellite only
+if you want that feature, and each brings the matching `BlogIt` transitively:
 
 | Package | Adds | Configure with |
 | --- | --- | --- |
+| `BlogIt.Sqlite` | A single-file SQLite database instead of SQL Server | `options.UseSqlite(...)` |
 | `BlogIt.AzureStorage` | Azure Blob media storage | `options.UseAzureStorage(...)` |
 | `BlogIt.OpenAi` | The admin's AI brainstorm and export-to-draft screens | `options.UseOpenAi()` |
 | `BlogIt.GoogleAnalytics` | The admin dashboard's analytics panel | `options.UseGoogleAnalytics()` |

@@ -24,11 +24,13 @@ $consumer = Join-Path $testRoot "Consumer\Consumer.csproj"
 $azureConsumer = Join-Path $testRoot "AzureConsumer\AzureConsumer.csproj"
 $aiAnalyticsConsumer = Join-Path $testRoot "AiAnalyticsConsumer\AiAnalyticsConsumer.csproj"
 $contractsConsumer = Join-Path $testRoot "ContractsConsumer\ContractsConsumer.csproj"
+$sqliteConsumer = Join-Path $testRoot "SqliteConsumer\SqliteConsumer.csproj"
 $packageProject = Join-Path $repo "src\BlogIt.Core\BlogIt.Core.csproj"
 $contractsPackageProject = Join-Path $repo "src\BlogIt.Contracts\BlogIt.Contracts.csproj"
 $azurePackageProject = Join-Path $repo "src\providers\BlogIt.AzureStorage\BlogIt.AzureStorage.csproj"
 $openAiPackageProject = Join-Path $repo "src\providers\BlogIt.OpenAi\BlogIt.OpenAi.csproj"
 $analyticsPackageProject = Join-Path $repo "src\providers\BlogIt.GoogleAnalytics\BlogIt.GoogleAnalytics.csproj"
+$sqlitePackageProject = Join-Path $repo "src\providers\BlogIt.Sqlite\BlogIt.Sqlite.csproj"
 $consumerOutput = Join-Path $artifacts "consumer-publish"
 $version = $PackageVersion
 $packageName = "BlogIt.$version.nupkg"
@@ -36,11 +38,13 @@ $contractsPackageName = "BlogIt.Contracts.$version.nupkg"
 $azurePackageName = "BlogIt.AzureStorage.$version.nupkg"
 $openAiPackageName = "BlogIt.OpenAi.$version.nupkg"
 $analyticsPackageName = "BlogIt.GoogleAnalytics.$version.nupkg"
+$sqlitePackageName = "BlogIt.Sqlite.$version.nupkg"
 $symbolPackageName = "BlogIt.$version.snupkg"
 $contractsSymbolPackageName = "BlogIt.Contracts.$version.snupkg"
 $azureSymbolPackageName = "BlogIt.AzureStorage.$version.snupkg"
 $openAiSymbolPackageName = "BlogIt.OpenAi.$version.snupkg"
 $analyticsSymbolPackageName = "BlogIt.GoogleAnalytics.$version.snupkg"
+$sqliteSymbolPackageName = "BlogIt.Sqlite.$version.snupkg"
 $adminAssetPrefix = "staticwebassets/BlogItAdminAssets/"
 $adminPublishTree = Join-Path $repo "src\BlogIt.Core\obj\admin-publish\Release\wwwroot\blogit"
 
@@ -426,7 +430,8 @@ foreach ($shippedProject in @(
     $contractsPackageProject,
     $azurePackageProject,
     $openAiPackageProject,
-    $analyticsPackageProject
+    $analyticsPackageProject,
+    $sqlitePackageProject
 )) {
     $floatingVersions = @(
         [regex]::Matches(
@@ -447,7 +452,9 @@ foreach ($generatedPath in @(
     (Join-Path $testRoot "AiAnalyticsConsumer\bin"),
     (Join-Path $testRoot "AiAnalyticsConsumer\obj"),
     (Join-Path $testRoot "ContractsConsumer\bin"),
-    (Join-Path $testRoot "ContractsConsumer\obj")
+    (Join-Path $testRoot "ContractsConsumer\obj"),
+    (Join-Path $testRoot "SqliteConsumer\bin"),
+    (Join-Path $testRoot "SqliteConsumer\obj")
 )) {
     Remove-Item $generatedPath -Recurse -Force -ErrorAction SilentlyContinue
 }
@@ -502,6 +509,11 @@ if (-not $SkipPack) {
         -o $feed `
         --nologo `
         "-p:PackageVersion=$version"
+    Invoke-DotNet pack $sqlitePackageProject `
+        -c Release `
+        -o $feed `
+        --nologo `
+        "-p:PackageVersion=$version"
 }
 
 $producedPackages = @(
@@ -515,7 +527,8 @@ Assert-SameSet `
         $contractsPackageName,
         $azurePackageName,
         $openAiPackageName,
-        $analyticsPackageName) `
+        $analyticsPackageName,
+        $sqlitePackageName) `
     -Description "Produced nupkgs"
 $producedSymbolPackages = @(
     Get-ChildItem $feed -File |
@@ -528,7 +541,8 @@ Assert-SameSet `
         $contractsSymbolPackageName,
         $azureSymbolPackageName,
         $openAiSymbolPackageName,
-        $analyticsSymbolPackageName) `
+        $analyticsSymbolPackageName,
+        $sqliteSymbolPackageName) `
     -Description "Produced snupkgs"
 foreach ($symbolPackage in $producedSymbolPackages) {
     $correspondingPackage = Join-Path $feed (
@@ -544,6 +558,7 @@ $contractsPackage = Get-Item (Join-Path $feed $contractsPackageName)
 $azurePackage = Get-Item (Join-Path $feed $azurePackageName)
 $openAiPackage = Get-Item (Join-Path $feed $openAiPackageName)
 $analyticsPackage = Get-Item (Join-Path $feed $analyticsPackageName)
+$sqlitePackage = Get-Item (Join-Path $feed $sqlitePackageName)
 # The ceiling is deliberately close to the real size (~11 MB) so that re-introducing the
 # precompressed admin variants - which alone added 18.4 MB of already-compressed, and
 # therefore incompressible, payload - trips this instead of passing unnoticed.
@@ -552,7 +567,7 @@ if ($package.Length -gt 15MB) {
 }
 # Every satellite is a handful of source files over a provider abstraction; anything approaching a
 # megabyte means it has started duplicating the engine's assets rather than depending on them.
-foreach ($satellite in @($azurePackage, $openAiPackage, $analyticsPackage)) {
+foreach ($satellite in @($azurePackage, $openAiPackage, $analyticsPackage, $sqlitePackage)) {
     if ($satellite.Length -gt 1MB) {
         throw "$($satellite.Name) size is $([math]::Round($satellite.Length / 1KB, 2)) KB; expected at most 1 MB."
     }
@@ -571,6 +586,7 @@ $contractsInspection = Get-PackageInspection $contractsPackage
 $azureInspection = Get-PackageInspection $azurePackage
 $openAiInspection = Get-PackageInspection $openAiPackage
 $analyticsInspection = Get-PackageInspection $analyticsPackage
+$sqliteInspection = Get-PackageInspection $sqlitePackage
 
 foreach ($symbolExpectation in @(
     @{
@@ -592,6 +608,10 @@ foreach ($symbolExpectation in @(
     @{
         Package = Get-Item (Join-Path $feed $analyticsSymbolPackageName)
         Pdb = "lib/net10.0/BlogIt.GoogleAnalytics.pdb"
+    },
+    @{
+        Package = Get-Item (Join-Path $feed $sqliteSymbolPackageName)
+        Pdb = "lib/net10.0/BlogIt.Sqlite.pdb"
     }
 )) {
     $symbolArchive = [IO.Compression.ZipFile]::OpenRead($symbolExpectation.Package.FullName)
@@ -779,6 +799,23 @@ $satelliteExpectations = @(
             "BlogIt" = "[$version]"
             "Google.Analytics.Data.V1Beta" = "2.0.0-beta10"
         }
+    },
+    @{
+        Inspection = $sqliteInspection
+        Package = $sqlitePackage
+        Id = "BlogIt.Sqlite"
+        # The SQLite migrations are compiled into this one assembly; the consumer run further down
+        # proves they shipped and apply.
+        Assembly = "BlogIt.Sqlite.dll"
+        # Emitted because of the private EF Core Design reference `dotnet ef migrations add` needs,
+        # exactly as BlogIt.Core's is above. Harmless in a library: nothing reads it.
+        ExtraLibraryAssets = @("lib/net10.0/BlogIt.Sqlite.runtimeconfig.json")
+        # Pinned to the same servicing patch as BlogIt's own EF Core dependency. EF Core Design is a
+        # private build-time reference for generating migrations and must not appear here.
+        Dependencies = [ordered]@{
+            "BlogIt" = "[$version]"
+            "Microsoft.EntityFrameworkCore.Sqlite" = "10.0.11"
+        }
     }
 )
 foreach ($satellite in $satelliteExpectations) {
@@ -791,7 +828,7 @@ foreach ($satellite in $satelliteExpectations) {
     }
     Assert-SameSet `
         -Actual @($inspection.EntryNames | Where-Object { $_ -Like "lib/*" }) `
-        -Expected @("lib/net10.0/$($satellite.Assembly)") `
+        -Expected (@("lib/net10.0/$($satellite.Assembly)") + @($satellite.ExtraLibraryAssets | Where-Object { $_ })) `
         -Description "$($satellite.Id) library assets"
     if (@($inspection.EntryNames | Where-Object {
         $_ -Like "staticwebassets/*" -or $_ -Like "buildTransitive/*"
@@ -847,7 +884,8 @@ foreach ($licensedPackage in @(
     $contractsInspection,
     $azureInspection,
     $openAiInspection,
-    $analyticsInspection
+    $analyticsInspection,
+    $sqliteInspection
 )) {
     Assert-PackageLicense -Inspection $licensedPackage -Expected "MIT"
 }
@@ -860,7 +898,8 @@ foreach ($stampedAssembly in @(
     @{ Package = $contractsPackage; Entry = "lib/net10.0/BlogIt.Contracts.dll" },
     @{ Package = $azurePackage; Entry = "lib/net10.0/BlogIt.AzureStorage.dll" },
     @{ Package = $openAiPackage; Entry = "lib/net10.0/BlogIt.OpenAi.dll" },
-    @{ Package = $analyticsPackage; Entry = "lib/net10.0/BlogIt.GoogleAnalytics.dll" }
+    @{ Package = $analyticsPackage; Entry = "lib/net10.0/BlogIt.GoogleAnalytics.dll" },
+    @{ Package = $sqlitePackage; Entry = "lib/net10.0/BlogIt.Sqlite.dll" }
 )) {
     Assert-PackedAssemblyVersion `
         -Package $stampedAssembly.Package `
@@ -872,18 +911,20 @@ $consumerProjectText = Get-Content $consumer -Raw
 $azureConsumerProjectText = Get-Content $azureConsumer -Raw
 $aiAnalyticsConsumerProjectText = Get-Content $aiAnalyticsConsumer -Raw
 $contractsConsumerProjectText = Get-Content $contractsConsumer -Raw
+$sqliteConsumerProjectText = Get-Content $sqliteConsumer -Raw
 foreach ($projectText in @(
     $consumerProjectText,
     $azureConsumerProjectText,
     $aiAnalyticsConsumerProjectText,
-    $contractsConsumerProjectText
+    $contractsConsumerProjectText,
+    $sqliteConsumerProjectText
 )) {
     if ($projectText -match "<ProjectReference") {
         throw "Clean package consumers must not contain source ProjectReferences."
     }
 }
 if (($consumerProjectText -notmatch 'PackageReference Include="BlogIt"') -or
-    ($consumerProjectText -match 'PackageReference Include="BlogIt\.(Contracts|Admin|AzureStorage|OpenAi|GoogleAnalytics)"')) {
+    ($consumerProjectText -match 'PackageReference Include="BlogIt\.(Contracts|Admin|AzureStorage|OpenAi|GoogleAnalytics|Sqlite)"')) {
     throw "The filesystem consumer must reference only the BlogIt production package."
 }
 if (($azureConsumerProjectText -notmatch 'PackageReference Include="BlogIt\.AzureStorage"') -or
@@ -901,8 +942,13 @@ if (($aiAnalyticsConsumerProjectText -notmatch 'PackageReference Include="BlogIt
 # compile while proving nothing.
 if (($contractsConsumerProjectText -notmatch 'PackageReference Include="BlogIt\.Contracts"') -or
     ($contractsConsumerProjectText -match 'PackageReference Include="BlogIt"') -or
-    ($contractsConsumerProjectText -match 'PackageReference Include="BlogIt\.(Admin|AzureStorage|OpenAi|GoogleAnalytics)"')) {
+    ($contractsConsumerProjectText -match 'PackageReference Include="BlogIt\.(Admin|AzureStorage|OpenAi|GoogleAnalytics|Sqlite)"')) {
     throw "The contracts consumer must reference only the BlogIt.Contracts package."
+}
+if (($sqliteConsumerProjectText -notmatch 'PackageReference Include="BlogIt\.Sqlite"') -or
+    ($sqliteConsumerProjectText -match 'PackageReference Include="BlogIt"') -or
+    ($sqliteConsumerProjectText -match 'PackageReference Include="Microsoft\.EntityFrameworkCore')) {
+    throw "The SQLite consumer must reference only BlogIt.Sqlite and receive BlogIt and the EF Core provider transitively."
 }
 # Not the web SDK either: a console or MAUI client is the case the contracts package exists for, and
 # Microsoft.NET.Sdk.Web would silently supply the ASP.NET Core framework reference that the empty
@@ -919,7 +965,8 @@ foreach ($consumerProject in @(
     $consumer,
     $azureConsumer,
     $aiAnalyticsConsumer,
-    $contractsConsumer
+    $contractsConsumer,
+    $sqliteConsumer
 )) {
     Invoke-DotNet restore $consumerProject `
         "-p:RestoreAdditionalProjectSources=$feed" `
@@ -931,6 +978,7 @@ foreach ($consumerProject in @(
 Invoke-DotNet build $consumer -c Release --no-restore --nologo @restoreProperties
 Invoke-DotNet build $azureConsumer -c Release --no-restore --nologo @restoreProperties
 Invoke-DotNet build $aiAnalyticsConsumer -c Release --no-restore --nologo @restoreProperties
+Invoke-DotNet build $sqliteConsumer -c Release --no-restore --nologo @restoreProperties
 # Compiling is the assertion here: ClientUsage.cs names a DTO, a request record, the concurrency
 # stamp, BlogUrlHelper, SettingKeys, the bootstrap config, the length constants and the
 # DataAnnotations validator, all resolved from the contracts package alone. The fixture sets
@@ -966,7 +1014,11 @@ $satelliteOnlyLibraryPrefixes = @(
     "Google.Api.Gax",
     "Google.Apis.",
     "Google.Protobuf/",
-    "Grpc."
+    "Grpc.",
+    # The SQLite provider and its native library bundle, which is several megabytes per platform.
+    "Microsoft.EntityFrameworkCore.Sqlite",
+    "Microsoft.Data.Sqlite",
+    "SQLitePCLRaw."
 )
 $leakedLibraries = @(
     $consumerLibraries | Where-Object {
@@ -977,7 +1029,75 @@ $leakedLibraries = @(
     }
 )
 if ($leakedLibraries.Count -ne 0) {
-    throw "A BlogIt-only consumer restored $($leakedLibraries.Count) AI/analytics SDK libraries it cannot use: $($leakedLibraries -join ', ')."
+    throw "A BlogIt-only consumer restored $($leakedLibraries.Count) satellite-only libraries it cannot use: $($leakedLibraries -join ', ')."
+}
+
+# The SQLite satellite, end to end from the packed output: BlogIt and the EF Core provider arrive
+# transitively, and starting the app applies the migrations compiled into BlogIt.Sqlite.dll to a
+# database file under the content root, in a directory that did not exist beforehand.
+$sqliteConsumerAssets = Get-Content (
+    Join-Path $testRoot "SqliteConsumer\obj\project.assets.json") -Raw |
+    ConvertFrom-Json
+$sqliteConsumerLibraries = @($sqliteConsumerAssets.libraries.PSObject.Properties.Name)
+Assert-SameSet `
+    -Actual @($sqliteConsumerLibraries | Where-Object { $_ -Like "BlogIt*/*" }) `
+    -Expected @("BlogIt/$version", "BlogIt.Contracts/$version", "BlogIt.Sqlite/$version") `
+    -Description "SQLite consumer BlogIt packages"
+if ($sqliteConsumerLibraries -notcontains "Microsoft.EntityFrameworkCore.Sqlite/10.0.11") {
+    throw "The SQLite consumer did not restore Microsoft.EntityFrameworkCore.Sqlite 10.0.11 from its satellite package."
+}
+
+$sqliteConsumerOutput = Join-Path $testRoot "SqliteConsumer\bin\Release\net10.0"
+$sqliteDatabase = Join-Path $sqliteConsumerOutput "App_Data\blogit.db"
+if (Test-Path (Split-Path $sqliteDatabase -Parent)) {
+    throw "The SQLite consumer's App_Data directory exists before startup, so its creation proves nothing."
+}
+$sqlitePort = Get-FreePort
+$sqliteBaseUrl = "http://127.0.0.1:$sqlitePort"
+$oldUrls = $env:ASPNETCORE_URLS
+$sqliteServer = $null
+try {
+    $env:ASPNETCORE_URLS = $sqliteBaseUrl
+    $sqliteServer = Start-Process dotnet `
+        -ArgumentList "`"$sqliteConsumerOutput\SqliteConsumer.dll`"" `
+        -WorkingDirectory $sqliteConsumerOutput `
+        -RedirectStandardOutput (Join-Path $artifacts "sqlite.log") `
+        -RedirectStandardError (Join-Path $artifacts "sqlite.err.log") `
+        -PassThru
+}
+finally {
+    $env:ASPNETCORE_URLS = $oldUrls
+}
+$sqliteClient = [Net.Http.HttpClient]::new()
+try {
+    $sqliteStatus = $null
+    for ($attempt = 0; $attempt -lt 60; $attempt++) {
+        if ($sqliteServer.HasExited) {
+            throw "The SQLite consumer exited before becoming ready. See $(Join-Path $artifacts 'sqlite.err.log')."
+        }
+        try {
+            $sqliteStatus = $sqliteClient.GetAsync("$sqliteBaseUrl/api/setup/status").GetAwaiter().GetResult()
+            break
+        }
+        catch {
+            Start-Sleep -Milliseconds 250
+        }
+    }
+    if ($null -eq $sqliteStatus) {
+        throw "The SQLite consumer did not become ready at $sqliteBaseUrl."
+    }
+    # The endpoint queries the Users table, so anything but 200 means the schema is not there.
+    Assert-Status $sqliteStatus 200 "SQLite consumer setup status"
+    if (-not (Test-Path $sqliteDatabase -PathType Leaf)) {
+        throw "The SQLite consumer did not create its database at $sqliteDatabase."
+    }
+}
+finally {
+    $sqliteClient.Dispose()
+    if ($null -ne $sqliteServer -and -not $sqliteServer.HasExited) {
+        Stop-Process -Id $sqliteServer.Id
+        $sqliteServer.WaitForExit()
+    }
 }
 
 # The other half of the same claim: opting in has to actually deliver the SDKs, or the assertion
@@ -1127,8 +1247,9 @@ foreach ($satellite in $satelliteExpectations) {
 $contractsSizeKb = [math]::Round($contractsPackage.Length / 1KB, 2)
 Write-Host "PASS ${contractsPackageName}: $contractsSizeKb KB, one library asset, 0 dependencies, 0 framework references, MIT"
 Write-Host "PASS contracts-only client: plain Microsoft.NET.Sdk fixture compiled against BlogIt.Contracts alone, restore graph of exactly 1 library"
-Write-Host "PASS release stamping: AssemblyVersion/FileVersion/InformationalVersion track $version in 5 shipped assemblies"
+Write-Host "PASS release stamping: AssemblyVersion/FileVersion/InformationalVersion track $version in 6 shipped assemblies"
 Write-Host "PASS package dependency boundaries and forbidden browser dependencies: 0"
-Write-Host "PASS BlogIt-only consumer restored 0 AI/analytics SDK libraries; satellite consumer restored both"
+Write-Host "PASS BlogIt-only consumer restored 0 satellite-only libraries; satellite consumers restored theirs"
+Write-Host "PASS SQLite consumer: packaged migrations applied to a new file under the content root"
 Write-Host "PASS clean consumers: filesystem/public Razor surface, Azure and AI/analytics startup/transitive BlogIt"
 Write-Host "PASS published consumer: $consumerOutput"

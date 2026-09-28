@@ -71,7 +71,8 @@ jobs:
             "src/BlogIt.Contracts/BlogIt.Contracts.csproj",
             "src/providers/BlogIt.AzureStorage/BlogIt.AzureStorage.csproj",
             "src/providers/BlogIt.OpenAi/BlogIt.OpenAi.csproj",
-            "src/providers/BlogIt.GoogleAnalytics/BlogIt.GoogleAnalytics.csproj"
+            "src/providers/BlogIt.GoogleAnalytics/BlogIt.GoogleAnalytics.csproj",
+            "src/providers/BlogIt.Sqlite/BlogIt.Sqlite.csproj"
           )
           foreach ($project in $projects) {
             dotnet pack $project `

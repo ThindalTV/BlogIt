@@ -5,6 +5,7 @@ var builder = WebApplication.CreateBuilder(new WebApplicationOptions
     Args = args
 });
 var hostTestDbName = builder.Configuration["TestDbName"];
+var hostTestSqlitePath = builder.Configuration["TestSqlitePath"];
 
 // Explicit precedence: base settings -> environment settings -> injected environment -> secrets.
 builder.Configuration.Sources.Clear();
@@ -48,9 +49,18 @@ builder.Services.AddBlogIt(options =>
 {
     if (isTesting)
     {
-        options.UseDatabaseProvider(
-            new TestingDatabaseProviderRegistration(
-                hostTestDbName ?? $"BlogItTest_{Guid.NewGuid():N}"));
+        // The suite runs on EF's in-memory provider unless the test factory hands over a file, which
+        // it does to run the same tests against real SQLite (BLOGIT_TEST_DATABASE=sqlite).
+        if (!string.IsNullOrWhiteSpace(hostTestSqlitePath))
+        {
+            options.UseSqlite($"Data Source={hostTestSqlitePath};Pooling=False");
+        }
+        else
+        {
+            options.UseDatabaseProvider(
+                new TestingDatabaseProviderRegistration(
+                    hostTestDbName ?? $"BlogItTest_{Guid.NewGuid():N}"));
+        }
         options.UseStorageProvider(new TestingStorageProviderRegistration());
         return;
     }
