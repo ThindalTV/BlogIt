@@ -363,7 +363,7 @@ public sealed class BlogItOptions
         if (_databaseProviders.Count != 1)
         {
             throw new InvalidOperationException(
-                "BlogIt requires exactly one database provider. Configure one in AddBlogIt, for example options.UseSqlServer(...).");
+                "BlogIt requires exactly one database provider. Configure one in AddBlogIt, for example options.UseSqlServer(...) or options.UseSqlite(...).");
         }
 
         if (_storageProviders.Count != 1)

@@ -37,7 +37,12 @@ public static class PagesApi
         var query = db.Pages.AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(q))
-            query = query.Where(p => p.Title.Contains(q) || p.Slug.Contains(q));
+        {
+            var pattern = SearchPattern.Containing(q);
+            query = query.Where(p =>
+                EF.Functions.Like(p.Title, pattern, SearchPattern.EscapeCharacter)
+                || EF.Functions.Like(p.Slug, pattern, SearchPattern.EscapeCharacter));
+        }
 
         // Same vocabulary as the posts endpoint, deliberately: both feed the same admin list
         // screens, and an unrecognised value falls through to "everything" rather than erroring,

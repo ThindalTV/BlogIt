@@ -205,7 +205,9 @@ instead — the old value is not carried over.
   and choose a deployment mode that stops the old instance before starting the
   new one instead of overlapping them. Your developers can find the detail in the
   technical guide under "Deployment: BlogIt is single-instance today".
-- Back up the SQL Server database and the configured media store together.
+- Back up the database and the configured media store together. On SQLite the
+  database is one file; the `BlogIt.Sqlite` package README explains how to copy
+  it safely while the site is running.
 - Run application migrations as part of every BlogIt deployment before serving
   traffic.
 - Serve the site over HTTPS because admin credentials and tokens pass through

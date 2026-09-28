@@ -227,11 +227,13 @@ public sealed class PublicContentService(IDbContextFactory<BlogItDbContext> dbCo
             return new PublicPostPage([], 1, 1) { TotalCount = 0 };
 
         await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var pattern = SearchPattern.Containing(searchTerm);
         var query2 = db.BlogPosts.WherePublished()
             .Where(post =>
-                post.Title.Contains(searchTerm)
-                || post.Summary.Contains(searchTerm)
-                || (post.Content != null && post.Content.Contains(searchTerm)));
+                EF.Functions.Like(post.Title, pattern, SearchPattern.EscapeCharacter)
+                || EF.Functions.Like(post.Summary, pattern, SearchPattern.EscapeCharacter)
+                || (post.Content != null
+                    && EF.Functions.Like(post.Content, pattern, SearchPattern.EscapeCharacter)));
 
         var total = await query2.CountAsync(cancellationToken);
         var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));

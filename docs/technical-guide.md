@@ -8,7 +8,8 @@ site's routes and design.
 ## Requirements
 
 - .NET 10 SDK
-- SQL Server
+- SQL Server, or a local disk for a SQLite database file (`BlogIt.Sqlite`, see
+  [Using SQLite](#using-sqlite-instead-of-sql-server))
 - A writable local directory for filesystem media, or an Azure Blob Storage
   account
 
@@ -32,12 +33,13 @@ and response records on their own, with no dependencies at all. See
 
 ## Optional satellite packages
 
-The engine carries no AI or analytics SDK. Both are reached through provider
-abstractions in `BlogIt`, and each has its own package that brings the matching
-`BlogIt` transitively — install neither, either, or both:
+The engine carries no SQLite, AI or analytics SDK. Each is reached through a
+provider abstraction in `BlogIt` and has its own package that brings the matching
+`BlogIt` transitively — install only the ones you use:
 
 | Package | Adds | Configure with |
 | --- | --- | --- |
+| `BlogIt.Sqlite` | A single-file SQLite database instead of SQL Server | `options.UseSqlite(...)` |
 | `BlogIt.AzureStorage` | Azure Blob media storage | `options.UseAzureStorage(...)` |
 | `BlogIt.OpenAi` | The admin's AI brainstorm and export-to-draft screens | `options.UseOpenAi()` |
 | `BlogIt.GoogleAnalytics` | The admin dashboard's analytics panel | `options.UseGoogleAnalytics()` |
@@ -195,6 +197,36 @@ builder.Services.AddBlogIt(options =>
 
 The Azure provider creates its private container on first use. Media keys are
 provider-owned values; do not interpret them as paths or public URLs.
+
+### Using SQLite instead of SQL Server
+
+A small or self-hosted blog can keep everything in one SQLite file, with no
+database server to run. Install `BlogIt.Sqlite` and replace the database
+registration:
+
+```csharp
+builder.Services.AddBlogIt(options =>
+{
+    options.UseSqlite("Data Source=App_Data/blogit.db");
+    options.UseFileSystemStorage(storage => storage.RootPath = mediaRoot);
+});
+```
+
+`MigrateBlogItAsync` creates the file and its directory on first start and
+applies the SQLite migrations, which ship in `BlogIt.Sqlite` rather than in
+`BlogIt`. A relative `Data Source` resolves against the content root, like a
+relative media root. In-memory SQLite databases are refused, because EF Core
+closes connections between operations and the data would disappear.
+
+The engine behaves the same on either database. Text columns use SQLite's
+`NOCASE` collation, so logins, slug and redirect lookups, and the unique indexes
+ignore case exactly as SQL Server's default collation does. Search is an
+escaped `LIKE` on both, so it ignores case either way. SQLite folds ASCII only,
+so non-ASCII text in a different case does not match.
+
+Keep the file on a local disk: SQLite's locking is unreliable on network file
+systems, including the `/home` share Azure App Service mounts. The package README
+covers write-ahead logging and online backups.
 
 ## Paths and middleware
 
@@ -644,8 +676,10 @@ with ordinary settable properties. This is deliberate, not an oversight.
 A host can supply its own database provider by registering a
 `IBlogItDatabaseProviderRegistration` that calls
 `AddDbContextFactory<BlogItDbContext>(...)` — which is exactly what
-`options.UseSqlServer(...)` does internally, and what the reference sample does
-for its in-memory testing provider. That extension point only works if the
+`options.UseSqlServer(...)` and `options.UseSqlite(...)` do internally, and what
+the reference sample does for its in-memory testing provider. A relational
+provider also needs migrations generated for it, in its own assembly, and an
+`IBlogItMigrator` that applies them; `BlogIt.Sqlite` is a complete example. That extension point only works if the
 context and the model it maps are visible to the host, so both stay public.
 
 The trade-off that buys: the schema is part of this package's compatibility
@@ -951,6 +985,22 @@ satellites), `BlogIt.Contracts.Tests` and `BlogIt.MauiAdmin.Tests` — so run th
 solution rather than naming one. On a machine without the MAUI workloads
 installed, use `.\BlogIt.Web.slnx` instead: it is the same set minus the MAUI
 projects, and it works for both `build` and `test`.
+
+The engine tests run on EF Core's in-memory provider by default. Set
+`BLOGIT_TEST_DATABASE=sqlite` to run the same tests against real SQLite files
+with the shipped migrations. CI runs the integration tests both ways, because the
+in-memory provider enforces no foreign keys and compares text ordinally.
+
+Each database provider carries its own migrations, so a model change needs two:
+
+```powershell
+dotnet ef migrations add <Name> --project src/BlogIt.Core
+dotnet ef migrations add <Name> --project src/providers/BlogIt.Sqlite --namespace BlogIt.Sqlite.Migrations
+```
+
+`MigrationCoverageTests` fails until both exist. When EF writes the SQLite
+snapshot into a `BlogIt/Sqlite/Migrations` folder, move it into `Migrations`;
+it does that whenever the namespace differs from the project's root namespace.
 
 Package verification lives under `tests/PackageLayout`; it validates package
 contents and a clean consumer application, and the release workflow runs it against the
