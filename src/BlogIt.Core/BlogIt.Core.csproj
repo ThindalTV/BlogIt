@@ -147,15 +147,24 @@
     as a set) and drops the brotli pass from every Release build.
     Note this is a publish-pipeline property, not a BlogIt one: if a future SDK renames it,
     verify.ps1's precompressed-asset assertion is what will catch the regression.
+
+    Under NoBuild (dotnet publish with its no-build switch) the admin is not republished; the tree the
+    preceding build left in AdminPublishDir is reused. Invoking the admin's Publish target there
+    inherits NoBuild=true, and the SDK fails its Contracts reference with NETSDK1085, so a
+    source-referencing host could not use the common build-once-then-publish CI pattern at all.
   -->
   <Target Name="BuildBlogItAdminAssets"
           BeforeTargets="AssignTargetPaths"
           Condition="'$(DesignTimeBuild)' != 'true'">
-    <RemoveDir Directories="$(AdminPublishDir)" />
-    <MSBuild Projects="$(AdminProject)"
+    <RemoveDir Condition="'$(NoBuild)' != 'true'"
+               Directories="$(AdminPublishDir)" />
+    <MSBuild Condition="'$(NoBuild)' != 'true'"
+             Projects="$(AdminProject)"
              Targets="Publish"
              BuildInParallel="false"
              Properties="Configuration=$(Configuration);PublishTrimmed=false;CompressionEnabled=false;PublishDir=$(AdminPublishDir);BlogItAdminBuildRoot=$(AdminBuildRoot);BlogItBundledAdminBuild=true" />
+    <Error Condition="!Exists('$(AdminAssetsDir)index.html') and '$(NoBuild)' == 'true'"
+           Text="--no-build found no BlogIt.Admin publish tree at $(AdminAssetsDir). Build the host in the same configuration first." />
     <Error Condition="!Exists('$(AdminAssetsDir)index.html')"
            Text="BlogIt.Admin did not produce $(AdminAssetsDir)index.html." />
     <ItemGroup>
