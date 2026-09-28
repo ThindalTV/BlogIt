@@ -64,6 +64,24 @@ jobs:
       - name: Build solution
         run: dotnet build BlogIt.Web.slnx --no-restore --configuration Release
 
+      # A host that references BlogIt from source, published the way Azure App Service on Linux
+      # consumes it. Oryx picks the startup DLL by finding exactly one *.runtimeconfig.json in the app
+      # root, and BlogIt.Admin's used to arrive next to the host's own. --no-build also keeps the
+      # build-once-then-publish pattern working: BlogIt.Core's admin bundling used to fail it with
+      # NETSDK1085. tests/PackageLayout/verify.ps1 covers the plain publish and package consumers.
+      - name: Publish a source-referencing host
+        shell: bash
+        run: |
+          dotnet publish samples/BlogIt.Sample/BlogIt.Sample.csproj \
+            --no-build --no-restore --configuration Release --output artifacts/source-host-publish
+          configs=$(cd artifacts/source-host-publish && ls *.runtimeconfig.json)
+          if [ "$configs" != "BlogIt.Sample.runtimeconfig.json" ]; then
+            echo "::error::Expected only BlogIt.Sample.runtimeconfig.json in the publish root, found: $configs"
+            exit 1
+          fi
+          test -f artifacts/source-host-publish/BlogItAdminAssets/index.html \
+            || { echo "::error::The source-referencing host publish is missing BlogItAdminAssets."; exit 1; }
+
       - name: Run contracts tests
         run: >-
           dotnet test tests/BlogIt.Contracts.Tests/BlogIt.Contracts.Tests.csproj

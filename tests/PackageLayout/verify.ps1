@@ -96,6 +96,25 @@ function Assert-SameSet {
     }
 }
 
+# Azure App Service on Linux (Oryx) picks a .NET app's startup DLL by finding exactly one
+# *.runtimeconfig.json in the app root; with two it logs "Expected to find only one file with
+# extension '.runtimeconfig.json'" and runs its default placeholder app instead. BlogIt.Admin's
+# runtimeconfig used to flow through BlogIt.Core's ProjectReference into every source-referencing
+# host, which is how a real deployment ended up needing an explicit startup command. A host's output
+# must carry its own runtimeconfig and no other.
+function Assert-SingleRuntimeConfig {
+    param(
+        [Parameter(Mandatory)] [string] $Directory,
+        [Parameter(Mandatory)] [string] $HostName,
+        [Parameter(Mandatory)] [string] $Description
+    )
+
+    Assert-SameSet `
+        -Actual @(Get-ChildItem $Directory -File -Filter "*.runtimeconfig.json" | ForEach-Object Name) `
+        -Expected @("$HostName.runtimeconfig.json") `
+        -Description "$Description runtimeconfig files"
+}
+
 function Get-PackageInspection {
     param(
         [Parameter(Mandatory)] [IO.FileInfo] $Package
@@ -1225,6 +1244,24 @@ if (Test-Path (Join-Path $consumerOutput "wwwroot\blogit")) {
     throw "Admin assets were copied to the fixed public wwwroot/blogit path."
 }
 
+Assert-SingleRuntimeConfig $consumerOutput "Consumer" "Published package consumer"
+Assert-SingleRuntimeConfig $azureConsumerOutput "AzureConsumer" "Azure package consumer"
+Assert-SingleRuntimeConfig $aiAnalyticsConsumerOutput "AiAnalyticsConsumer" "AI/analytics package consumer"
+Assert-SingleRuntimeConfig $sqliteConsumerOutput "SqliteConsumer" "SQLite package consumer"
+# The case that actually broke: a host referencing BlogIt from source rather than as a package. The
+# sample is exactly that shape (a ProjectReference to BlogIt.Core), so its publish output stands in
+# for any such host. The clean consumers above cannot cover it, since they may not contain a
+# ProjectReference at all.
+$sourceHostOutput = Join-Path $artifacts "source-host-publish"
+Invoke-DotNet publish (Join-Path $repo "samples\BlogIt.Sample\BlogIt.Sample.csproj") `
+    -c Release `
+    --nologo `
+    -o $sourceHostOutput
+Assert-SingleRuntimeConfig $sourceHostOutput "BlogIt.Sample" "Source-referencing host publish"
+if (-not (Test-Path (Join-Path $sourceHostOutput "BlogItAdminAssets\index.html") -PathType Leaf)) {
+    throw "Source-referencing host publish is missing the BlogItAdminAssets tree."
+}
+
 $adminWasmPath = $adminWasmEntry.Substring($adminAssetPrefix.Length)
 Invoke-ConsumerScenario `
     -Name "default" `
@@ -1252,4 +1289,5 @@ Write-Host "PASS package dependency boundaries and forbidden browser dependencie
 Write-Host "PASS BlogIt-only consumer restored 0 satellite-only libraries; satellite consumers restored theirs"
 Write-Host "PASS SQLite consumer: packaged migrations applied to a new file under the content root"
 Write-Host "PASS clean consumers: filesystem/public Razor surface, Azure and AI/analytics startup/transitive BlogIt"
+Write-Host "PASS single runtimeconfig: package consumers and a source-referencing host publish carry only their own"
 Write-Host "PASS published consumer: $consumerOutput"
