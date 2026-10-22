@@ -116,6 +116,11 @@ public class BlogItDbContext(DbContextOptions<BlogItDbContext> options) : DbCont
             e.Property(m => m.BackendUrl).HasMaxLength(200).IsRequired();
             e.HasIndex(m => m.BackendUrl).IsUnique();
             e.Property(m => m.PublicPath).HasMaxLength(1000).IsRequired();
+            // Looked up on every media request alongside BackendUrl, so it is indexed; unique so two
+            // files can never claim the same URL. Nullable because most files have none — providers
+            // that treat NULLs as equal in a unique index filter them out.
+            e.Property(m => m.Slug).HasMaxLength(MediaSlug.MaxLength);
+            e.HasIndex(m => m.Slug).IsUnique();
             e.HasOne(m => m.UploadedByUser)
              .WithMany(u => u.MediaFiles)
              .HasForeignKey(m => m.UploadedByUserId)

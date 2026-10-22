@@ -63,7 +63,8 @@ public class SqlServerProviderTests
             "20260815225105_AddIndexesColumnWidthsAndConcurrencyStamps",
             "20260818093824_MakeSiteSettingValueNullable",
             "20260828110805_AddBlogPostWordCount",
-            "20261015184934_AddMediaFileViewCount");
+            "20261015184934_AddMediaFileViewCount",
+            "20261022192013_AddMediaFileSlugAndUpdatedAt");
     }
 
     private static ServiceProvider CreateServices(

@@ -58,6 +58,32 @@ internal sealed class AzureBlobMediaStorage : IBlogItMediaStorage
         return storageKey;
     }
 
+    public async Task ReplaceAsync(
+        string storageKey,
+        Stream content,
+        string contentType,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(content);
+        ArgumentException.ThrowIfNullOrWhiteSpace(contentType);
+        ValidateStorageKey(storageKey);
+
+        await EnsureContainerAsync(cancellationToken);
+
+        // No IfNoneMatch condition, unlike StoreAsync: overwriting is the point. A blob upload is
+        // atomic, so readers see either the old content or the new, never a mixture.
+        await container.GetBlobClient(storageKey).UploadAsync(
+            content,
+            new BlobUploadOptions
+            {
+                HttpHeaders = new BlobHttpHeaders
+                {
+                    ContentType = contentType
+                }
+            },
+            cancellationToken);
+    }
+
     public async Task<Stream?> OpenReadAsync(
         string storageKey,
         CancellationToken cancellationToken = default)

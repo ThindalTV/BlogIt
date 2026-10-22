@@ -29,6 +29,32 @@ internal sealed class FileSystemMediaStorage : IBlogItMediaStorage
         ArgumentException.ThrowIfNullOrWhiteSpace(contentType);
 
         var storageKey = CreateStorageKey(originalFileName);
+        await WriteAsync(storageKey, content, overwrite: false, cancellationToken);
+        return storageKey;
+    }
+
+    public async Task ReplaceAsync(
+        string storageKey,
+        Stream content,
+        string contentType,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(content);
+        ArgumentException.ThrowIfNullOrWhiteSpace(contentType);
+
+        await WriteAsync(storageKey, content, overwrite: true, cancellationToken);
+    }
+
+    /// <summary>
+    /// Writes to a temporary file and moves it into place, so a reader never sees a half-written
+    /// object and a failed write leaves the previous content untouched.
+    /// </summary>
+    private async Task WriteAsync(
+        string storageKey,
+        Stream content,
+        bool overwrite,
+        CancellationToken cancellationToken)
+    {
         var destinationPath = GetStoragePath(storageKey);
         var temporaryPath = Path.Combine(rootPath, $".{storageKey}.{Guid.NewGuid():N}.tmp");
 
@@ -46,8 +72,18 @@ internal sealed class FileSystemMediaStorage : IBlogItMediaStorage
                 await destination.FlushAsync(cancellationToken);
             }
 
-            File.Move(temporaryPath, destinationPath, overwrite: false);
-            return storageKey;
+            if (overwrite && File.Exists(destinationPath))
+            {
+                // File.Replace rather than a Move that overwrites: on Windows the latter is refused
+                // while any reader has the target open, even with delete sharing, and a download in
+                // progress is exactly when an editor tends to replace a file. Replace swaps it out
+                // from under the reader, who carries on with the old content.
+                File.Replace(temporaryPath, destinationPath, destinationBackupFileName: null);
+            }
+            else
+            {
+                File.Move(temporaryPath, destinationPath, overwrite: false);
+            }
         }
         finally
         {
@@ -69,7 +105,9 @@ internal sealed class FileSystemMediaStorage : IBlogItMediaStorage
             path,
             FileMode.Open,
             FileAccess.Read,
-            FileShare.Read,
+            // Delete as well as Read: on Windows a file open without FILE_SHARE_DELETE cannot be
+            // replaced or removed, so one slow download would make ReplaceAsync fail.
+            FileShare.Read | FileShare.Delete,
             bufferSize: 81920,
             FileOptions.Asynchronous | FileOptions.SequentialScan);
         return Task.FromResult<Stream?>(stream);

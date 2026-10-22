@@ -33,6 +33,43 @@ public sealed class FileSystemMediaStorageTests : IDisposable
     }
 
     [Fact]
+    public async Task ReplaceAsync_OverwritesContentUnderTheSameKey_EvenWhileItIsBeingRead()
+    {
+        var storage = CreateStorage();
+        await using var original = new MemoryStream("old content"u8.ToArray());
+        var key = await storage.StoreAsync(original, "doc.pdf", "application/pdf");
+
+        // An open reader must not block the replace (on Windows it would without FileShare.Delete)
+        // and must keep seeing the content it opened.
+        await using var reader = await storage.OpenReadAsync(key);
+        await using var replacement = new MemoryStream("new content"u8.ToArray());
+        await storage.ReplaceAsync(key, replacement, "application/pdf");
+
+        using (var oldReader = new StreamReader(reader!))
+            (await oldReader.ReadToEndAsync()).Should().Be("old content");
+        await using var after = await storage.OpenReadAsync(key);
+        using var newReader = new StreamReader(after!);
+        (await newReader.ReadToEndAsync()).Should().Be("new content");
+        Directory.EnumerateFiles(rootPath).Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task ReplaceAsync_WhenSourceFails_KeepsThePreviousContent()
+    {
+        var storage = CreateStorage();
+        await using var original = new MemoryStream("old content"u8.ToArray());
+        var key = await storage.StoreAsync(original, "doc.pdf", "application/pdf");
+        await using var failing = new FailingCopyStream();
+
+        var replace = () => storage.ReplaceAsync(key, failing, "application/pdf");
+
+        await replace.Should().ThrowAsync<IOException>();
+        await using var after = await storage.OpenReadAsync(key);
+        using var reader = new StreamReader(after!);
+        (await reader.ReadToEndAsync()).Should().Be("old content");
+    }
+
+    [Fact]
     public async Task StoreAsync_WhenSourceFails_LeavesNoPartialOrTemporaryFile()
     {
         var storage = CreateStorage();

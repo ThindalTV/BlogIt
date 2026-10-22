@@ -256,11 +256,19 @@ namespace BlogIt.Sqlite.Migrations
                     b.Property<long>("SizeBytes")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("Slug")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT")
+                        .UseCollation("NOCASE");
+
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasMaxLength(500)
                         .HasColumnType("TEXT")
                         .UseCollation("NOCASE");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("TEXT");
 
                     b.Property<DateTime>("UploadedAt")
                         .HasColumnType("TEXT");
@@ -274,6 +282,9 @@ namespace BlogIt.Sqlite.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("BackendUrl")
+                        .IsUnique();
+
+                    b.HasIndex("Slug")
                         .IsUnique();
 
                     b.HasIndex("UploadedByUserId");

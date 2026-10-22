@@ -94,7 +94,38 @@ else
         </div>
         <div class="media-detail-actions">
             <button class="btn btn-secondary" @onclick="CopyUrl">Copy URL</button>
+            <button class="btn btn-secondary" @onclick="StartEdit">Edit</button>
+            @* Same keyboard-reachable pattern as the upload button above. *@
+            <label class="btn btn-secondary upload-trigger" for="media-replace">Replace file</label>
+            <InputFile id="media-replace" class="visually-hidden" OnChange="HandleReplace" />
             <button class="btn btn-danger" @onclick="() => showConfirm = true">Delete</button>
+        </div>
+    </div>
+}
+
+@if (isEditing && selectedFile != null)
+{
+    <div class="settings-section media-edit">
+        <h2 class="settings-section-title">Edit “@selectedFile.Title”</h2>
+        <div class="form-group">
+            <label class="form-label" for="media-edit-title">Title</label>
+            <input id="media-edit-title" class="form-input" @bind="editTitle" />
+            <FieldError Errors="fieldErrors" Field="title" InputId="media-edit-title" />
+        </div>
+        <div class="form-group">
+            <label class="form-label" for="media-edit-slug">Path</label>
+            <input id="media-edit-slug" class="form-input" @bind="editSlug" placeholder="docs/my-document.pdf"
+                   aria-describedby="media-edit-slug-hint" />
+            <p class="form-hint" id="media-edit-slug-hint">
+                Currently served at @selectedFile.PublicPath. Letters, digits, “-”, “_”, “.” and “/”
+                only; lower-cased. Leave empty to use the generated URL. Changing the path stops the
+                old one working, so update any links to it.
+            </p>
+            <FieldError Errors="fieldErrors" Field="slug" InputId="media-edit-slug" />
+        </div>
+        <div class="media-detail-actions">
+            <button class="btn btn-primary" @onclick="SaveEdit">Save</button>
+            <button class="btn btn-secondary" @onclick="() => isEditing = false">Cancel</button>
         </div>
     </div>
 }
@@ -122,6 +153,10 @@ else
     private string errorMsg = "";
     private string successMsg = "";
     private bool showConfirm;
+    private bool isEditing;
+    private string editTitle = "";
+    private string editSlug = "";
+    private IReadOnlyDictionary<string, string>? fieldErrors;
 
     private async Task OnSearchInput(ChangeEventArgs e)
     {
@@ -141,6 +176,7 @@ else
         // The selection belongs to the rows on screen; a different page or search would leave the
         // detail bar describing a file no longer visible.
         selectedFile = null;
+        isEditing = false;
         try { result = await Api.GetMediaAsync(searchQuery, page); }
         catch (Exception ex) { errorMsg = ex.Message; }
         finally { isLoading = false; }
@@ -153,7 +189,57 @@ else
         return $"{from}–{from + result.Items.Count - 1} of {result.TotalCount}";
     }
 
-    private void SelectFile(MediaFileDto file) => selectedFile = selectedFile?.Id == file.Id ? null : file;
+    private void SelectFile(MediaFileDto file)
+    {
+        selectedFile = selectedFile?.Id == file.Id ? null : file;
+        isEditing = false;
+    }
+
+    private void StartEdit()
+    {
+        if (selectedFile == null) return;
+        editTitle = selectedFile.Title;
+        editSlug = selectedFile.Slug ?? "";
+        fieldErrors = null;
+        isEditing = true;
+    }
+
+    private async Task SaveEdit()
+    {
+        if (selectedFile == null) return;
+        errorMsg = "";
+        fieldErrors = null;
+        try
+        {
+            var updated = await Api.UpdateMediaAsync(selectedFile.Id, editTitle, editSlug);
+            isEditing = false;
+            successMsg = $"Saved. Now served at {updated?.PublicPath}";
+            var id = selectedFile.Id;
+            await LoadMedia(currentPage);
+            selectedFile = result?.Items.FirstOrDefault(f => f.Id == id);
+        }
+        catch (ApiValidationException ex) { fieldErrors = ex.FieldErrors; }
+        catch (Exception ex) { errorMsg = ex.Message; }
+    }
+
+    private async Task HandleReplace(InputFileChangeEventArgs e)
+    {
+        if (selectedFile == null) return;
+        isUploading = true;
+        errorMsg = "";
+        try
+        {
+            var file = e.File;
+            await using var stream = file.OpenReadStream(maxAllowedSize: ContentLimits.MediaUploadBytes);
+            await Api.ReplaceMediaAsync(selectedFile.Id, stream, file.Name, file.ContentType);
+            successMsg = $"Content replaced with '{file.Name}'. The URL is unchanged.";
+            var id = selectedFile.Id;
+            await LoadMedia(currentPage);
+            selectedFile = result?.Items.FirstOrDefault(f => f.Id == id);
+        }
+        catch (Exception ex) { errorMsg = $"Replace failed: {ex.Message}"; }
+        finally { isUploading = false; }
+    }
 
     private async Task HandleUpload(InputFileChangeEventArgs e)
     {

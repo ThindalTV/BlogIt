@@ -790,6 +790,9 @@ code { font-family: var(--font-mono); font-size: .875em; }
 .media-detail-info strong { color: var(--color-text); font-weight: 600; }
 .media-detail-actions { display: flex; gap: 10px; }
 
+/* Clear of the fixed detail bar, so the Save button is never hidden behind it. */
+.media-edit { margin-top: 24px; margin-bottom: 96px; }
+
 .upload-trigger { cursor: pointer; }
 .upload-progress {
   position: fixed;

@@ -33,6 +33,11 @@ public static class MediaApi
             // The handler reads the form itself, so the IFormFile parameter that would normally
             // describe this endpoint is gone. Declared explicitly to keep the OpenAPI shape.
             .Accepts<IFormFile>("multipart/form-data");
+        group.MapPut("/{id:guid}", UpdateMedia);
+        group.MapPut("/{id:guid}/content", ReplaceMedia)
+            .DisableAntiforgery()
+            .WithMetadata(new BlogItRequestSizeLimit(options.MaxMediaUploadBytes))
+            .Accepts<IFormFile>("multipart/form-data");
         group.MapDelete("/{id:guid}", DeleteMedia);
 
         return app;
@@ -135,6 +140,13 @@ public static class MediaApi
             errors, "fileName", "File name", file.FileName, ContentLimits.FileNameLength);
         TextFieldValidator.CheckLength(
             errors, "contentType", "Content type", file.ContentType, ContentLimits.ContentTypeLength);
+
+        // Optional pretty URL. Checked before StoreAsync for the same reason as the fields above.
+        // Two uploads racing for the same path are caught by the unique index instead, which takes
+        // the compensating-delete path below.
+        var slug = MediaSlug.Normalize(form.TryGetValue("slug", out var slugVal) ? slugVal.ToString() : null);
+        await CheckSlugAsync(errors, db, slug, excludeId: null, request.HttpContext.RequestAborted);
+
         if (errors.Count > 0)
             return Results.ValidationProblem(errors);
 
@@ -157,7 +169,8 @@ public static class MediaApi
             FileName = file.FileName,
             ContentType = file.ContentType,
             BackendUrl = storageKey,
-            PublicPath = BlogItPath.MediaPublicPath(options, storageKey),
+            Slug = slug,
+            PublicPath = BlogItPath.MediaPublicPath(options, slug ?? storageKey),
             SizeBytes = file.Length,
             UploadedAt = DateTime.UtcNow,
             UploadedByUserId = uploaderId,
@@ -196,6 +209,143 @@ public static class MediaApi
         await db.Entry(media).Reference(m => m.UploadedByUser).LoadAsync();
 
         return Results.Ok(ToDto(media));
+    }
+
+    /// <summary>
+    /// Edits the title and the pretty URL. Setting a new slug moves the file's public URL; the
+    /// storage-key URL keeps working, but a previous slug stops resolving, so anything that linked
+    /// to it needs updating.
+    /// </summary>
+    private static async Task<IResult> UpdateMedia(
+        Guid id,
+        UpdateMediaRequest req,
+        BlogItDbContext db,
+        BlogItOptions options,
+        HttpContext httpContext)
+    {
+        var media = await db.MediaFiles.Include(m => m.UploadedByUser).FirstOrDefaultAsync(m => m.Id == id);
+        if (media is null) return Results.NotFound();
+
+        var errors = new Dictionary<string, string[]>();
+        TextFieldValidator.CheckRequired(errors, "title", "Title", req.Title, ContentLimits.TitleLength);
+        var slug = MediaSlug.Normalize(req.Slug);
+        await CheckSlugAsync(errors, db, slug, excludeId: id, httpContext.RequestAborted);
+        if (errors.Count > 0)
+            return Results.ValidationProblem(errors);
+
+        media.Title = req.Title;
+        media.Slug = slug;
+        media.PublicPath = BlogItPath.MediaPublicPath(options, slug ?? media.BackendUrl);
+        await db.SaveChangesAsync();
+
+        return Results.Ok(ToDto(media));
+    }
+
+    /// <summary>
+    /// Replaces a file's content in place: same storage key, same URLs, new bytes.
+    /// </summary>
+    /// <remarks>
+    /// The stored object is written first and the row updated second. The two cannot be committed
+    /// together; if the row save fails the new content is already live under the old size and
+    /// content type, and repeating the request repairs that. The other order would leave a row
+    /// advertising content that was never written.
+    /// </remarks>
+    private static async Task<IResult> ReplaceMedia(
+        Guid id,
+        HttpRequest request,
+        BlogItDbContext db,
+        IBlogItMediaStorage mediaStorage,
+        BlogItOptions options)
+    {
+        IFormCollection form;
+        try
+        {
+            form = await request.ReadFormAsync(request.HttpContext.RequestAborted);
+        }
+        catch (BadHttpRequestException ex)
+            when (ex.StatusCode == StatusCodes.Status413PayloadTooLarge)
+        {
+            return TooLarge(options);
+        }
+
+        if (form.Files.Count == 0)
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["file"] = ["A file is required."]
+            });
+        }
+
+        var file = form.Files[0];
+        if (file.Length > options.MaxMediaUploadBytes)
+            return TooLarge(options);
+
+        var errors = new Dictionary<string, string[]>();
+        TextFieldValidator.CheckLength(
+            errors, "fileName", "File name", file.FileName, ContentLimits.FileNameLength);
+        TextFieldValidator.CheckLength(
+            errors, "contentType", "Content type", file.ContentType, ContentLimits.ContentTypeLength);
+        if (errors.Count > 0)
+            return Results.ValidationProblem(errors);
+
+        var media = await db.MediaFiles
+            .Include(m => m.UploadedByUser)
+            .FirstOrDefaultAsync(m => m.Id == id, request.HttpContext.RequestAborted);
+        if (media is null) return Results.NotFound();
+
+        // The same trust decision as on upload: the client-supplied Content-Type is stored as-is.
+        var contentType = string.IsNullOrWhiteSpace(file.ContentType)
+            ? "application/octet-stream"
+            : file.ContentType;
+
+        await using var stream = file.OpenReadStream();
+        try
+        {
+            await mediaStorage.ReplaceAsync(
+                media.BackendUrl, stream, contentType, request.HttpContext.RequestAborted);
+        }
+        catch (NotSupportedException ex)
+        {
+            return Results.Problem(
+                title: "Replacing media is not supported by the configured storage.",
+                detail: ex.Message,
+                statusCode: StatusCodes.Status501NotImplemented);
+        }
+
+        media.FileName = file.FileName;
+        media.ContentType = contentType;
+        media.SizeBytes = file.Length;
+        media.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+
+        return Results.Ok(ToDto(media));
+    }
+
+    /// <summary>
+    /// A slug must be well-formed and must not collide with another file's slug or storage key —
+    /// the proxy resolves both, so either would make two files answer to one URL.
+    /// </summary>
+    private static async Task CheckSlugAsync(
+        Dictionary<string, string[]> errors,
+        BlogItDbContext db,
+        string? slug,
+        Guid? excludeId,
+        CancellationToken cancellationToken)
+    {
+        if (slug is null)
+            return;
+
+        var problem = MediaSlug.Validate(slug);
+        if (problem is null
+            && await db.MediaFiles.AnyAsync(
+                m => m.Id != excludeId && (m.Slug == slug || m.BackendUrl == slug),
+                cancellationToken))
+        {
+            problem = "Another file already uses this path.";
+        }
+
+        if (problem is not null)
+            errors["slug"] = [problem];
     }
 
     private static async Task<IResult> DeleteMedia(
@@ -246,6 +396,7 @@ public static class MediaApi
         m.Id, m.Title, m.FileName, m.ContentType, m.PublicPath,
         m.SizeBytes, UtcTimestamp.ToOffset(m.UploadedAt),
         m.UploadedByUser?.DisplayName ?? string.Empty,
-        m.ViewCount
+        m.ViewCount,
+        m.Slug
     );
 }

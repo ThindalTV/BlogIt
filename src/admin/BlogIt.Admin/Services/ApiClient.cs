@@ -322,6 +322,26 @@ public class ApiClient(HttpClient http)
         return await resp.Content.ReadFromJsonAsync<MediaFileDto>();
     }
 
+    /// <summary>Changes a file's title and its pretty URL path (null or blank removes the path).</summary>
+    public async Task<MediaFileDto?> UpdateMediaAsync(Guid id, string title, string? slug)
+    {
+        var resp = await http.PutAsJsonAsync($"media/{id}", new UpdateMediaRequest(title, slug));
+        await EnsureSuccessAsync(resp);
+        return await resp.Content.ReadFromJsonAsync<MediaFileDto>();
+    }
+
+    /// <summary>Replaces a file's content, keeping its URLs.</summary>
+    public async Task<MediaFileDto?> ReplaceMediaAsync(Guid id, Stream fileStream, string fileName, string contentType)
+    {
+        using var content = new MultipartFormDataContent();
+        var streamContent = new StreamContent(fileStream);
+        streamContent.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+        content.Add(streamContent, "file", fileName);
+        var resp = await http.PutAsync($"media/{id}/content", content);
+        await EnsureSuccessAsync(resp);
+        return await resp.Content.ReadFromJsonAsync<MediaFileDto>();
+    }
+
     public async Task DeleteMediaAsync(Guid id)
     {
         var resp = await http.DeleteAsync($"media/{id}");
