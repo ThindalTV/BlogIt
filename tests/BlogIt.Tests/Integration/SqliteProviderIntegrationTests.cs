@@ -33,6 +33,34 @@ public class SqliteProviderIntegrationTests(SqliteBlogItSampleFactory factory)
     }
 
     [Fact]
+    public async Task ServingMedia_CountsViews_ButNotRangeContinuationsOrHeadRequests()
+    {
+        var username = $"viewer_{Guid.NewGuid():N}";
+        var userId = await factory.SeedUserAsync(username);
+        var client = factory.CreateClient().WithAuth(userId, username);
+
+        using var form = new MultipartFormDataContent();
+        using var file = new ByteArrayContent("view counted bytes"u8.ToArray());
+        file.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("image/png");
+        form.Add(file, "file", "views.png");
+        var uploaded = await (await client.PostAsync("/api/media/upload", form))
+            .Content.ReadFromJsonAsync<MediaFileDto>();
+        uploaded!.ViewCount.Should().Be(0);
+
+        (await client.GetAsync(uploaded.PublicPath)).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await client.GetAsync(uploaded.PublicPath)).StatusCode.Should().Be(HttpStatusCode.OK);
+        using var head = new HttpRequestMessage(HttpMethod.Head, uploaded.PublicPath);
+        await client.SendAsync(head);
+        using var continuation = new HttpRequestMessage(HttpMethod.Get, uploaded.PublicPath);
+        continuation.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(5, null);
+        await client.SendAsync(continuation);
+
+        var page = await client.GetFromJsonAsync<PagedResult<MediaFileDto>>(
+            "/api/media?q=views");
+        page!.Items.Single(m => m.Id == uploaded.Id).ViewCount.Should().Be(2);
+    }
+
+    [Fact]
     public async Task Login_IgnoresUsernameCase_AsOnSqlServer()
     {
         var username = $"CaseUser_{Guid.NewGuid():N}";

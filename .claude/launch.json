@@ -24,6 +24,19 @@
       "env": { "ASPNETCORE_ENVIRONMENT": "Testing" },
       "autoPort": true,
       "port": 5108
+    },
+    {
+      "name": "ericjohansson-site",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": [
+        "run",
+        "--project",
+        "../EricJohansson.se/src/EricJohansson.Aspire/EricJohansson.Aspire.Host/EricJohansson.Aspire.Host.csproj",
+        "--launch-profile",
+        "http"
+      ],
+      "env": { "ASPIRE_ALLOW_UNSECURED_TRANSPORT": "true" },
+      "port": 59463
     }
   ]
 }

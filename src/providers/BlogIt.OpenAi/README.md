@@ -55,10 +55,14 @@ startup and nothing that can be configured in two places:
 | API key | OpenAI-compatible key, or a GitHub PAT for `github-copilot` |
 | Base URL | Optional; overrides `api.openai.com` for `openai-compatible` only |
 | Model | Chat model for brainstorming; defaults to `gpt-4o-mini` |
-| Export model | Model used for export-to-draft; defaults to `gpt-4o` |
+| Export model | Model used for export-to-draft; when blank, the brainstorm model above is reused |
 
 For `github-copilot` the base URL is fixed to GitHub's Azure-hosted models endpoint and
 the Base URL setting is ignored.
+
+When the AI settings change, the admin's Settings screen saves them and then calls
+`POST /api/settings/ai-provider/verify`, which sends one tiny chat request per configured model
+and reports a rejected key, a wrong base URL or model name, or an unreachable host.
 
 The Base URL must be an absolute `http(s)` URL, and by default it may not point at a
 loopback, link-local, or private address: the stored API key is sent to whatever it names,

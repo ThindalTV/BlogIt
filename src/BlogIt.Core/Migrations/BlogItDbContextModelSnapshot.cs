@@ -252,6 +252,9 @@ namespace BlogIt.Migrations
                     b.Property<Guid>("UploadedByUserId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<long>("ViewCount")
+                        .HasColumnType("bigint");
+
                     b.HasKey("Id");
 
                     b.HasIndex("BackendUrl")

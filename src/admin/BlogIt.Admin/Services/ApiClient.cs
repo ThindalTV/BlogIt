@@ -35,7 +35,11 @@ public class ApiClient(HttpClient http)
         if (response.IsSuccessStatusCode)
             return;
 
-        var message = ExtractErrorMessage(await response.Content.ReadAsStringAsync());
+        var body = await response.Content.ReadAsStringAsync();
+        var message = ExtractErrorMessage(body);
+
+        if (ExtractFieldErrors(body) is { Count: > 0 } fieldErrors)
+            throw new ApiValidationException(message ?? "Validation failed.", fieldErrors, response.StatusCode);
 
         throw new HttpRequestException(
             string.IsNullOrWhiteSpace(message) ? $"Request failed ({(int)response.StatusCode})." : message,
@@ -47,6 +51,38 @@ public class ApiClient(HttpClient http)
     /// The server's own words for this failure, or null when the body is not one of its error
     /// shapes and the bare status is the better thing to report.
     /// </summary>
+    /// <summary>
+    /// Every field message in a ValidationProblem body, keyed by the server's camelCase field name.
+    /// Empty for any other body.
+    /// </summary>
+    private static Dictionary<string, string> ExtractFieldErrors(string body)
+    {
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (string.IsNullOrWhiteSpace(body))
+            return result;
+
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            if (doc.RootElement.ValueKind == JsonValueKind.Object
+                && doc.RootElement.TryGetProperty("errors", out var errors)
+                && errors.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var field in errors.EnumerateObject())
+                {
+                    if (field.Value.ValueKind == JsonValueKind.Array && field.Value.GetArrayLength() > 0
+                        && field.Value[0].GetString() is string text)
+                    {
+                        result[field.Name] = text;
+                    }
+                }
+            }
+        }
+        catch (JsonException) { }
+
+        return result;
+    }
+
     private static string? ExtractErrorMessage(string body)
     {
         if (string.IsNullOrWhiteSpace(body))
@@ -358,6 +394,20 @@ public class ApiClient(HttpClient http)
     {
         var resp = await http.PutAsJsonAsync("settings", settings);
         await EnsureSuccessAsync(resp);
+    }
+
+    /// <summary>
+    /// Asks the server to make one real request with the saved AI settings. Returns
+    /// <see langword="null"/> when they work, otherwise the reason — never throws for a failed check,
+    /// since that is an answer, not an error.
+    /// </summary>
+    public async Task<string?> VerifyAiProviderAsync()
+    {
+        var resp = await http.PostAsync("settings/ai-provider/verify", null);
+        if (resp.IsSuccessStatusCode)
+            return null;
+        return ExtractErrorMessage(await resp.Content.ReadAsStringAsync())
+            ?? $"The AI connection check failed ({(int)resp.StatusCode}).";
     }
 
     /// <summary>

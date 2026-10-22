@@ -36,6 +36,7 @@ else
             <div class="form-group">
                 <label class="form-label" for="settings-site-url">Site URL</label>
                 <input id="settings-site-url" class="form-input" @bind="siteUrl" />
+                <FieldError Errors="fieldErrors" Field="siteUrl" InputId="settings-site-url" />
             </div>
             <div class="form-group">
                 <label class="form-label" for="settings-site-description">Description</label>
@@ -43,7 +44,8 @@ else
             </div>
             <div class="form-group">
                 <label class="form-label" for="settings-og-image">Default OG Image URL</label>
-                <input id="settings-og-image" class="form-input" @bind="defaultOgImage" />
+                <input id="settings-og-image" class="form-input" @bind="defaultOgImage" placeholder="https://example.com/og.png" />
+                <FieldError Errors="fieldErrors" Field="defaultOgImage" InputId="settings-og-image" />
             </div>
         </div>
 
@@ -55,6 +57,7 @@ else
                     <option value="github-copilot">GitHub Copilot</option>
                     <option value="openai-compatible">OpenAI-Compatible</option>
                 </select>
+                <FieldError Errors="fieldErrors" Field="aiProvider" InputId="settings-ai-provider" />
             </div>
             <div class="form-group">
                 <label class="form-label" for="settings-ai-key">API Key <span class="form-hint">(leave blank to keep existing)</span></label>
@@ -65,14 +68,15 @@ else
                 <div class="form-group">
                     <label class="form-label" for="settings-ai-base-url">Base URL</label>
                     <input id="settings-ai-base-url" class="form-input" @bind="aiBaseUrl" placeholder="https://api.openai.com/v1" />
+                    <FieldError Errors="fieldErrors" Field="aiBaseUrl" InputId="settings-ai-base-url" />
                 </div>
                 <div class="form-group">
                     <label class="form-label" for="settings-ai-model">Model</label>
                     <input id="settings-ai-model" class="form-input" @bind="aiModel" placeholder="gpt-4o" />
                 </div>
                 <div class="form-group">
-                    <label class="form-label" for="settings-ai-export-model">Export Model</label>
-                    <input id="settings-ai-export-model" class="form-input" @bind="aiExportModel" />
+                    <label class="form-label" for="settings-ai-export-model">Export Model <span class="form-hint">(blank uses the model above)</span></label>
+                    <input id="settings-ai-export-model" class="form-input" @bind="aiExportModel" placeholder="Same as Model" />
                 </div>
             }
         </div>
@@ -82,6 +86,7 @@ else
             <div class="form-group">
                 <label class="form-label" for="settings-gtm-container-id">Container ID <span class="form-hint">(Google Tag Manager, where your tags and cookie consent live)</span></label>
                 <input id="settings-gtm-container-id" class="form-input" @bind="gtmContainerId" @bind:event="oninput" placeholder="GTM-XXXXXXX" />
+                <FieldError Errors="fieldErrors" Field="googleTagManagerContainerId" InputId="settings-gtm-container-id" />
             </div>
             @if (!HasTag)
             {
@@ -95,10 +100,12 @@ else
                 <div class="form-group">
                     <label class="form-label" for="settings-ga-property-id">Property ID</label>
                     <input id="settings-ga-property-id" class="form-input" @bind="gaPropertyId" placeholder="123456789" />
+                    <FieldError Errors="fieldErrors" Field="googleAnalyticsPropertyId" InputId="settings-ga-property-id" />
                 </div>
                 <div class="form-group">
                     <label class="form-label" for="settings-ga-credentials">Service Account Credentials JSON <span class="form-hint">(leave blank to keep existing)</span></label>
                     <textarea id="settings-ga-credentials" class="form-textarea" @bind="gaCredentialsJson" rows="5" placeholder="****"></textarea>
+                    <FieldError Errors="fieldErrors" Field="googleAnalyticsCredentialsJson" InputId="settings-ga-credentials" />
                 </div>
             }
         </div>
@@ -108,6 +115,7 @@ else
             <div class="form-group">
                 <label class="form-label" for="settings-jwt-expiry">JWT Expiry (minutes)</label>
                 <input id="settings-jwt-expiry" class="form-input" type="number" @bind="jwtExpiryMinutes" min="5" max="10080" />
+                <FieldError Errors="fieldErrors" Field="jwtExpiryMinutes" InputId="settings-jwt-expiry" />
             </div>
         </div>
     </div>
@@ -132,6 +140,12 @@ else
     private string gaPropertyId = "";
     private string gaCredentialsJson = "";
     private int jwtExpiryMinutes = 60;
+
+    /// <summary>The server's message per invalid field, from the last save attempt.</summary>
+    private Dictionary<string, string> fieldErrors = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>The AI fields as last loaded or saved, to tell whether a save changed them.</summary>
+    private (string Provider, string BaseUrl, string Model, string ExportModel) savedAi;
 
     /// <summary>
     /// Whether reporting may be configured at all. The server enforces the same rule through
@@ -166,6 +180,7 @@ else
                 aiBaseUrl = Value(settings, SettingKeys.AiBaseUrl);
                 aiModel = Value(settings, SettingKeys.AiModel);
                 aiExportModel = Value(settings, SettingKeys.AiExportModel);
+                savedAi = (aiProvider, aiBaseUrl, aiModel, aiExportModel);
                 gtmContainerId = Value(settings, SettingKeys.GoogleTagManagerContainerId);
                 gaPropertyId = Value(settings, SettingKeys.GoogleAnalyticsPropertyId);
                 if (int.TryParse(Value(settings, SettingKeys.JwtExpiryMinutes, "60"), out var exp))
@@ -181,21 +196,24 @@ else
         isSaving = true;
         errorMsg = "";
         successMsg = "";
+        fieldErrors = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         if (!IsValidAbsoluteHttpUrl(siteUrl))
-        {
-            errorMsg = "Site URL must be an absolute http:// or https:// URL.";
-            isSaving = false;
-            return;
-        }
+            fieldErrors["siteUrl"] = "Site URL must be an absolute http:// or https:// URL.";
 
         // Same code the server validates with, so the form cannot drift from what it will accept.
         if (AnalyticsPolicy.Validate(gtmContainerId, null, null) is string containerError)
+            fieldErrors["googleTagManagerContainerId"] = containerError;
+
+        if (fieldErrors.Count > 0)
         {
-            errorMsg = containerError;
+            errorMsg = InvalidFieldsMessage;
             isSaving = false;
             return;
         }
+
+        var aiChanged = !string.IsNullOrWhiteSpace(aiApiKey)
+            || (aiProvider, aiBaseUrl, aiModel, aiExportModel) != savedAi;
 
         try
         {
@@ -225,10 +243,27 @@ else
             await Api.UpdateSettingsAsync(settings);
             successMsg = "Settings saved.";
             aiApiKey = gaCredentialsJson = "";
+            savedAi = (aiProvider, aiBaseUrl, aiModel, aiExportModel);
+
+            // A base URL, key or model can be perfectly well-formed and still wrong, and nothing but
+            // a real request finds that out. Only when the AI settings changed, since the check
+            // costs a (tiny) completion; and after the save, so a provider outage never blocks it.
+            if (aiChanged && await Api.VerifyAiProviderAsync() is string aiProblem)
+            {
+                successMsg = "";
+                errorMsg = $"Settings saved, but the AI connection check failed: {aiProblem}";
+            }
+        }
+        catch (ApiValidationException ex)
+        {
+            fieldErrors = new Dictionary<string, string>(ex.FieldErrors, StringComparer.OrdinalIgnoreCase);
+            errorMsg = InvalidFieldsMessage;
         }
         catch (Exception ex) { errorMsg = $"Save failed: {ex.Message}"; }
         finally { isSaving = false; }
     }
+
+    private const string InvalidFieldsMessage = "Nothing was saved — fix the fields marked below.";
 
     private static bool IsValidAbsoluteHttpUrl(string? value) =>
         !string.IsNullOrWhiteSpace(value)

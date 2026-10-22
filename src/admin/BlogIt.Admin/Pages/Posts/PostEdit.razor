@@ -13,7 +13,14 @@
     <div class="header-actions">
         @if (!isNew)
         {
-            <button class="btn btn-secondary" @onclick="Preview">Preview</button>
+            <button class="btn btn-danger" @onclick="() => showDeleteConfirm = true" disabled="@isSaving">Delete</button>
+            <button class="btn btn-secondary" @onclick="Preview" disabled="@isSaving">Preview</button>
+            @if (post?.IsPublished == true)
+            {
+                @* Takes the post offline without saving the form: unsaved edits stay on screen, and
+                   the stored text is left as it was. Save Draft does the same *and* saves. *@
+                <button class="btn btn-secondary" @onclick="UnpublishNow" disabled="@isSaving">Unpublish Now</button>
+            }
         }
         <button class="btn btn-secondary" @onclick="SaveDraft" disabled="@isSaving">Save Draft</button>
         <button class="btn btn-primary" @onclick="Publish" disabled="@isSaving">
@@ -88,6 +95,10 @@ else
                            @onchange="e => scheduledUnpublishLocal = e.Value?.ToString() ?? string.Empty" />
                 </div>
                 <p class="form-hint">Times are shown in your local time and saved as UTC. Leave blank for no schedule.</p>
+                @if (post?.ScheduledPublishAt is not null || post?.ScheduledUnpublishAt is not null)
+                {
+                    <button class="btn btn-sm btn-secondary" @onclick="CancelSchedule" disabled="@isSaving">Cancel Schedule</button>
+                }
             </div>
             <div class="sidebar-panel">
                 @* This is the one field with no label of its own — the panel heading is its caption.
@@ -134,6 +145,12 @@ else
     OnConfirm="ConfirmUnpublishAndSave"
     OnCancel="() => showUnpublishConfirm = false" />
 
+<ConfirmDialog IsOpen="showDeleteConfirm"
+    Title="Delete Post"
+    Message=@($"Delete \"{post?.Title}\"? This cannot be undone.")
+    OnConfirm="DeletePost"
+    OnCancel="() => showDeleteConfirm = false" />
+
 @code {
     [Parameter] public Guid? Id { get; set; }
 
@@ -160,6 +177,7 @@ else
     private DotNetObjectReference<PostEdit>? dotNetRef;
     private bool editorInitialized;
     private bool showUnpublishConfirm;
+    private bool showDeleteConfirm;
 
     private string title = "";
     private string slug = "";
@@ -275,9 +293,75 @@ else
     private async Task Preview()
     {
         if (!postId.HasValue) return;
-        var preview = await Api.CreatePostPreviewAsync(postId.Value);
-        if (preview is not null)
-            Nav.NavigateTo(preview.Url, forceLoad: true);
+        errorMsg = "";
+        try
+        {
+            var preview = await Api.CreatePostPreviewAsync(postId.Value);
+            if (preview is not null)
+                Nav.NavigateTo(preview.Url, forceLoad: true);
+        }
+        catch (Exception ex) { errorMsg = $"Preview failed: {ex.Message}"; }
+    }
+
+    private Task UnpublishNow() =>
+        RunStatusAction("Post unpublished.", id => Api.UnpublishPostAsync(id));
+
+    private Task CancelSchedule() =>
+        RunStatusAction("Schedule cancelled.", id => Api.UpdatePostScheduleAsync(id, new(null, null)));
+
+    /// <summary>
+    /// Runs one immediate status change against the stored post, then refreshes only the
+    /// server-owned state. The text fields are left alone, so an unsaved edit survives the action.
+    /// </summary>
+    private async Task RunStatusAction(string doneMessage, Func<Guid, Task> action)
+    {
+        if (!postId.HasValue) return;
+        isSaving = true;
+        errorMsg = "";
+        successMsg = "";
+        try
+        {
+            await action(postId.Value);
+            await RefreshServerStateAsync();
+            successMsg = doneMessage;
+        }
+        catch (Exception ex) { errorMsg = ex.Message; }
+        finally { isSaving = false; }
+    }
+
+    private async Task DeletePost()
+    {
+        showDeleteConfirm = false;
+        if (!postId.HasValue) return;
+        isSaving = true;
+        errorMsg = "";
+        try
+        {
+            await Api.DeletePostAsync(postId.Value);
+            Nav.NavigateTo("posts");
+        }
+        catch (Exception ex)
+        {
+            errorMsg = $"Delete failed: {ex.Message}";
+            isSaving = false;
+        }
+    }
+
+    /// <summary>
+    /// Re-reads the post and takes the fields the server decides — the concurrency stamp, the slug
+    /// (locked by first publication) and the schedule (cleared by publish and unpublish) — without
+    /// touching what the author is typing.
+    /// </summary>
+    private async Task RefreshServerStateAsync()
+    {
+        if (!postId.HasValue) return;
+        post = await Api.GetPostAsync(postId.Value);
+        if (post is not null)
+        {
+            slug = post.Slug;
+            scheduledPublishLocal = ToLocalInput(post.ScheduledPublishAt);
+            scheduledUnpublishLocal = ToLocalInput(post.ScheduledUnpublishAt);
+        }
     }
 
     private async Task Save(bool publish)
@@ -338,13 +422,7 @@ else
                 else if (!publish && post?.IsPublished == true)
                     await Api.UnpublishPostAsync(postId.Value);
                 successMsg = "Post saved.";
-                post = await Api.GetPostAsync(postId.Value);
-                if (post is not null)
-                {
-                    slug = post.Slug;
-                    scheduledPublishLocal = ToLocalInput(post.ScheduledPublishAt);
-                    scheduledUnpublishLocal = ToLocalInput(post.ScheduledUnpublishAt);
-                }
+                await RefreshServerStateAsync();
             }
         }
         catch (Exception ex) { errorMsg = $"Save failed: {ex.Message}"; }

@@ -134,13 +134,18 @@ public sealed class SetupService(
         if (!UrlValidator.IsValidAbsoluteHttpUrl(request.SiteUrl))
             errors["siteUrl"] = ["Site URL must be an absolute http:// or https:// URL."];
 
-        // The same AI endpoint policy the authenticated settings route applies.
+        // The same field rules the authenticated settings route applies: AI endpoint policy, OG image
+        // URL, and the shape of the GA property ID and service-account key.
         if (SiteSettingsValidator.Validate(
-                new SiteSettingsUpdateRequest(AiBaseUrl: request.AiBaseUrl),
+                new SiteSettingsUpdateRequest(
+                    DefaultOgImage: request.DefaultOgImage,
+                    AiBaseUrl: request.AiBaseUrl,
+                    GoogleAnalyticsPropertyId: request.GoogleAnalyticsPropertyId,
+                    GoogleAnalyticsCredentialsJson: request.GoogleAnalyticsCredentialsJson),
                 options.AllowPrivateAiEndpoints)
-            is { Count: > 0 } aiErrors)
+            is { Count: > 0 } fieldErrors)
         {
-            foreach (var (key, value) in aiErrors)
+            foreach (var (key, value) in fieldErrors)
                 errors[key] = value;
         }
 

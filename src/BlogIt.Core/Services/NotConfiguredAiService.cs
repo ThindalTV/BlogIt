@@ -47,4 +47,7 @@ internal sealed class NotConfiguredAiService : IAiService
         string? additionalInstructions,
         CancellationToken cancellationToken = default) =>
         throw new InvalidOperationException(NotConfiguredMessage);
+
+    public Task VerifyConnectionAsync(CancellationToken cancellationToken = default) =>
+        throw new InvalidOperationException(NotConfiguredMessage);
 }
