@@ -97,8 +97,8 @@
                         <input id="setup-ai-model" class="form-input" @bind="model.AiModel" placeholder="gpt-4o" />
                     </div>
                     <div class="form-group">
-                        <label class="form-label" for="setup-ai-export-model">Export Model <span class="form-hint">(optional, for draft export)</span></label>
-                        <input id="setup-ai-export-model" class="form-input" @bind="model.AiExportModel" placeholder="gpt-4o" />
+                        <label class="form-label" for="setup-ai-export-model">Export Model <span class="form-hint">(optional, for draft export; blank uses the model above)</span></label>
+                        <input id="setup-ai-export-model" class="form-input" @bind="model.AiExportModel" placeholder="Same as Model" />
                     </div>
                 }
             </div>

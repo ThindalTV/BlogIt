@@ -245,6 +245,7 @@ public static class MediaApi
     private static MediaFileDto ToDto(MediaFile m) => new(
         m.Id, m.Title, m.FileName, m.ContentType, m.PublicPath,
         m.SizeBytes, UtcTimestamp.ToOffset(m.UploadedAt),
-        m.UploadedByUser?.DisplayName ?? string.Empty
+        m.UploadedByUser?.DisplayName ?? string.Empty,
+        m.ViewCount
     );
 }

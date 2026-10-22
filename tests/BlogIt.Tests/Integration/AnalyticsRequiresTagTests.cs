@@ -24,7 +24,10 @@ namespace BlogIt.Tests.Integration;
 /// </summary>
 public class AnalyticsRequiresTagTests
 {
-    private const string Credentials = @"{""type"":""service_account""}";
+    // Shaped like a real key file: SiteSettingsValidator now refuses one without client_email and
+    // private_key, and these tests are about the tag rule, not the key shape.
+    private const string Credentials =
+        @"{""type"":""service_account"",""client_email"":""a@b.iam.gserviceaccount.com"",""private_key"":""k""}";
 
     private static StringContent Json(string body) =>
         new(body, Encoding.UTF8, "application/json");

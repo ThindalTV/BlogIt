@@ -89,9 +89,9 @@ public class SqliteProviderTests
 
         dbContext.Database.ProviderName.Should().Be("Microsoft.EntityFrameworkCore.Sqlite");
         dbContext.Database.GetCommandTimeout().Should().Be(42);
-        dbContext.Database.GetMigrations().Should().ContainSingle()
-            .Which.Should().EndWith("_InitialCreate",
-                "the SQLite migrations ship in BlogIt.Sqlite, not the SQL Server ones in BlogIt.Core");
+        dbContext.Database.GetMigrations().Should().Equal(
+            ["20260927205244_InitialCreate", "20261015184952_AddMediaFileViewCount"],
+            "the SQLite migrations ship in BlogIt.Sqlite, not the SQL Server ones in BlogIt.Core");
     }
 
     [Fact]

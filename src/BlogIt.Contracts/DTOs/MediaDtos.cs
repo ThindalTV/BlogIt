@@ -8,7 +8,8 @@ public record MediaFileDto(
     string PublicPath,
     long SizeBytes,
     DateTimeOffset UploadedAt,
-    string UploaderDisplayName
+    string UploaderDisplayName,
+    long ViewCount = 0
 );
 
 public record UploadMediaRequest(string Title);

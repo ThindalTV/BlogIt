@@ -55,7 +55,7 @@ public record PostArchiveCount(int Year, int Month, int Count);
 /// excludes a post that is scheduled but not yet live. The only opt-out is
 /// <c>includeUnpublished</c> on <see cref="GetPostAsync"/> and <see cref="GetPageAsync"/>; pass it
 /// only from a path that has already authorized a draft preview through
-/// <c>IPreviewTokenService</c>.
+/// <c>IPreviewTokenService</c> — or use <see cref="IContentPreviewService"/>, which does both.
 /// </remarks>
 public interface IPublicContentService
 {

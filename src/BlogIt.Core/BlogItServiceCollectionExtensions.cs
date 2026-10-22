@@ -79,6 +79,7 @@ public static class BlogItServiceCollectionExtensions
         services.TryAddSingleton<JwtSigningKeyCache>();
         services.TryAddSingleton<IUrlRedirectService, UrlRedirectService>();
         services.TryAddScoped<IPublicContentService, PublicContentService>();
+        services.TryAddScoped<IContentPreviewService, ContentPreviewService>();
         services.TryAddScoped<ISiteMetadataService, SiteMetadataService>();
         // Scoped, not singleton: the head belongs to one page render. See IBlogItHeadRegistry for
         // why a shared instance would bleed one visitor's meta tags onto another's page.

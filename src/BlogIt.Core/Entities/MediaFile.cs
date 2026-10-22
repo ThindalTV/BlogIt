@@ -16,6 +16,9 @@ public class MediaFile
     public long SizeBytes { get; set; }
     public DateTime UploadedAt { get; set; } = DateTime.UtcNow;
 
+    /// <summary>Times the file has been served through the media proxy.</summary>
+    public long ViewCount { get; set; }
+
     public Guid UploadedByUserId { get; set; }
     public AppUser? UploadedByUser { get; set; }
 }

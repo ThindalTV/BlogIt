@@ -70,7 +70,7 @@ else
                 }
                 <div class="media-card-info">
                     <span class="media-card-name" title="@file.Title">@file.Title</span>
-                    <span class="media-card-size">@FormatSize(file.SizeBytes)</span>
+                    <span class="media-card-size">@FormatSize(file.SizeBytes) · @file.ViewCount.ToString("N0") @(file.ViewCount == 1 ? "view" : "views")</span>
                 </div>
             </button>
         }
@@ -90,6 +90,7 @@ else
             <span>@selectedFile.FileName</span>
             <span>@FormatSize(selectedFile.SizeBytes)</span>
             <span>@selectedFile.UploadedAt.ToString("MMM d, yyyy")</span>
+            <span>@selectedFile.ViewCount.ToString("N0") @(selectedFile.ViewCount == 1 ? "view" : "views")</span>
         </div>
         <div class="media-detail-actions">
             <button class="btn btn-secondary" @onclick="CopyUrl">Copy URL</button>

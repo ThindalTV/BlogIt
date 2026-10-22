@@ -268,6 +268,9 @@ namespace BlogIt.Sqlite.Migrations
                     b.Property<Guid>("UploadedByUserId")
                         .HasColumnType("TEXT");
 
+                    b.Property<long>("ViewCount")
+                        .HasColumnType("INTEGER");
+
                     b.HasKey("Id");
 
                     b.HasIndex("BackendUrl")

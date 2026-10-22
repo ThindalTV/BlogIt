@@ -1,0 +1,17 @@
+@* The server's message for one form field, shown directly under it. Renders nothing when the field
+   is valid. The id is "<InputId>-error" so the input can point aria-describedby at it. *@
+@if (Errors is not null && Errors.TryGetValue(Field, out var message))
+{
+    <p class="field-error" id="@($"{InputId}-error")" role="alert">@message</p>
+}
+
+@code {
+    /// <summary>Field messages keyed by the server's camelCase field name.</summary>
+    [Parameter, EditorRequired] public IReadOnlyDictionary<string, string>? Errors { get; set; }
+
+    /// <summary>The server's field name, e.g. <c>aiBaseUrl</c>.</summary>
+    [Parameter, EditorRequired] public string Field { get; set; } = "";
+
+    /// <summary>The id of the input this message describes.</summary>
+    [Parameter, EditorRequired] public string InputId { get; set; } = "";
+}

@@ -41,17 +41,21 @@ internal sealed class OpenAiService(
     // messages to trigger the next round.
     internal const int HistoryCompactionThreshold = 20;
 
-    // Default models per provider.
+    // Default chat model per provider. There is no separate export default: an unset export model
+    // means "the model the conversation was brainstormed with", so the draft comes from the same
+    // model the author has been talking to rather than silently switching to a different one.
     private const string DefaultChatModel = "gpt-4o-mini";
-    private const string DefaultExportModel = "gpt-4o";
     private const string DefaultCopilotChatModel = "gpt-4o-mini";
-    private const string DefaultCopilotExportModel = "gpt-4o";
 
     /// <summary>
     /// Builds a ChatClient for the configured provider.
     /// Supports "github-copilot" and "openai-compatible" (any OpenAI-compatible endpoint).
     /// </summary>
-    private async Task<(ChatClient chat, ChatClient export)> BuildClientsAsync()
+    /// <remarks>
+    /// The model names travel alongside the clients because <c>ChatClient.Model</c> is marked
+    /// experimental (OPENAI001) and the connection check has to name the model that failed.
+    /// </remarks>
+    private async Task<(ChatClient Chat, ChatClient Export, string ChatModel, string ExportModel)> BuildClientsAsync()
     {
         var provider = (await settings.GetAsync(SettingKeys.AiProvider) ?? "openai-compatible").Trim().ToLowerInvariant();
         // NullIfWhiteSpace, not a bare null check: a key that is not set is stored as null, but a
@@ -60,18 +64,16 @@ internal sealed class OpenAiService(
         // had to interpret, instead of the message naming the actual problem.
         var apiKey = NullIfWhiteSpace(await settings.GetAsync(SettingKeys.AiApiKey))
             ?? throw new InvalidOperationException("AI API key is not configured.");
-        var chatModel = NullIfWhiteSpace(await settings.GetAsync(SettingKeys.AiModel));
-        var exportModel = NullIfWhiteSpace(await settings.GetAsync(SettingKeys.AiExportModel));
+        var configuredChatModel = NullIfWhiteSpace(await settings.GetAsync(SettingKeys.AiModel));
+        var configuredExportModel = NullIfWhiteSpace(await settings.GetAsync(SettingKeys.AiExportModel));
 
         if (provider == "github-copilot")
         {
             // GitHub Copilot: fixed base URL, PAT as API key
             var options = new OpenAIClientOptions { Endpoint = new Uri(GitHubCopilotBaseUrl) };
             var client = new OpenAIClient(new ApiKeyCredential(apiKey), options);
-            return (
-                client.GetChatClient(chatModel ?? DefaultCopilotChatModel),
-                client.GetChatClient(exportModel ?? DefaultCopilotExportModel)
-            );
+            var (chatModel, exportModel) = ResolveModels(configuredChatModel, configuredExportModel, DefaultCopilotChatModel);
+            return (client.GetChatClient(chatModel), client.GetChatClient(exportModel), chatModel, exportModel);
         }
         else
         {
@@ -84,11 +86,22 @@ internal sealed class OpenAiService(
                 ? new OpenAIClient(new ApiKeyCredential(apiKey), options)
                 : new OpenAIClient(new ApiKeyCredential(apiKey));
 
-            return (
-                client.GetChatClient(chatModel ?? DefaultChatModel),
-                client.GetChatClient(exportModel ?? DefaultExportModel)
-            );
+            var (chatModel, exportModel) = ResolveModels(configuredChatModel, configuredExportModel, DefaultChatModel);
+            return (client.GetChatClient(chatModel), client.GetChatClient(exportModel), chatModel, exportModel);
         }
+    }
+
+    /// <summary>
+    /// Picks the brainstorm and export models. The export model falls back to the brainstorm model —
+    /// whatever that resolved to, default included — not to a default of its own.
+    /// </summary>
+    internal static (string Chat, string Export) ResolveModels(
+        string? configuredChatModel,
+        string? configuredExportModel,
+        string defaultChatModel)
+    {
+        var chat = configuredChatModel ?? defaultChatModel;
+        return (chat, configuredExportModel ?? chat);
     }
 
     /// <summary>
@@ -153,7 +166,7 @@ internal sealed class OpenAiService(
         db.AiMessages.Add(userMessage);
         await db.SaveChangesAsync(cancellationToken);
 
-        var (chatClient, _) = await BuildClientsAsync();
+        var chatClient = (await BuildClientsAsync()).Chat;
 
         IReadOnlyList<AiMessage> orderedMessages = SelectHistoryForRequest(conversation);
 
@@ -266,6 +279,65 @@ internal sealed class OpenAiService(
         return await CompleteChatTextAsync(chatClient, summaryMessages, cancellationToken);
     }
 
+    public async Task VerifyConnectionAsync(CancellationToken cancellationToken = default)
+    {
+        // BuildClientsAsync already throws InvalidOperationException for a missing key or a base URL
+        // the endpoint policy refuses, and those messages go through as they are.
+        var clients = await BuildClientsAsync();
+        await VerifyModelAsync(clients.Chat, clients.ChatModel, "model", cancellationToken);
+        if (clients.ExportModel != clients.ChatModel)
+            await VerifyModelAsync(clients.Export, clients.ExportModel, "export model", cancellationToken);
+    }
+
+    /// <summary>
+    /// One minimal completion against <paramref name="client"/>'s model, with the provider's failure
+    /// translated into what the operator should change. A chat call rather than a models listing:
+    /// OpenAI-compatible servers differ on whether they implement <c>/models</c> at all, and the
+    /// chat endpoint is the one BlogIt actually needs to work.
+    /// </summary>
+    private static async Task VerifyModelAsync(
+        ChatClient client,
+        string model,
+        string fieldLabel,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await client.CompleteChatAsync(
+                [ChatMessage.CreateUserMessage("Reply with the single word OK.")],
+                cancellationToken: cancellationToken);
+        }
+        // The client's retry policy wraps a transport failure that survived every attempt in an
+        // AggregateException of identical attempts; the first one says what went wrong.
+        catch (AggregateException ex) when (ex.InnerExceptions.FirstOrDefault() is ClientResultException or HttpRequestException)
+        {
+            throw Describe(ex.InnerExceptions[0], model, fieldLabel);
+        }
+        catch (Exception ex) when (ex is ClientResultException or HttpRequestException)
+        {
+            throw Describe(ex, model, fieldLabel);
+        }
+    }
+
+    private static InvalidOperationException Describe(Exception failure, string model, string fieldLabel)
+    {
+        if (failure is ClientResultException ex)
+        {
+            return new InvalidOperationException(ex.Status switch
+            {
+                401 or 403 => "The AI provider rejected the API key.",
+                404 => $"The AI provider returned 404 for model '{model}'. Check the base URL "
+                    + $"(OpenAI-compatible endpoints usually end in /v1) and the {fieldLabel} name.",
+                400 => $"The AI provider refused a request for model '{model}' (400). Check the "
+                    + $"{fieldLabel} name.",
+                0 => $"Could not reach the AI provider: {ex.InnerException?.Message ?? ex.Message}",
+                _ => $"The AI provider answered with HTTP {ex.Status} for model '{model}'."
+            }, ex);
+        }
+
+        return new InvalidOperationException($"Could not reach the AI provider: {failure.Message}", failure);
+    }
+
     public async Task<BlogPost> ExportToDraftAsync(
         Guid conversationId,
         Guid authorId,
@@ -317,7 +389,7 @@ internal sealed class OpenAiService(
                 "Brainstorm conversation:\n\n" + string.Join("\n\n", history))
         };
 
-        var (_, exportClient) = await BuildClientsAsync();
+        var exportClient = (await BuildClientsAsync()).Export;
         var generated = await CompleteChatTextAsync(exportClient, messages, cancellationToken);
 
         var lines = generated.Replace("\r\n", "\n").Split('\n');

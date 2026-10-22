@@ -44,6 +44,20 @@ public static class SiteSettingsValidator
         if (request.SiteUrl is not null && !UrlValidator.IsValidAbsoluteHttpUrl(request.SiteUrl))
             errors["siteUrl"] = ["Site URL must be an absolute http:// or https:// URL."];
 
+        // Blank clears it. Otherwise absolute, because it is written verbatim into og:image and
+        // twitter:image, and share-card crawlers ignore a relative URL there without saying so.
+        if (!string.IsNullOrWhiteSpace(request.DefaultOgImage)
+            && !UrlValidator.IsValidAbsoluteHttpUrl(request.DefaultOgImage.Trim()))
+        {
+            errors["defaultOgImage"] = ["Default OG image must be an absolute http:// or https:// URL."];
+        }
+
+        if (GoogleAnalyticsPropertyIdError(request.GoogleAnalyticsPropertyId) is string propertyError)
+            errors["googleAnalyticsPropertyId"] = [propertyError];
+
+        if (GoogleAnalyticsCredentialsError(request.GoogleAnalyticsCredentialsJson) is string credentialsError)
+            errors["googleAnalyticsCredentialsJson"] = [credentialsError];
+
         // Unlike SiteUrl, blank is meaningful: it clears the override and falls back to the
         // provider's own default endpoint. Anything else has to be a real http(s) URL, because
         // the configured API key is sent to whatever this resolves to.
@@ -85,5 +99,71 @@ public static class SiteSettingsValidator
         }
 
         return errors;
+    }
+
+    /// <summary>
+    /// A GA4 property ID is the bare number from Admin → Property details. The two IDs people paste
+    /// instead are both named, because either one is accepted by nothing until the dashboard's first
+    /// report call fails with an error that does not mention which field was wrong.
+    /// </summary>
+    internal static string? GoogleAnalyticsPropertyIdError(string? propertyId)
+    {
+        if (string.IsNullOrWhiteSpace(propertyId))
+            return null;
+
+        var trimmed = propertyId.Trim();
+        if (trimmed.StartsWith("properties/", StringComparison.OrdinalIgnoreCase))
+            trimmed = trimmed["properties/".Length..];
+
+        if (trimmed.Length > 0 && trimmed.All(char.IsAsciiDigit))
+            return null;
+
+        if (trimmed.StartsWith("G-", StringComparison.OrdinalIgnoreCase))
+            return "Property ID must be the numeric GA4 property ID (Admin → Property details), not a "
+                + "measurement ID (G-…).";
+        if (trimmed.StartsWith("GTM-", StringComparison.OrdinalIgnoreCase))
+            return "Property ID must be the numeric GA4 property ID (Admin → Property details), not the "
+                + "Tag Manager container ID (GTM-…).";
+
+        return "Property ID must be the numeric GA4 property ID, for example 123456789.";
+    }
+
+    /// <summary>
+    /// Checks the service-account key is the JSON file Google issues, not just any text. Null,
+    /// blank and the redaction placeholder all mean "unchanged" or "clear" and pass.
+    /// </summary>
+    internal static string? GoogleAnalyticsCredentialsError(string? credentialsJson)
+    {
+        if (string.IsNullOrWhiteSpace(credentialsJson) || credentialsJson == SettingsRedaction.Placeholder)
+            return null;
+
+        const string expected = "Service account credentials must be the JSON key file downloaded from "
+            + "Google Cloud (IAM → Service accounts → Keys)";
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(credentialsJson);
+            var root = doc.RootElement;
+            if (root.ValueKind != System.Text.Json.JsonValueKind.Object)
+                return expected + ".";
+
+            if (!root.TryGetProperty("type", out var type) || type.GetString() != "service_account")
+                return expected + " — this JSON is not a service-account key (\"type\" is not \"service_account\").";
+
+            foreach (var field in (string[])["client_email", "private_key"])
+            {
+                if (!root.TryGetProperty(field, out var value)
+                    || value.ValueKind != System.Text.Json.JsonValueKind.String
+                    || string.IsNullOrWhiteSpace(value.GetString()))
+                {
+                    return expected + $" — \"{field}\" is missing.";
+                }
+            }
+
+            return null;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return expected + " — the text is not valid JSON.";
+        }
     }
 }

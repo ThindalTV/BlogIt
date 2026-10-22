@@ -28,11 +28,63 @@ public class SiteSettingsValidatorTests
             AiApiKey: "sk-real-key",
             GoogleTagManagerContainerId: "GTM-XXXXXXX",
             GoogleAnalyticsPropertyId: "123456789",
-            GoogleAnalyticsCredentialsJson: "{}",
+            GoogleAnalyticsCredentialsJson: ValidServiceAccountJson,
             JwtExpiryMinutes: 1440);
 
         SiteSettingsValidator.Validate(request).Should().BeEmpty();
     }
+
+    private const string ValidServiceAccountJson = """
+        {"type":"service_account","client_email":"blog@proj.iam.gserviceaccount.com","private_key":"-----BEGIN PRIVATE KEY-----\nabc\n-----END PRIVATE KEY-----\n"}
+        """;
+
+    [Theory]
+    [InlineData("/images/og.png")]
+    [InlineData("og.png")]
+    [InlineData("ftp://example.com/og.png")]
+    public void Validate_RejectsNonAbsoluteDefaultOgImage(string url) =>
+        SiteSettingsValidator.Validate(new SiteSettingsUpdateRequest(DefaultOgImage: url))
+            .Should().ContainKey("defaultOgImage");
+
+    [Fact]
+    public void Validate_BlankDefaultOgImage_ClearsRatherThanFails() =>
+        SiteSettingsValidator.Validate(new SiteSettingsUpdateRequest(DefaultOgImage: ""))
+            .Should().BeEmpty();
+
+    [Theory]
+    [InlineData("123456789")]
+    [InlineData(" 123456789 ")]
+    [InlineData("properties/123456789")]
+    [InlineData("")]
+    public void Validate_AcceptsNumericOrBlankPropertyId(string propertyId) =>
+        SiteSettingsValidator.Validate(new SiteSettingsUpdateRequest(GoogleAnalyticsPropertyId: propertyId))
+            .Should().BeEmpty();
+
+    [Theory]
+    [InlineData("G-ABC123XYZ", "measurement ID")]
+    [InlineData("GTM-WQCQZBKK", "container ID")]
+    [InlineData("UA-1234-1", "numeric GA4 property ID")]
+    [InlineData("12345abc", "numeric GA4 property ID")]
+    public void Validate_RejectsNonNumericPropertyId_NamingWhatWasPasted(string propertyId, string expected) =>
+        SiteSettingsValidator.Validate(new SiteSettingsUpdateRequest(GoogleAnalyticsPropertyId: propertyId))
+            ["googleAnalyticsPropertyId"].Single().Should().Contain(expected);
+
+    [Theory]
+    [InlineData("not json", "not valid JSON")]
+    [InlineData("[]", "JSON key file")]
+    [InlineData("{}", "service_account")]
+    [InlineData("""{"type":"authorized_user"}""", "service_account")]
+    [InlineData("""{"type":"service_account","client_email":"a@b"}""", "private_key")]
+    public void Validate_RejectsCredentialsThatAreNotAServiceAccountKey(string json, string expected) =>
+        SiteSettingsValidator.Validate(new SiteSettingsUpdateRequest(GoogleAnalyticsCredentialsJson: json))
+            ["googleAnalyticsCredentialsJson"].Single().Should().Contain(expected);
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(SettingsRedaction.Placeholder)]
+    public void Validate_BlankOrRedactedCredentials_MeanUnchanged(string json) =>
+        SiteSettingsValidator.Validate(new SiteSettingsUpdateRequest(GoogleAnalyticsCredentialsJson: json))
+            .Should().BeEmpty();
 
     [Theory]
     [InlineData("not-a-url")]

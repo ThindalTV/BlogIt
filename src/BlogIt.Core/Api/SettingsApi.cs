@@ -24,8 +24,55 @@ public static class SettingsApi
         group.MapPut("/", SaveSettings);
         group.MapPost("/jwt-secret/rotate", RotateJwtSecret);
         group.MapGet("/ai-provider", GetAiProvider);
+        group.MapPost("/ai-provider/verify", VerifyAiProvider);
 
         return app;
+    }
+
+    /// <summary>How long a connection check may take before it is reported as unreachable.</summary>
+    private static readonly TimeSpan AiVerifyTimeout = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// Checks the <em>saved</em> AI settings with one real request. Separate from
+    /// <see cref="SaveSettings"/> on purpose: a provider that is down should not stop the rest of the
+    /// settings from saving, so the admin saves first and then asks this, and shows the answer as a
+    /// warning next to a save that did succeed.
+    /// </summary>
+    private static async Task<IResult> VerifyAiProvider(
+        IAiService ai,
+        ILogger<IAiService> logger,
+        CancellationToken requestAborted)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(requestAborted);
+        timeout.CancelAfter(AiVerifyTimeout);
+        try
+        {
+            await ai.VerifyConnectionAsync(timeout.Token);
+            return Results.NoContent();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status400BadRequest);
+        }
+        catch (NotSupportedException ex)
+        {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status501NotImplemented);
+        }
+        catch (OperationCanceledException) when (!requestAborted.IsCancellationRequested)
+        {
+            return Results.Problem(
+                $"The AI provider did not answer within {AiVerifyTimeout.TotalSeconds:0} seconds. Check the base URL.",
+                statusCode: StatusCodes.Status400BadRequest);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Anything unrecognised is logged in full but not echoed: provider exceptions can carry
+            // request details the admin UI has no business displaying.
+            logger.LogError(ex, "AI connection check failed");
+            return Results.Problem(
+                "The AI connection check failed unexpectedly. See the server log for details.",
+                statusCode: StatusCodes.Status502BadGateway);
+        }
     }
 
     private static async Task<IResult> GetSettings(ISettingsService settings)
